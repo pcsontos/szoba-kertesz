@@ -4,6 +4,9 @@
   "license": "MIT",
   "scripts": {},
   "private": true,
+  "prisma": {
+    "schema": "packages/db/prisma/schema.prisma"
+  },
   "devDependencies": {
     "@eslint/js": "^9.8.0",
     "@nx/esbuild": "23.0.1",
@@ -26,6 +29,7 @@
     "jsonc-eslint-parser": "^2.1.0",
     "nx": "23.0.1",
     "prettier": "^3.8.1",
+    "prisma": "6.19.3",
     "tslib": "^2.3.0",
     "tsx": "^4.22.4",
     "typescript": "~5.9.2",
@@ -33,5 +37,7 @@
     "vite": "^8.0.0",
     "vitest": "~4.1.0"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@prisma/client": "6.19.3"
+  }
 }
