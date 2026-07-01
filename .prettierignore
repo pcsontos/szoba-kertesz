@@ -1,0 +1,17 @@
+# Add files here to ignore them from prettier formatting
+/dist
+/coverage
+/.nx/cache
+/.nx/workspace-data
+.nx/self-healing
+
+# Pre-existing repo content owned outside this tooling scaffold — must stay
+# byte-for-byte unchanged by this task, so it's out of Prettier's scope.
+/docs
+/docker-compose.yml
+/init.sql
+/.claude
+/.superpowers
+
+# Package manager lockfile — not meant to be hand-/tool-formatted.
+/pnpm-lock.yaml
