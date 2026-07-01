@@ -4,6 +4,10 @@
 
 node_modules
 dist
+out-tsc
 .nx
 packages/db/generated
 logs/
+/tmp/
+
+vitest.config.*.timestamp*
