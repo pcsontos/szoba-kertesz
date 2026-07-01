@@ -14,13 +14,22 @@ export function runInteractive(): void {
     prompt: 'szobakertesz> ',
   });
 
+  // Pipe-olt stdin esetén a readline a rl.close() UTÁN is emittálhat már
+  // pufferelt 'line' eseményeket; a lezárt interfészen a prompt()/echo hívása
+  // ERR_USE_AFTER_CLOSE-zal dobna — ezért a close után minden sort eldobunk.
+  let closed = false;
+
   console.log(
     'Szobakertész interaktív mód — írj be egy sort, és visszhangzom. Kilépés: "exit".',
   );
   rl.prompt();
 
   rl.on('line', (line: string) => {
+    if (closed) {
+      return;
+    }
     if (line.trim() === 'exit') {
+      closed = true;
       rl.close();
       return;
     }
