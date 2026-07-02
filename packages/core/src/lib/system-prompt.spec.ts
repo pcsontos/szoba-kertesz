@@ -1,31 +1,79 @@
 import { SYSTEM_PROMPT } from './system-prompt.js';
 
 describe('SYSTEM_PROMPT', () => {
-  it('is XML-tagged with <role>, <task> and <constraint> sections', () => {
+  it('is XML-tagged with <role>, <task>, <schema>, <rules>, <behavior> and <tools> sections', () => {
     expect(SYSTEM_PROMPT).toMatch(/<role>[\s\S]*<\/role>/);
     expect(SYSTEM_PROMPT).toMatch(/<task>[\s\S]*<\/task>/);
-    expect(SYSTEM_PROMPT).toMatch(/<constraint>[\s\S]*<\/constraint>/);
+    expect(SYSTEM_PROMPT).toMatch(/<schema>[\s\S]*<\/schema>/);
+    expect(SYSTEM_PROMPT).toMatch(/<rules>[\s\S]*<\/rules>/);
+    expect(SYSTEM_PROMPT).toMatch(/<behavior>[\s\S]*<\/behavior>/);
+    expect(SYSTEM_PROMPT).toMatch(/<tools>[\s\S]*<\/tools>/);
   });
 
   it('describes the Szobakertész interior-design persona in Hungarian', () => {
-    expect(SYSTEM_PROMPT).toMatch(/Szobakertész/);
+    expect(SYSTEM_PROMPT).toMatch(/Szobakertesz/);
     expect(SYSTEM_PROMPT).toMatch(/lakberendező/);
   });
 
-  it('explicitly states it has no database access and must not invent catalogue data', () => {
-    const constraintMatch = SYSTEM_PROMPT.match(
-      /<constraint>([\s\S]*)<\/constraint>/,
-    );
-    expect(constraintMatch).not.toBeNull();
-    const constraintText = constraintMatch?.[1] ?? '';
+  it('lists every products column referenced in the domain model', () => {
+    const schemaMatch = SYSTEM_PROMPT.match(/<schema>([\s\S]*)<\/schema>/);
+    expect(schemaMatch).not.toBeNull();
+    const schemaText = schemaMatch?.[1] ?? '';
 
-    expect(constraintText).toMatch(/nincs adatbázis-hozzáférés/i);
-    expect(constraintText).toMatch(/ne találj ki/i);
+    for (const column of [
+      'id',
+      'name',
+      'latin_name',
+      'category',
+      'location',
+      'price',
+      'sale_price',
+      'stock',
+      'light',
+      'watering',
+      'difficulty',
+      'current_height_cm',
+      'max_height_cm',
+      'current_pot_cm',
+      'pet_safe',
+      'kid_safe',
+      'air_purifying',
+      'rating',
+      'reviews_count',
+      'description',
+    ]) {
+      expect(schemaText).toContain(column);
+    }
   });
 
-  it('does not mention SQL, runSql or the products table (that is the B3 tool-based prompt)', () => {
-    expect(SYSTEM_PROMPT).not.toMatch(/runSql/i);
-    expect(SYSTEM_PROMPT).not.toMatch(/\bSQL\b/i);
-    expect(SYSTEM_PROMPT).not.toMatch(/products\s*\(/i);
+  it('mandates SELECT-only, an always-present LIMIT, ILIKE search and COALESCE pricing', () => {
+    const rulesMatch = SYSTEM_PROMPT.match(/<rules>([\s\S]*)<\/rules>/);
+    expect(rulesMatch).not.toBeNull();
+    const rulesText = rulesMatch?.[1] ?? '';
+
+    expect(rulesText).toMatch(/CSAK SELECT/);
+    expect(rulesText).toMatch(/INSERT\/UPDATE\/DELETE\/DDL tilos/);
+    expect(rulesText).toMatch(/LIMIT/);
+    expect(rulesText).toMatch(/ILIKE/);
+    expect(rulesText).toMatch(/COALESCE\(sale_price, price\)/);
+    expect(rulesText).toMatch(/stock > 0/);
+  });
+
+  it('instructs the model to ask a clarifying question instead of guessing', () => {
+    const behaviorMatch = SYSTEM_PROMPT.match(/<behavior>([\s\S]*)<\/behavior>/);
+    expect(behaviorMatch).not.toBeNull();
+    const behaviorText = behaviorMatch?.[1] ?? '';
+
+    expect(behaviorText).toMatch(/KÉRDEZZ vissza/);
+    expect(behaviorText).toMatch(/Ne találj ki nem létező oszlopot vagy táblát/);
+  });
+
+  it('describes the runSql tool for read-only SQL execution', () => {
+    const toolsMatch = SYSTEM_PROMPT.match(/<tools>([\s\S]*)<\/tools>/);
+    expect(toolsMatch).not.toBeNull();
+    const toolsText = toolsMatch?.[1] ?? '';
+
+    expect(toolsText).toMatch(/runSql\(query\)/);
+    expect(toolsText).toMatch(/read-only/i);
   });
 });

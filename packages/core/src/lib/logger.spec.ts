@@ -23,6 +23,7 @@ describe('logInteraction', () => {
         messages: [{ role: 'user', content: 'mitől függ a fényigény?' }],
         answer: 'A fényigény a növény eredeti élőhelyétől függ.',
         usage: { inputTokens: 12, outputTokens: 34 },
+        toolSteps: [],
       },
       filePath,
     );
@@ -37,6 +38,7 @@ describe('logInteraction', () => {
       messages: [{ role: 'user', content: 'mitől függ a fényigény?' }],
       answer: 'A fényigény a növény eredeti élőhelyétől függ.',
       usage: { inputTokens: 12, outputTokens: 34 },
+      toolSteps: [],
     });
     expect(typeof entry.timestamp).toBe('string');
   });
@@ -50,6 +52,7 @@ describe('logInteraction', () => {
         messages: [{ role: 'user', content: 'első kérdés' }],
         answer: 'első válasz',
         usage: { inputTokens: 1, outputTokens: 2 },
+        toolSteps: [],
       },
       filePath,
     );
@@ -59,6 +62,7 @@ describe('logInteraction', () => {
         messages: [{ role: 'user', content: 'második kérdés' }],
         answer: 'második válasz',
         usage: { inputTokens: 3, outputTokens: 4 },
+        toolSteps: [],
       },
       filePath,
     );
@@ -68,6 +72,66 @@ describe('logInteraction', () => {
     expect(lines).toHaveLength(2);
     expect(JSON.parse(lines[0])).toMatchObject({ answer: 'első válasz' });
     expect(JSON.parse(lines[1])).toMatchObject({ answer: 'második válasz' });
+  });
+
+  it('logs generated SQL and the tool-step outcome (B3.6)', async () => {
+    const filePath = join(tempDir, 'session-with-tools.jsonl');
+
+    await logInteraction(
+      {
+        systemPrompt: 'sp',
+        messages: [
+          { role: 'user', content: 'mutass 3 pet-safe növényt' },
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'toolu_1',
+                name: 'runSql',
+                input: { query: 'SELECT * FROM products WHERE pet_safe' },
+              },
+            ],
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'tool_result',
+                tool_use_id: 'toolu_1',
+                content: '[{"id":1,"name":"Pozsgás"}]',
+              },
+            ],
+          },
+        ],
+        answer: 'Íme 3 pet-safe növény.',
+        usage: { inputTokens: 5, outputTokens: 6 },
+        toolSteps: [
+          {
+            toolName: 'runSql',
+            input: { query: 'SELECT * FROM products WHERE pet_safe' },
+            sql: 'SELECT * FROM products WHERE pet_safe LIMIT 50',
+            ok: true,
+            rowCount: 1,
+            resultSummary: '[{"id":1,"name":"Pozsgás"}]',
+          },
+        ],
+      },
+      filePath,
+    );
+
+    const content = await readFile(filePath, 'utf8');
+    const entry = JSON.parse(content.trim()) as Record<string, unknown>;
+    expect(entry.toolSteps).toEqual([
+      {
+        toolName: 'runSql',
+        input: { query: 'SELECT * FROM products WHERE pet_safe' },
+        sql: 'SELECT * FROM products WHERE pet_safe LIMIT 50',
+        ok: true,
+        rowCount: 1,
+        resultSummary: '[{"id":1,"name":"Pozsgás"}]',
+      },
+    ]);
   });
 });
 
