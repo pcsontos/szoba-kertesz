@@ -1,6 +1,21 @@
 import { Command } from 'commander';
-import { echo } from '@szoba-kertesz/core';
+import { askAgent } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
+import { printPrompt } from './lib/print-prompt.js';
+
+// .env betöltése a belépési pontban (a core sosem tölt fájlt, lásd
+// packages/core/src/lib/config.ts) — hiányzó .env esetén toleráljuk, mert
+// az env jöhet közvetlenül a shellből is (pl. CI-ban).
+try {
+  process.loadEnvFile();
+} catch (error) {
+  const isMissingEnvFile =
+    error instanceof Error &&
+    (error as NodeJS.ErrnoException).code === 'ENOENT';
+  if (!isMissingEnvFile) {
+    throw error;
+  }
+}
 
 // A CLI verziószáma — az apps/cli/package.json "version" mezőjével egyezik,
 // hardcode-olva, mert a build (esbuild, bundle: false) rootDir-ja "src",
@@ -19,8 +34,21 @@ program
 program
   .command('ask <question>')
   .description('Kérdés feltevése a szobakertész agensnek természetes nyelven.')
-  .action((question: string) => {
-    console.log(echo(question));
+  .option(
+    '--show-prompt',
+    'a modellnek ténylegesen elküldött system prompt és üzenet-tömb kiírása a válasz előtt',
+  )
+  .action(async (question: string, options: { showPrompt?: boolean }) => {
+    try {
+      const result = await askAgent(question);
+      if (options.showPrompt) {
+        printPrompt(result.systemPrompt, result.messages);
+      }
+      console.log(result.answer);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
   });
 
 // Argumentum nélkül indítva (process.argv: [node, script]) az interaktív mód
@@ -29,8 +57,23 @@ program
 // ismeretlen subcommand esetén is lefutna (pl. `szobakertesz foo` hibajelzés
 // helyett interaktív módba lépne) — az argv-ellenőrzés csak a ténylegesen
 // üres hívásra szűkíti a triggert, a --help/--version/ask változatlan marad.
-if (process.argv.slice(2).length === 0) {
-  runInteractive();
+//
+// A `--show-prompt` az egyetlen kivétel: mivel az `ask` mellett interaktív
+// módban is támogatott, egy önmagában álló `--show-prompt`-ot (subcommand
+// nélkül) az "üres hívás" részének tekintjük, és bekapcsolt flag-gel indítjuk
+// az interaktív módot — ehhez ki kell szűrni az argv-ből, mielőtt az
+// "üres-e" döntést meghoznánk.
+const cliArgs = process.argv.slice(2);
+const showPromptFlag = cliArgs.includes('--show-prompt');
+const nonFlagArgs = cliArgs.filter((arg) => arg !== '--show-prompt');
+
+function handleFatalError(error: unknown): void {
+  console.error(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+}
+
+if (nonFlagArgs.length === 0) {
+  runInteractive({ showPrompt: showPromptFlag }).catch(handleFatalError);
 } else {
-  program.parse();
+  program.parseAsync(process.argv).catch(handleFatalError);
 }
