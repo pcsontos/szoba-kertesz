@@ -4,12 +4,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Debug @szoba-kertesz/cli with Nx",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["exec", "nx", "serve", "@szoba-kertesz/cli"],
-      "env": {
-        "NODE_OPTIONS": "--inspect=9229"
-      },
+      "name": "Debug @szoba-kertesz/cli (interactive)",
+      "preLaunchTask": "build cli",
+      "program": "${workspaceFolder}/apps/cli/dist/main.js",
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
       "skipFiles": ["<node_internals>/**"],
@@ -18,6 +15,75 @@
         "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
         "!**/node_modules/**"
       ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug @szoba-kertesz/cli (interactive --show-prompt)",
+      "preLaunchTask": "build cli",
+      "program": "${workspaceFolder}/apps/cli/dist/main.js",
+      "args": ["--show-prompt"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug @szoba-kertesz/cli (ask)",
+      "preLaunchTask": "build cli",
+      "program": "${workspaceFolder}/apps/cli/dist/main.js",
+      "args": ["ask", "${input:askQuestion}"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug @szoba-kertesz/cli (ask --show-prompt)",
+      "preLaunchTask": "build cli",
+      "program": "${workspaceFolder}/apps/cli/dist/main.js",
+      "args": ["ask", "${input:askQuestion}", "--show-prompt"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "type": "node",
+      "request": "attach",
+      "name": "Attach to @szoba-kertesz/cli (terminal)",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true,
+      "outFiles": [
+        "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "!**/node_modules/**"
+      ]
+    }
+  ],
+  "inputs": [
+    {
+      "id": "askQuestion",
+      "type": "promptString",
+      "description": "Kérdés a 'szobakertesz ask' parancshoz",
+      "default": "szia"
     }
   ]
 }

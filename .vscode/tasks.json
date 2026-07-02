@@ -1,0 +1,11 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build cli",
+      "type": "shell",
+      "command": "pnpm exec nx run cli:build:development",
+      "problemMatcher": []
+    }
+  ]
+}

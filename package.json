@@ -3,7 +3,8 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "szobakertesz": "nx run cli:build && node apps/cli/dist/main.js"
+    "szobakertesz": "nx run cli:build && node apps/cli/dist/main.js",
+    "szobakertesz:debug": "nx run cli:build:development && node --inspect apps/cli/dist/main.js --show-prompt"
   },
   "private": true,
   "prisma": {
