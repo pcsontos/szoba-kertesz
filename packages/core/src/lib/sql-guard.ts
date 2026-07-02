@@ -19,6 +19,25 @@
  * mellett elhanyagolható kockázat, és a védelem konzervatív irányban téved
  * (inkább elutasít egy ártalmatlan lekérdezést, mint hogy átengedjen egy
  * módosítót).
+ *
+ * A LIMIT-kikényszerítés SZÁNDÉKOSAN nem szöveges hozzáfűzéssel történik
+ * (pl. `` `${statement} LIMIT 50` ``) — az sérülékeny egy záró sorvégi
+ * (`--`) kommentre: a hozzáfűzött `LIMIT 50` a kommentbe csúszna és sosem
+ * futna le ténylegesen (élőben igazolt eset: `SELECT g FROM
+ * generate_series(1,200) g --x LIMIT 50` 200 sort adott vissza). Egy
+ * rokon hiba: egy string literálban szereplő "limit" szó (pl. `ILIKE
+ * '%limit%'`) hamisan azt jelezhetné egy szöveges detekciónak, hogy már
+ * van LIMIT, és kihagyná a hozzáfűzést.
+ *
+ * Ehelyett a guard MINDIG egy külső `SELECT * FROM (...) AS _q LIMIT
+ * <DEFAULT_LIMIT>`-be csomagolja a belső statementet, a záró zárójelet és a
+ * külső LIMIT-et pedig SZÁNDÉKOSAN külön sorba teszi — így egy a belső
+ * statement végén álló sorvégi komment csak a saját sorát nyeli el, a
+ * csomagolást nem tudja megkerülni. Ez egyszerre old meg mindkét fenti
+ * hibaosztályt, mert a belső statementen belüli LIMIT (meglévő vagy
+ * kikommentezett) irreleváns: a ténylegesen visszaadott sorok száma
+ * garantáltan legfeljebb `DEFAULT_LIMIT` (vagy kevesebb, ha a belső
+ * statement saját, annál szigorúbb LIMIT-je ezt tovább szűkíti).
  */
 
 const DEFAULT_LIMIT = 50;
@@ -53,7 +72,6 @@ const FORBIDDEN_KEYWORD_PATTERN = new RegExp(
 );
 
 const SELECT_PREFIX_PATTERN = /^select\b/i;
-const LIMIT_PATTERN = /\blimit\b/i;
 
 export type SqlGuardResult =
   | { readonly allowed: true; readonly sql: string }
@@ -65,15 +83,18 @@ function reject(reason: string): SqlGuardResult {
 
 /**
  * Ellenőriz egy nyers SQL-stringet, és vagy elutasítja (indoklással), vagy
- * visszaadja a ténylegesen futtatandó, garantáltan LIMIT-tel ellátott
+ * visszaadja a ténylegesen futtatandó, garantáltan sor-korlátozott
  * SELECT-et.
  *
  * - Csak egyetlen statement engedélyezett (pontosvesszővel elválasztott
  *   több utasítás — pl. `SELECT 1; DROP TABLE products;` — tilos).
  * - A statementnek `SELECT`-tel kell kezdődnie.
  * - Tiltott (író/DDL) kulcsszót tartalmazó statement elutasítva.
- * - Ha nincs `LIMIT`, a guard automatikusan hozzáfűz egy alapértelmezettet
- *   (`LIMIT 50`); ha már van, változatlanul hagyja.
+ * - A statementet mindig egy `SELECT * FROM (...) AS _q LIMIT
+ *   <DEFAULT_LIMIT>` külső korlátba csomagolja (lásd a fenti fájl-szintű
+ *   doc-commentet) — nem próbálja szövegesen eldönteni, van-e már belső
+ *   LIMIT, mert ez a próbálkozás pont az, amit a záró kommentes és
+ *   string-literálos trükkök megkerülnek.
  */
 export function guardSql(rawSql: string): SqlGuardResult {
   const trimmed = rawSql.trim();
@@ -108,9 +129,10 @@ export function guardSql(rawSql: string): SqlGuardResult {
     return reject(`Tiltott SQL kulcsszó: ${forbiddenMatch[0].toUpperCase()}.`);
   }
 
-  const sql = LIMIT_PATTERN.test(statement)
-    ? statement
-    : `${statement} LIMIT ${DEFAULT_LIMIT}`;
+  // A zárójel-lezárás és a külső LIMIT szándékosan külön soron van — ha a
+  // belső `statement` egy `--` sorvégi kommenttel végződik, az csak a saját
+  // sorát nyeli el, a következő soron lévő `) AS _q LIMIT ...`-ot nem.
+  const sql = `SELECT * FROM (\n${statement}\n) AS _q LIMIT ${DEFAULT_LIMIT}`;
 
   return { allowed: true, sql };
 }

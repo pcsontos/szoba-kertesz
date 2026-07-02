@@ -136,10 +136,10 @@ describe('askAgent', () => {
 
     expect(client.messages.create).toHaveBeenCalledTimes(2);
 
-    // A DB-nek a guard által kiegészített (LIMIT-tel ellátott) SQL-t kell
-    // látnia, nem a modell nyers query-jét.
+    // A DB-nek a guard által becsomagolt (külső LIMIT-tel ellátott) SQL-t
+    // kell látnia, nem a modell nyers query-jét.
     expect(dbPool.query).toHaveBeenCalledWith(
-      'SELECT id, name, pet_safe FROM products WHERE pet_safe = true LIMIT 50',
+      'SELECT * FROM (\nSELECT id, name, pet_safe FROM products WHERE pet_safe = true\n) AS _q LIMIT 50',
     );
 
     const secondCall = (client.messages.create as ReturnType<typeof vi.fn>)
@@ -177,7 +177,7 @@ describe('askAgent', () => {
       {
         toolName: 'runSql',
         input: { query: 'SELECT id, name, pet_safe FROM products WHERE pet_safe = true' },
-        sql: 'SELECT id, name, pet_safe FROM products WHERE pet_safe = true LIMIT 50',
+        sql: 'SELECT * FROM (\nSELECT id, name, pet_safe FROM products WHERE pet_safe = true\n) AS _q LIMIT 50',
         ok: true,
         rowCount: 2,
         resultSummary: JSON.stringify(fakeRows),

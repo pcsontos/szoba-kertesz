@@ -1,21 +1,21 @@
 import { guardSql } from './sql-guard.js';
 
 describe('guardSql', () => {
-  it('allows a simple SELECT and leaves an existing LIMIT untouched', () => {
+  it('wraps a SELECT with an existing LIMIT in an outer bounding LIMIT too', () => {
     const result = guardSql('SELECT * FROM products WHERE stock > 0 LIMIT 10');
 
     expect(result).toEqual({
       allowed: true,
-      sql: 'SELECT * FROM products WHERE stock > 0 LIMIT 10',
+      sql: 'SELECT * FROM (\nSELECT * FROM products WHERE stock > 0 LIMIT 10\n) AS _q LIMIT 50',
     });
   });
 
-  it('auto-appends a default LIMIT when the query has none', () => {
+  it('wraps a SELECT with no LIMIT in the same outer bounding LIMIT', () => {
     const result = guardSql('SELECT * FROM products WHERE category = $$');
 
     expect(result).toEqual({
       allowed: true,
-      sql: 'SELECT * FROM products WHERE category = $$ LIMIT 50',
+      sql: 'SELECT * FROM (\nSELECT * FROM products WHERE category = $$\n) AS _q LIMIT 50',
     });
   });
 
@@ -24,16 +24,16 @@ describe('guardSql', () => {
 
     expect(result.allowed).toBe(true);
     expect(result.allowed && result.sql).toEqual(
-      'select id, name from products limit 5',
+      'SELECT * FROM (\nselect id, name from products limit 5\n) AS _q LIMIT 50',
     );
   });
 
-  it('strips a single trailing semicolon and still appends LIMIT', () => {
+  it('strips a single trailing semicolon and still wraps with the outer LIMIT', () => {
     const result = guardSql('SELECT count(*) FROM products;');
 
     expect(result).toEqual({
       allowed: true,
-      sql: 'SELECT count(*) FROM products LIMIT 50',
+      sql: 'SELECT * FROM (\nSELECT count(*) FROM products\n) AS _q LIMIT 50',
     });
   });
 
@@ -105,5 +105,38 @@ describe('guardSql', () => {
     const result = guardSql(';');
 
     expect(result.allowed).toBe(false);
+  });
+
+  describe('LIMIT enforcement is immune to trailing-comment and string-literal tricks', () => {
+    it('places the closing wrapper on its own line, so a trailing "--" line comment cannot swallow the outer LIMIT', () => {
+      const result = guardSql(
+        'SELECT g FROM generate_series(1,200) g --x LIMIT 50',
+      );
+
+      expect(result.allowed).toBe(true);
+      const sql = result.allowed ? result.sql : '';
+
+      // A "--x LIMIT 50" komment csak a saját sorát nyelheti el — a
+      // zárójel-zárásnak és a külső LIMIT-nek egy KÖVETKEZŐ, önálló soron
+      // kell lennie ahhoz, hogy a komment ne tudja megkerülni (lásd a
+      // sql-guard.ts fájl-szintű doc-commentjét és
+      // runsql-tool.spec.ts valódi, élő DB-n futtatott regressziós
+      // tesztjét, ami ténylegesen leszámolja a visszakapott sorokat).
+      const lines = sql.split('\n');
+      const commentLineIndex = lines.findIndex((line) =>
+        line.includes('--x'),
+      );
+      expect(commentLineIndex).toBeGreaterThanOrEqual(0);
+      expect(lines[commentLineIndex + 1]).toEqual(') AS _q LIMIT 50');
+    });
+
+    it('still applies the outer LIMIT even when the inner statement contains "limit" inside a string literal', () => {
+      const result = guardSql(
+        "SELECT * FROM products WHERE description ILIKE '%limit%'",
+      );
+
+      expect(result.allowed).toBe(true);
+      expect(result.allowed && result.sql).toMatch(/\) AS _q LIMIT 50$/);
+    });
   });
 });

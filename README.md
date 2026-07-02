@@ -9,7 +9,7 @@ CLI AI agent szobanövény-tanácsadáshoz — magyar nyelvű kérdéseket vála
 - ✅ Nx monorepo, `packages/core` + `packages/db` + `apps/cli` felépítve
 - ✅ Postgres + Prisma séma + seed adat (~30 növény) betöltve
 - ✅ CLI: `ask <kérdés>` és interaktív mód, valódi Anthropic LLM-hívással
-- ⏳ **Adatbázis-hozzáférés még nincs bekötve az agenshez** — adatra vonatkozó kérdésnél (pl. "hány pozsgás van raktáron?") az agent őszintén jelzi, hogy nem fér hozzá a katalógushoz, nem talál ki választ. A `runSql` tool (SQL-alapú valós katalógus-lekérdezés) a következő fejlesztési fázis.
+- ✅ **Adatbázis-hozzáférés élesben bekötve (`runSql` tool)** — az agent valós SQL-t ír és futtat a `products` katalógustáblán, és a tényleges adatokra (készlet, ár, szűrés stb.) alapozva válaszol, nem talál ki adatot. Kétrétegű, egymástól független SELECT-only védelem: alkalmazás-szintű guard (csak SELECT engedélyezett, minden lekérdezés LIMIT-tel korlátozva) ÉS a `DATABASE_URL_READONLY` mögötti Postgres role is csak SELECT-jogosultsággal rendelkezik — bármelyik réteg önmagában is megállítana egy módosítási kísérletet.
 
 A teljes fázisterv: [`docs/implementacios-terv.md`](docs/implementacios-terv.md).
 
@@ -38,7 +38,7 @@ Töltsd ki a `.env`-ben:
 | `ANTHROPIC_API_KEY` | az agens LLM-hívásaihoz |
 | `ANTHROPIC_MODEL` | pl. `claude-sonnet-4-6` |
 | `DATABASE_URL` | admin/RW kapcsolat (Prisma: séma, migráció, seed) |
-| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt fogja használni az agent `runSql` toolja, ha bekötésre kerül |
+| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt (és kizárólag ezt) használja az agent `runSql` toolja |
 | `POSTGRES_*` | a docker-compose konténer admin hitelesítő adatai |
 
 `.env`-et soha ne commitolj — gitignore-olva van.

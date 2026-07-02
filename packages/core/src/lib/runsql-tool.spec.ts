@@ -76,11 +76,11 @@ describe('executeRunSqlTool (mocked pool)', () => {
     );
 
     expect(fakePool.query).toHaveBeenCalledWith(
-      'SELECT id, name FROM products WHERE pet_safe LIMIT 50',
+      'SELECT * FROM (\nSELECT id, name FROM products WHERE pet_safe\n) AS _q LIMIT 50',
     );
     expect(result).toEqual({
       ok: true,
-      sql: 'SELECT id, name FROM products WHERE pet_safe LIMIT 50',
+      sql: 'SELECT * FROM (\nSELECT id, name FROM products WHERE pet_safe\n) AS _q LIMIT 50',
       rows: fakeRows,
       rowCount: 1,
     });
@@ -98,7 +98,9 @@ describe('executeRunSqlTool (mocked pool)', () => {
 
     expect(result.ok).toBe(false);
     expect(!result.ok && result.error).toMatch(/syntax error/i);
-    expect(!result.ok && result.sql).toEqual('SELECT * FORM products LIMIT 50');
+    expect(!result.ok && result.sql).toEqual(
+      'SELECT * FROM (\nSELECT * FORM products\n) AS _q LIMIT 50',
+    );
   });
 });
 
@@ -117,5 +119,25 @@ describe('executeRunSqlTool (real local DB — DATABASE_URL_READONLY)', () => {
     expect(result.ok && result.rows.every((row) => row.pet_safe === true)).toBe(
       true,
     );
+  });
+
+  // Regresszió: a régi, szöveges hozzáfűzéses guard-ot egy záró "--" soros
+  // komment megkerülte — a hozzáfűzött "LIMIT 50" a kommentbe csúszott és
+  // sosem futott le ténylegesen (élőben igazolt: 200 sort adott vissza 50
+  // helyett). Itt NEM elég a guard visszaadott sql-stringjét ellenőrizni
+  // ("úgy néz ki, hogy limitált") — ténylegesen le kell futtatni a valódi
+  // DB-n, és a visszakapott SOROK SZÁMÁT kell leszámolni, pontosan úgy,
+  // ahogy a reviewer élőben igazolta a hibát.
+  it('bounds the actually-returned row count even when the model tries to defeat LIMIT with a trailing line comment (regression, executed against the real DB)', async () => {
+    const result = await executeRunSqlTool({
+      query: 'SELECT g FROM generate_series(1,200) g --x LIMIT 50',
+    });
+
+    expect(result.ok).toBe(true);
+    // generate_series(1,200) önmagában 200 sort adna; a guard wrap-je
+    // nélkül (vagy a régi, szöveges hozzáfűzéssel) ez mind visszajönne. A
+    // ténylegesen végrehajtott, külső LIMIT-tel csomagolt lekérdezésnek
+    // pontosan 50 sort kell visszaadnia.
+    expect(result.ok && result.rows.length).toEqual(50);
   });
 });
