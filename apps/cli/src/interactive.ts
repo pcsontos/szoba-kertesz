@@ -1,9 +1,15 @@
 import { createInterface } from 'node:readline';
-import { askAgent } from '@szoba-kertesz/core';
+import { askAgent, type AskAgentResult } from '@szoba-kertesz/core';
 import { printPrompt } from './lib/print-prompt.js';
 
 export interface RunInteractiveOptions {
   readonly showPrompt?: boolean;
+  // Teszteléshez injektálható függőségek (interactive.spec.ts) — alapból a
+  // valódi stdin/stdout és a valódi askAgent. Injektálás nélkül a viselkedés
+  // változatlan.
+  readonly input?: NodeJS.ReadableStream;
+  readonly output?: NodeJS.WritableStream;
+  readonly ask?: (question: string) => Promise<AskAgentResult>;
 }
 
 /**
@@ -34,11 +40,12 @@ export function runInteractive(
   options: RunInteractiveOptions = {},
 ): Promise<void> {
   const showPrompt = options.showPrompt ?? false;
+  const ask = options.ask ?? askAgent;
 
   return new Promise((resolve) => {
     const rl = createInterface({
-      input: process.stdin,
-      output: process.stdout,
+      input: options.input ?? process.stdin,
+      output: options.output ?? process.stdout,
       prompt: 'szobakertesz> ',
     });
 
@@ -73,7 +80,7 @@ export function runInteractive(
         }
 
         try {
-          const result = await askAgent(question);
+          const result = await ask(question);
           if (showPrompt) {
             printPrompt(result.systemPrompt, result.messages);
           }
