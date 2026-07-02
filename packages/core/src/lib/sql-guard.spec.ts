@@ -62,6 +62,30 @@ describe('guardSql', () => {
     expect(!result.allowed && result.reason).toMatch(/UPDATE/i);
   });
 
+  it('rejects SELECT ... INTO (creates and populates a new table — a genuine write disguised as SELECT)', () => {
+    const result = guardSql(
+      'SELECT id, name INTO new_table FROM products LIMIT 5',
+    );
+
+    expect(result.allowed).toBe(false);
+    expect(!result.allowed && result.reason).toMatch(/INTO/i);
+  });
+
+  it('rejects SELECT ... INTO TEMP ... (the temp-table form of the same write)', () => {
+    const result = guardSql('SELECT * INTO TEMP y FROM products LIMIT 5');
+
+    expect(result.allowed).toBe(false);
+    expect(!result.allowed && result.reason).toMatch(/INTO/i);
+  });
+
+  it('does not false-positive on "into" appearing inside a larger word (word-boundary match only)', () => {
+    const result = guardSql(
+      "SELECT * FROM products WHERE description ILIKE '%printout%' LIMIT 5",
+    );
+
+    expect(result.allowed).toBe(true);
+  });
+
   it('rejects multi-statement input separated by a semicolon (SELECT ; DROP)', () => {
     const result = guardSql('SELECT 1; DROP TABLE products;');
 

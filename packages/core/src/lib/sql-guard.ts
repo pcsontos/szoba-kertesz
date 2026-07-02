@@ -25,6 +25,7 @@ const DEFAULT_LIMIT = 50;
 
 const FORBIDDEN_KEYWORDS = [
   'insert',
+  'into',
   'update',
   'delete',
   'drop',

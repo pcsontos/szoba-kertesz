@@ -1,5 +1,9 @@
 import { createInterface } from 'node:readline';
-import { askAgent, type AskAgentResult } from '@szoba-kertesz/core';
+import {
+  askAgent,
+  closeReadonlyPool,
+  type AskAgentResult,
+} from '@szoba-kertesz/core';
 import { printPrompt } from './lib/print-prompt.js';
 
 export interface RunInteractiveOptions {
@@ -35,6 +39,14 @@ export interface RunInteractiveOptions {
  * interfészen. Ezért a queue-ban már `exit` előtt várakozó kérdéseket
  * végig kiszolgáljuk (a válaszukat kiírjuk), csak az újabb `rl.prompt()`
  * hívásokat tiltjuk le a close után.
+ *
+ * A runSql esetleg megnyitott read-only DB pool-ját SZÁNDÉKOSAN nem
+ * kérdésenként zárjuk le (az interaktív munkamenet sok kérdésen át egy
+ * folyamatban él, kérdésenkénti újracsatlakozás pazarló lenne — lásd
+ * `db-readonly.ts`), hanem egyszer, a `close` eseménykor (session vége),
+ * mielőtt a `runInteractive` által visszaadott Promise felold — így a
+ * folyamat a "Viszlát!" után nem marad életben a pg alapértelmezett
+ * `idleTimeoutMillis`-e miatt.
  */
 export function runInteractive(
   options: RunInteractiveOptions = {},
@@ -113,7 +125,16 @@ export function runInteractive(
     rl.on('close', () => {
       closed = true;
       console.log('Viszlát!');
-      resolve();
+      // Session-végi, egyszeri pool-zárás (lásd a fenti doc-comment) — a
+      // lezárási hibát (ha van) jelentjük, de nem hagyjuk a Promise-t
+      // örökre függőben.
+      void closeReadonlyPool()
+        .catch((error) => {
+          console.error(error instanceof Error ? error.message : String(error));
+        })
+        .finally(() => {
+          resolve();
+        });
     });
   });
 }

@@ -8,6 +8,7 @@ function makeResult(answer: string): AskAgentResult {
     systemPrompt: '<role>teszt</role>',
     messages: [{ role: 'user', content: 'teszt kérdés' }],
     usage: { inputTokens: 1, outputTokens: 2 },
+    toolSteps: [],
   };
 }
 

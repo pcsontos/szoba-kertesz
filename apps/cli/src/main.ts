@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { askAgent } from '@szoba-kertesz/core';
+import { askAgent, closeReadonlyPool } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
 import { printPrompt } from './lib/print-prompt.js';
 
@@ -48,6 +48,13 @@ program
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exitCode = 1;
+    } finally {
+      // Az `ask` egyszeri, egy-körös hívás — a runSql esetleg nyitva hagyott
+      // read-only DB pool-ját mindig lezárjuk (siker és hiba esetén is),
+      // különben a pg alapértelmezett `idleTimeoutMillis`-e miatt a folyamat
+      // ~10 másodpercig életben marad a válasz kiírása után is. Biztonságos
+      // no-op, ha runSql-t egyáltalán nem hívta a kérdés (nem jött létre pool).
+      await closeReadonlyPool();
     }
   });
 
