@@ -4,7 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project status
 
-Early-stage course project (course brief: `docs/brs-szoba-kertesz.md`). Only documentation and local DB infrastructure exist so far — **there is no application code yet** (no `package.json`, no Nx workspace, no `packages/` or `apps/` directories). There are currently no build/lint/test commands to run. Treat the files in `docs/` as the authoritative spec for what to build; don't invent commands or structure that aren't backed by those docs or the actual repo state.
+Working CLI agent, built as an Nx monorepo. `packages/core` (agent logic), `packages/db` (Prisma), and `apps/cli` (CLI) are scaffolded and functional: the full chain — CLI `ask` → `askAgent` tool-use loop → `runSql` / `listCategories` tools → read-only Postgres — runs and answers real catalog questions in Hungarian. The `docs/` files remain the authoritative spec; `docs/implementacios-terv.md` tracks the phase plan, `docs/HF1-hazifeladat.pdf` is the course assignment and `docs/hf1-hianyossagok.md` (gitignored) the running gap analysis.
+
+### Commands
+
+- **Local DB:** `docker compose up -d` (Postgres on host `5433`), then `pnpm exec prisma migrate deploy` + `pnpm exec prisma db seed` (schema + ~30 plants).
+- **Build & run:** `pnpm nx run cli:build`, then `node apps/cli/dist/main.js ask "<kérdés>"` (or `pnpm szobakertesz ...`). No-arg run starts interactive mode; add `--show-prompt` to dump the full system prompt + message array.
+- **Tests:** `pnpm nx test core` / `pnpm nx test cli` (Vitest). Some `core` specs hit the real local DB via `DATABASE_URL_READONLY`, so the DB must be up + seeded for them to pass.
+- **Typecheck / lint:** `pnpm nx run <core|cli>:typecheck` / `:lint`.
+
+### Key files
+
+- `packages/core/src/lib/agent.ts` — `askAgent`, the hand-rolled multi-step tool-use loop over the Anthropic SDK.
+- `packages/core/src/lib/{runsql-tool,list-categories-tool,sql-guard,db-readonly}.ts` — the two read-only tools, the SELECT-only guard (wraps queries in a subquery to force `LIMIT`), and the single readonly `pg` pool.
+- `packages/core/src/lib/system-prompt.ts` — the product system prompt; **must stay byte-identical to `docs/system-prompt.md`** (kept in lockstep; improvements are documented in `docs/system-prompt-javitas.md`).
+- `packages/db/prisma/` — `schema.prisma`, migrations, `seed.ts`, `plants.ts` (catalog seed data).
+- `apps/cli/src/{main,interactive}.ts` — commander `ask` command + `node:readline` interactive mode.
 
 ## What this project is
 
@@ -16,12 +31,12 @@ Early-stage course project (course brief: `docs/brs-szoba-kertesz.md`). Only doc
 - `init.sql` (mounted into `docker-entrypoint-initdb.d`) creates a read-only role `szoba-kertesz_ro` with SELECT-only grants (including default privileges for future tables) on the `public` schema.
 - `.env` defines two connection strings — always keep this split when writing code that touches the DB:
   - `DATABASE_URL` — admin/read-write, for Prisma (schema, migrations, seed).
-  - `DATABASE_URL_READONLY` — the `szoba-kertesz_ro` role; this is the **only** connection the agent's `runSql` tool may ever use.
+  - `DATABASE_URL_READONLY` — the `szoba-kertesz_ro` role; this is the **only** connection the agent's read-only tools (`runSql`, `listCategories`) may ever use.
 - `.env`, `.env.bak`, and `.mcp.json` are gitignored — never commit them. A Prisma MCP server is configured in `.mcp.json` (`npx prisma mcp`) for schema/migration work.
 
-## Planned architecture (Nx monorepo — not yet scaffolded)
+## Architecture (Nx monorepo — scaffolded)
 
-`docs/architektura.md` specifies the target structure:
+`docs/architektura.md` specifies the structure, now in place:
 
 ```
 packages/core   agent logic (LLM call, runSql tool, schema context, logging)
@@ -29,10 +44,10 @@ packages/db     Prisma lib (schema, migration, client, seed) — NOT at repo roo
 apps/cli        CLI (`ask` command + interactive mode)
 ```
 
-Key decisions to preserve when scaffolding/building this out:
+Key design invariants to preserve:
 
 - **Framework-agnostic core**: `packages/core` must not know about its entry point (CLI/API/web). A new surface is a new app, not a rewrite.
-- **Two DB connections, two privilege levels**: the agent's `runSql` tool only ever uses `DATABASE_URL_READONLY` (SELECT-only). Prisma uses `DATABASE_URL`. The agent must never query through Prisma.
+- **Two DB connections, two privilege levels**: the agent's read-only tools (`runSql` and `listCategories`) only ever use `DATABASE_URL_READONLY` (SELECT-only). Prisma uses `DATABASE_URL`. The agent must never query through Prisma.
 - **Hand-rolled agent loop**: `askAgent` is built directly on the Anthropic SDK (official client, not raw HTTP) with a manual tool-use loop — no agent framework — so the mechanics stay visible.
 - **Transparency by default**: every interaction is logged as JSONL (`logs/<timestamp>.jsonl`): system prompt, messages, generated SQL, result, response, token usage. A `--show-prompt` flag dumps the full message array.
 - **Prisma lives in `packages/db`**, not the repo root, so the schema is part of the Nx dependency graph and both `core` and the seed script import from there.
@@ -80,6 +95,6 @@ Project-agnostic TypeScript conventions (full detail in the doc). Highlights tha
 - One coherent step = one small, focused commit.
 - Course checkpoint branches are named `stage-N` (fallback points).
 
-## Tech stack (`docs/tech-stack.md`) — target, once scaffolded
+## Tech stack (`docs/tech-stack.md`)
 
 TypeScript (strict) / Nx / pnpm / Node LTS · PostgreSQL + Prisma · Anthropic SDK + hand-rolled tool-use loop + Zod · CLI via commander + `node:readline` · Vitest · ESLint + Prettier · tsx.
