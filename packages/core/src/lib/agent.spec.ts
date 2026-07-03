@@ -67,6 +67,27 @@ function toolUseResponse(
   };
 }
 
+function listCategoriesToolUseResponse(toolUseId: string): MockResponse {
+  return {
+    id: 'msg_tool',
+    type: 'message',
+    role: 'assistant',
+    model: 'claude-sonnet-4-6',
+    content: [
+      {
+        type: 'tool_use',
+        id: toolUseId,
+        name: 'listCategories',
+        input: {},
+        caller: { type: 'direct' },
+      },
+    ],
+    stop_reason: 'tool_use',
+    stop_sequence: null,
+    usage: { input_tokens: 15, output_tokens: 25 },
+  };
+}
+
 function createClient(...responses: readonly MockResponse[]): Anthropic {
   const create = vi.fn();
   for (const response of responses) {
@@ -102,6 +123,7 @@ describe('askAgent', () => {
     expect(call.system).toMatch(/<schema>/);
     expect(call.tools).toEqual([
       expect.objectContaining({ name: 'runSql' }),
+      expect.objectContaining({ name: 'listCategories' }),
     ]);
     expect(call.messages).toEqual([
       { role: 'user', content: 'Mitől függ egy növény fényigénye?' },
@@ -190,6 +212,41 @@ describe('askAgent', () => {
       .mock.calls[0]?.[0] as LogEntryInput;
     expect(loggedEntry.toolSteps).toEqual(result.toolSteps);
     expect(loggedEntry.answer).toEqual(result.answer);
+  });
+
+  it('runs a listCategories tool_use -> tool_result -> final-text exchange', async () => {
+    const fakeRows = [{ category: 'kaktusz' }, { category: 'szobanövény' }];
+    const client = createClient(
+      listCategoriesToolUseResponse('toolu_cat'),
+      textOnlyResponse('A katalógusban ezek a kategóriák vannak: kaktusz, szobanövény.'),
+    );
+    const dbPool = createFakePool(fakeRows);
+    const log = vi.fn().mockResolvedValue(undefined);
+
+    const result = await askAgent('Milyen kategóriák vannak?', {
+      client,
+      config: TEST_CONFIG,
+      log,
+      dbPool,
+    });
+
+    expect(dbPool.query).toHaveBeenCalledWith(
+      'SELECT DISTINCT category FROM products ORDER BY category',
+    );
+
+    expect(result.answer).toEqual(
+      'A katalógusban ezek a kategóriák vannak: kaktusz, szobanövény.',
+    );
+    expect(result.toolSteps).toEqual([
+      {
+        toolName: 'listCategories',
+        input: {},
+        sql: undefined,
+        ok: true,
+        rowCount: 2,
+        resultSummary: JSON.stringify(['kaktusz', 'szobanövény']),
+      },
+    ]);
   });
 
   it('surfaces a guard-rejected write attempt as an error tool_result and lets the model recover', async () => {

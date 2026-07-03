@@ -6,6 +6,11 @@ import {
   runSqlToolDefinition,
   RUN_SQL_TOOL_NAME,
 } from './runsql-tool.js';
+import {
+  executeListCategoriesTool,
+  listCategoriesToolDefinition,
+  LIST_CATEGORIES_TOOL_NAME,
+} from './list-categories-tool.js';
 import type { DbReadonlyDeps } from './db-readonly.js';
 import {
   logInteraction,
@@ -92,19 +97,41 @@ function toApiMessages(
 }
 
 /**
- * Egy `runSql` tool-eredményt a modellnek visszaküldhető `tool_result`
- * szöveggé alakít — siker esetén a sorok JSON-ja, hiba esetén a
- * hibaüzenet. Ugyanezt a szöveget naplózzuk `ToolStep.resultSummary`-ként
- * is, hogy a JSONL-ből pontosan visszakövethető legyen, mit "látott" a
- * modell.
+ * Egy tool-végrehajtás eredményét a naplózáshoz (`ToolStep`) és a
+ * modellnek visszaküldhető `tool_result` blokkhoz szükséges egységes
+ * alakra hozza — `runSql`-nél a lefuttatott SQL-t és a sorok JSON-ját,
+ * `listCategories`-nél a kategórianevek JSON-ját adja vissza. Hiba esetén
+ * mindkét tool ugyanazt a hibaüzenetet adja tovább.
  */
-function summarizeToolResult(
-  result: Awaited<ReturnType<typeof executeRunSqlTool>>,
-): string {
-  if (result.ok) {
-    return JSON.stringify(result.rows);
+interface ToolDispatchResult {
+  readonly ok: boolean;
+  readonly sql?: string;
+  readonly rowCount?: number;
+  readonly resultSummary: string;
+}
+
+async function dispatchToolUse(
+  block: Anthropic.ToolUseBlock,
+  dbDeps: DbReadonlyDeps,
+): Promise<ToolDispatchResult> {
+  if (block.name === RUN_SQL_TOOL_NAME) {
+    const result = await executeRunSqlTool(block.input, dbDeps);
+    return {
+      ok: result.ok,
+      sql: result.sql,
+      rowCount: result.ok ? result.rowCount : undefined,
+      resultSummary: result.ok ? JSON.stringify(result.rows) : result.error,
+    };
   }
-  return result.error;
+
+  const result = await executeListCategoriesTool(block.input, dbDeps);
+  return {
+    ok: result.ok,
+    rowCount: result.ok ? result.categories.length : undefined,
+    resultSummary: result.ok
+      ? JSON.stringify(result.categories)
+      : result.error,
+  };
 }
 
 /**
@@ -113,9 +140,9 @@ function summarizeToolResult(
  * végig látható marad:
  *
  * 1. `messages.create` hívás a teljes, tool-os `SYSTEM_PROMPT`-tal és a
- *    `runSql` tool-definícióval.
+ *    `runSql` + `listCategories` tool-definíciókkal.
  * 2. Amíg a válasz `stop_reason`-je `"tool_use"`, minden `tool_use`
- *    blokkra lefuttatjuk a `runSql`-t (`executeRunSqlTool`, kizárólag a
+ *    blokkra lefuttatjuk a megfelelő tool-t (`dispatchToolUse`, kizárólag a
  *    read-only DB-kapcsolaton), és egy `tool_result` user-üzenetként
  *    visszaküldjük — majd újra hívjuk a modellt a bővített
  *    üzenet-előzménnyel.
@@ -150,7 +177,7 @@ export async function askAgent(
       max_tokens: MAX_TOKENS,
       system: SYSTEM_PROMPT,
       messages: toApiMessages(messages),
-      tools: [runSqlToolDefinition],
+      tools: [runSqlToolDefinition, listCategoriesToolDefinition],
     });
 
     totalInputTokens += response.usage.input_tokens;
@@ -185,7 +212,10 @@ export async function askAgent(
 
     const toolResultBlocks: ChatMessageContentBlock[] = [];
     for (const block of toolUseBlocks) {
-      if (block.name !== RUN_SQL_TOOL_NAME) {
+      if (
+        block.name !== RUN_SQL_TOOL_NAME &&
+        block.name !== LIST_CATEGORIES_TOOL_NAME
+      ) {
         toolResultBlocks.push({
           type: 'tool_result',
           tool_use_id: block.id,
@@ -195,15 +225,17 @@ export async function askAgent(
         continue;
       }
 
-      const result = await executeRunSqlTool(block.input, dbDeps);
-      const resultSummary = summarizeToolResult(result);
+      const { ok, sql, rowCount, resultSummary } = await dispatchToolUse(
+        block,
+        dbDeps,
+      );
 
       toolSteps.push({
         toolName: block.name,
         input: block.input,
-        sql: result.sql,
-        ok: result.ok,
-        rowCount: result.ok ? result.rowCount : undefined,
+        sql,
+        ok,
+        rowCount,
         resultSummary,
       });
 
@@ -211,7 +243,7 @@ export async function askAgent(
         type: 'tool_result',
         tool_use_id: block.id,
         content: resultSummary,
-        is_error: !result.ok,
+        is_error: !ok,
       });
     }
 

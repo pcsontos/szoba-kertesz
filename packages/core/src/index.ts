@@ -6,4 +6,5 @@ export * from './lib/logger.js';
 export * from './lib/sql-guard.js';
 export * from './lib/db-readonly.js';
 export * from './lib/runsql-tool.js';
+export * from './lib/list-categories-tool.js';
 export * from './lib/agent.js';

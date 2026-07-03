@@ -76,4 +76,13 @@ describe('SYSTEM_PROMPT', () => {
     expect(toolsText).toMatch(/runSql\(query\)/);
     expect(toolsText).toMatch(/read-only/i);
   });
+
+  it('describes the listCategories tool for distinct category lookup', () => {
+    const toolsMatch = SYSTEM_PROMPT.match(/<tools>([\s\S]*)<\/tools>/);
+    expect(toolsMatch).not.toBeNull();
+    const toolsText = toolsMatch?.[1] ?? '';
+
+    expect(toolsText).toMatch(/listCategories\(\)/);
+    expect(toolsText).toMatch(/SELECT DISTINCT category/);
+  });
 });

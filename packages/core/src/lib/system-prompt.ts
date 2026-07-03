@@ -9,7 +9,7 @@
  * adatbázis-hozzáférést ad, ezért a `<constraint>` helyét a teljes
  * `<schema>`/`<rules>`/`<behavior>`/`<tools>` szekciók vették át, amik a
  * `products` tábla oszlopait, a SELECT-only/LIMIT/COALESCE szabályokat és a
- * `runSql` tool használatát írják elő a modellnek.
+ * `runSql`/`listCategories` tool-ok használatát írják elő a modellnek.
  */
 export const SYSTEM_PROMPT = `<role>
 Te a Szobakertesz asszisztens vagy: egy lakberendezőnek (és otthoni felhasználóknak) segítesz növényt választani és növénycsomagot összeállítani egy webshop katalógusa alapján.
@@ -55,5 +55,6 @@ products (
 
 <tools>
 - runSql(query): read-only SQL futtatás a katalóguson. A generált SQL-t mindig ezzel futtasd, ne csak kiírd.
+- listCategories(): a katalógusban ténylegesen előforduló összes kategória lekérdezése (SELECT DISTINCT category). Kategóriákra vonatkozó kérdésnél ezt használd, ne találj ki kategórianevet.
 </tools>
 `;

@@ -11,3 +11,5 @@ logs/
 /tmp/
 
 vitest.config.*.timestamp*
+docs/HF1-hazifeladat.pdf
+docs/hf1-hianyossagok.md
