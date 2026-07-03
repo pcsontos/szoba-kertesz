@@ -85,4 +85,33 @@ describe('SYSTEM_PROMPT', () => {
     expect(toolsText).toMatch(/listCategories\(\)/);
     expect(toolsText).toMatch(/SELECT DISTINCT category/);
   });
+
+  it('guides ORDER BY for superlatives and includes kid_safe/air_purifying filters', () => {
+    const rulesMatch = SYSTEM_PROMPT.match(/<rules>([\s\S]*)<\/rules>/);
+    expect(rulesMatch).not.toBeNull();
+    const rulesText = rulesMatch?.[1] ?? '';
+
+    expect(rulesText).toMatch(/ORDER BY/);
+    expect(rulesText).toMatch(/kid_safe/);
+    expect(rulesText).toMatch(/air_purifying/);
+  });
+
+  it('instructs an honest answer instead of inventing a product on an empty result', () => {
+    const behaviorMatch = SYSTEM_PROMPT.match(/<behavior>([\s\S]*)<\/behavior>/);
+    expect(behaviorMatch).not.toBeNull();
+    const behaviorText = behaviorMatch?.[1] ?? '';
+
+    expect(behaviorText).toMatch(/egy sort sem ad vissza/);
+    expect(behaviorText).toMatch(/ne találj ki terméket/);
+  });
+
+  it('provides an <examples> section with concrete SQL and tool-routing guidance', () => {
+    expect(SYSTEM_PROMPT).toMatch(/<examples>[\s\S]*<\/examples>/);
+    const examplesMatch = SYSTEM_PROMPT.match(/<examples>([\s\S]*)<\/examples>/);
+    const examplesText = examplesMatch?.[1] ?? '';
+
+    expect(examplesText).toMatch(/SELECT/);
+    expect(examplesText).toMatch(/ORDER BY/);
+    expect(examplesText).toMatch(/listCategories\(\)/);
+  });
 });
