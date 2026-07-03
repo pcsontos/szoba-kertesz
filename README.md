@@ -165,9 +165,12 @@ majd VS Code-ban indítsd az **"Attach to @szoba-kertesz/cli (terminal)"** konfi
 - [`docs/architektura.md`](docs/architektura.md) — a tervezett fájlstruktúra és kulcsdöntések
 - [`docs/tech-stack.md`](docs/tech-stack.md) — technológiai stack és a `products` tábla sémája
 - [`docs/system-prompt.md`](docs/system-prompt.md) — az agent tényleges system promptja
+- [`docs/system-prompt-javitas.md`](docs/system-prompt-javitas.md) — a system prompt minőségi javításainak indoklása
+- [`docs/pluginok-skillek.md`](docs/pluginok-skillek.md) — a használt Claude Code pluginek / skillek / MCP-szerverek és indoklásuk
 - [`docs/konvenciók.md`](docs/konvenciók.md) — kódolási konvenciók
 - [`docs/dev-workflow.md`](docs/dev-workflow.md) — git workflow, branch- és commit-konvenciók
 - [`docs/implementacios-terv.md`](docs/implementacios-terv.md) — a teljes fázisterv (A1–A6, B1–B3)
+- [`docs/roi.md`](docs/roi.md) — ROI-levezetés (5 fős lakberendező iroda megtakarítása számokkal)
 
 ## Git workflow
 
