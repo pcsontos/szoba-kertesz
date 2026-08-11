@@ -27,4 +27,4 @@
 
 ## Megjegyzés a reprodukálhatóságról
 
-A `github`, `Context7`, `superpowers`, `skill-creator`, `pnpm` a user-szintű Claude Code konfigból aktívak (nem a repóból), a `prisma` MCP és a projekt-szintű plugin-engedélyek pedig a gitignore-olt `.mcp.json` / `.claude/settings.local.json` fájlokban. Egy tiszta klón tehát nem örökli automatikusan ezeket — ezt szándékosan így hagyjuk (a `settings.local.json` tokent tartalmaz), és ez a doksi rögzíti a választásokat és indoklásukat.
+A `github`, `Context7`, `skill-creator`, `pnpm` a user-szintű Claude Code konfigból aktívak (nem a repóból). A `superpowers` és a `commit-commands` projekt-szinten van bekapcsolva (`.claude/settings.local.json` → `enabledPlugins`), a `prisma` MCP pedig a repo-szintű `.mcp.json`-ban. Mindkét fájl szándékosan gitignore-olt (a `settings.local.json` tokent is tartalmaz), ezért egy tiszta klón nem örökli automatikusan ezeket a bekapcsolásokat — ez a doksi rögzíti a választásokat és indoklásukat.
