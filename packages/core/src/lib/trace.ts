@@ -271,7 +271,11 @@ export class Trace {
       ? flat(outcome.sql)
       : flat((call.input as { query?: string } | null)?.query ?? '');
     this.line('');
-    this.line(c.yellow(bar(`TOOL · ${call.name} (lefuttatjuk a DB-n)`)));
+    // A "DB-n" megjegyzés csak akkor igaz, ha tényleg SQL futott — a
+    // getClientPreferences például nem nyúl adatbázishoz.
+    this.line(
+      c.yellow(bar(`TOOL · ${call.name}${sql ? ' (lefuttatjuk a DB-n)' : ''}`)),
+    );
     if (sql) {
       this.line(c.dim('  SQL (guard után): ') + c.cyan(sql));
     }

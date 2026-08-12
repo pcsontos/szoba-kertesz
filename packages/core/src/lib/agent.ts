@@ -44,6 +44,13 @@ export interface AskAgentDeps {
    * `false`-szal futnak, hogy ne gyártsanak artifactot.
    */
   readonly persistTrace?: boolean;
+  /**
+   * Korábbi beszélgetés (interaktív mód) — ezt folytatjuk. A visszakapott
+   * `AskAgentResult.messages`-t kell visszaadni a következő híváshoz, így a
+   * modell látja az előzményt és a visszautaló kérdés ("és olcsóbbat?")
+   * értelmezhető.
+   */
+  readonly history?: readonly ChatMessage[];
 }
 
 export interface AskAgentResult {
@@ -130,7 +137,10 @@ export async function askAgent(
   const log = deps.log ?? logInteraction;
   const dbDeps: DbReadonlyDeps = { config, pool: deps.dbPool };
 
-  let messages: ChatMessage[] = [{ role: 'user', content: question }];
+  let messages: ChatMessage[] = [
+    ...(deps.history ?? []),
+    { role: 'user', content: question },
+  ];
   const toolSteps: ToolStep[] = [];
   let totalInputTokens = 0;
   let totalOutputTokens = 0;

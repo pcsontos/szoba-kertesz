@@ -7,6 +7,7 @@ export * from './lib/tools/sql-guard.js';
 export * from './lib/tools/db-readonly.js';
 export * from './lib/tools/run-sql.js';
 export * from './lib/tools/list-categories.js';
+export * from './lib/tools/client-preferences.js';
 export * from './lib/tools/index.js';
 export * from './lib/trace.js';
 export * from './lib/agent.js';

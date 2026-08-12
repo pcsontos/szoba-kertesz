@@ -9,7 +9,7 @@
  * NE TÖRÖLD refaktornál. Ha egy kurzus-lépés törölné, az T3-eltérés:
  * megállás és jelzés, nem felülírás.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,6 +19,7 @@ import {
   executeListCategoriesTool,
   executeRunSqlTool,
   executeTool,
+  askAgent,
   guardSql,
   logInteraction,
 } from '../index.js';
@@ -99,6 +100,44 @@ describe('saját kiegészítés 5 — javított system prompt', () => {
   it('a buildSystemPrompt() wrapper pontosan a konstanst adja vissza', () => {
     // A 03. alkalom hívási alakja — a bájtazonosság a konstanson marad.
     expect(buildSystemPrompt()).toBe(SYSTEM_PROMPT);
+  });
+});
+
+describe('beszélgetés-memória (03. alkalom, c00055a)', () => {
+  it('a history a kérdés ELÉ fűződik, így a modell látja az előzményt', async () => {
+    const create = vi.fn().mockResolvedValue({
+      id: 'msg',
+      type: 'message',
+      role: 'assistant',
+      model: 'teszt',
+      content: [{ type: 'text', text: 'ok', citations: null }],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    await askAgent('És olcsóbbat?', {
+      client: { messages: { create } } as never,
+      config: {
+        anthropicApiKey: 'sk-ant-test',
+        anthropicModel: 'teszt',
+        databaseUrlReadonly: 'postgresql://ro:ro@localhost:5433/teszt',
+      },
+      log: async () => undefined,
+      print: false,
+      persistTrace: false,
+      history: [
+        { role: 'user', content: 'Ajánlj egy pozsgást.' },
+        { role: 'assistant', content: 'Íme az Echeveria.' },
+      ],
+    });
+
+    const sent = create.mock.calls[0]?.[0] as {
+      messages: { role: string; content: unknown }[];
+    };
+    expect(sent.messages).toHaveLength(3);
+    expect(sent.messages[0]?.content).toBe('Ajánlj egy pozsgást.');
+    expect(sent.messages[2]?.content).toBe('És olcsóbbat?');
   });
 });
 

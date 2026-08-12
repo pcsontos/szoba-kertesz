@@ -53,6 +53,7 @@ products (
 <tools>
 - runSql(query): read-only SQL futtatás a katalóguson. A generált SQL-t mindig ezzel futtasd, ne csak kiírd.
 - listCategories(): a katalógusban ténylegesen előforduló összes kategória lekérdezése (SELECT DISTINCT category). Kategóriákra vonatkozó kérdésnél ezt használd, ne találj ki kategórianevet.
+- getClientPreferences(clientCode): egy ügyfél büdzséje forintban és a preferált gondozási igényesség (ALACSONY / KÖZEPES / MAGAS). Ha a kérdés ügyfélkódot említ (pl. ACME, GLOBEX, INITECH), ELŐBB ezt hívd, és a kapott büdzsével szűrj a katalógusban.
 </tools>
 
 <examples>

@@ -24,11 +24,17 @@ import {
   listCategoriesToolDefinition,
   LIST_CATEGORIES_TOOL_NAME,
 } from './list-categories.js';
+import {
+  executeGetClientPreferencesTool,
+  getClientPreferencesToolDefinition,
+  GET_CLIENT_PREFERENCES_TOOL_NAME,
+} from './client-preferences.js';
 
 /** A modellnek felkínált tool-definíciók, egy helyen. */
 export const tools: Anthropic.Tool[] = [
   runSqlToolDefinition,
   listCategoriesToolDefinition,
+  getClientPreferencesToolDefinition,
 ];
 
 /**
@@ -71,6 +77,16 @@ export async function executeTool(
       rowCount: result.ok ? result.categories.length : undefined,
       resultSummary: result.ok
         ? JSON.stringify(result.categories)
+        : result.error,
+    };
+  }
+
+  if (name === GET_CLIENT_PREFERENCES_TOOL_NAME) {
+    const result = await executeGetClientPreferencesTool(input);
+    return {
+      ok: result.ok,
+      resultSummary: result.ok
+        ? JSON.stringify(result.preference)
         : result.error,
     };
   }

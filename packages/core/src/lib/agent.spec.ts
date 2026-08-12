@@ -131,6 +131,7 @@ describe('askAgent', () => {
     expect(call.tools).toEqual([
       expect.objectContaining({ name: 'runSql' }),
       expect.objectContaining({ name: 'listCategories' }),
+      expect.objectContaining({ name: 'getClientPreferences' }),
     ]);
     expect(call.messages).toEqual([
       { role: 'user', content: 'Mitől függ egy növény fényigénye?' },
