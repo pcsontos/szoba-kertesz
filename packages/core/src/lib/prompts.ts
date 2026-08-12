@@ -71,3 +71,15 @@ products (
 - Kérdés: "Kellene egy növény a nappaliba." — hiányzik a büdzsé, a fény és a méret. Ne találgass: KÉRDEZZ vissza ezekre, mielőtt lekérdezel.
 </examples>
 `;
+
+/**
+ * A kurzus 03. alkalmának hívási alakja (`prompts.ts` → `buildSystemPrompt()`).
+ *
+ * Vékony wrapper szándékosan: a prompt forrása továbbra is a fenti
+ * `SYSTEM_PROMPT` konstans, ami bájtra azonos a `docs/system-prompt.md`-vel.
+ * Így a kurzus 04–06. alkalmának hívási alakja megvan anélkül, hogy a
+ * bájtazonosság-invariáns sérülne.
+ */
+export function buildSystemPrompt(): string {
+  return SYSTEM_PROMPT;
+}

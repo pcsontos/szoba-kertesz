@@ -5,7 +5,7 @@ import { closeReadonlyPool } from './db-readonly.js';
 import {
   executeListCategoriesTool,
   listCategoriesToolDefinition,
-} from './list-categories-tool.js';
+} from './list-categories.js';
 
 // Lásd runsql-tool.spec.ts — ugyanaz a minta: a repo gyökerén lévő .env
 // explicit betöltése, mert a vitest cwd-je `packages/core`.

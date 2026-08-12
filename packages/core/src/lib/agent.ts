@@ -1,17 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { loadConfig, type Config } from './config.js';
-import { SYSTEM_PROMPT } from './system-prompt.js';
-import {
-  executeRunSqlTool,
-  runSqlToolDefinition,
-  RUN_SQL_TOOL_NAME,
-} from './runsql-tool.js';
-import {
-  executeListCategoriesTool,
-  listCategoriesToolDefinition,
-  LIST_CATEGORIES_TOOL_NAME,
-} from './list-categories-tool.js';
-import type { DbReadonlyDeps } from './db-readonly.js';
+import { SYSTEM_PROMPT } from './prompts.js';
+import { executeTool, tools } from './tools/index.js';
+import type { DbReadonlyDeps } from './tools/db-readonly.js';
 import {
   logInteraction,
   type ChatMessage,
@@ -97,44 +88,6 @@ function toApiMessages(
 }
 
 /**
- * Egy tool-végrehajtás eredményét a naplózáshoz (`ToolStep`) és a
- * modellnek visszaküldhető `tool_result` blokkhoz szükséges egységes
- * alakra hozza — `runSql`-nél a lefuttatott SQL-t és a sorok JSON-ját,
- * `listCategories`-nél a kategórianevek JSON-ját adja vissza. Hiba esetén
- * mindkét tool ugyanazt a hibaüzenetet adja tovább.
- */
-interface ToolDispatchResult {
-  readonly ok: boolean;
-  readonly sql?: string;
-  readonly rowCount?: number;
-  readonly resultSummary: string;
-}
-
-async function dispatchToolUse(
-  block: Anthropic.ToolUseBlock,
-  dbDeps: DbReadonlyDeps,
-): Promise<ToolDispatchResult> {
-  if (block.name === RUN_SQL_TOOL_NAME) {
-    const result = await executeRunSqlTool(block.input, dbDeps);
-    return {
-      ok: result.ok,
-      sql: result.sql,
-      rowCount: result.ok ? result.rowCount : undefined,
-      resultSummary: result.ok ? JSON.stringify(result.rows) : result.error,
-    };
-  }
-
-  const result = await executeListCategoriesTool(block.input, dbDeps);
-  return {
-    ok: result.ok,
-    rowCount: result.ok ? result.categories.length : undefined,
-    resultSummary: result.ok
-      ? JSON.stringify(result.categories)
-      : result.error,
-  };
-}
-
-/**
  * Kézzel írt tool-use hurok (B3.5) a hivatalos Anthropic SDK kliensén
  * keresztül — nincs `toolRunner`/`betaZodTool` SDK-segéd, a mechanika
  * végig látható marad:
@@ -177,7 +130,7 @@ export async function askAgent(
       max_tokens: MAX_TOKENS,
       system: SYSTEM_PROMPT,
       messages: toApiMessages(messages),
-      tools: [runSqlToolDefinition, listCategoriesToolDefinition],
+      tools,
     });
 
     totalInputTokens += response.usage.input_tokens;
@@ -212,21 +165,11 @@ export async function askAgent(
 
     const toolResultBlocks: ChatMessageContentBlock[] = [];
     for (const block of toolUseBlocks) {
-      if (
-        block.name !== RUN_SQL_TOOL_NAME &&
-        block.name !== LIST_CATEGORIES_TOOL_NAME
-      ) {
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: `Ismeretlen tool: "${block.name}".`,
-          is_error: true,
-        });
-        continue;
-      }
-
-      const { ok, sql, rowCount, resultSummary } = await dispatchToolUse(
-        block,
+      // Az ismeretlen tool kezelése is az `executeTool` dolga — az agent-loop
+      // nem tud arról, MILYEN toolok léteznek.
+      const { ok, sql, rowCount, resultSummary } = await executeTool(
+        block.name,
+        block.input,
         dbDeps,
       );
 

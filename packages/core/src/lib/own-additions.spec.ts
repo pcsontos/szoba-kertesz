@@ -15,8 +15,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   SYSTEM_PROMPT,
+  buildSystemPrompt,
   executeListCategoriesTool,
   executeRunSqlTool,
+  executeTool,
   guardSql,
   logInteraction,
 } from '../index.js';
@@ -30,6 +32,22 @@ describe('saját kiegészítés 1 — listCategories tool', () => {
 
     expect(result.categories.length).toBeGreaterThan(0);
     expect(result.categories).toContain('szobanövény');
+  });
+
+  it('be van kötve az executeTool dispatchbe', async () => {
+    // Ez a lényegi regressziós állítás: a refaktor után is a NEVÉN keresztül
+    // elérhető, nem "Ismeretlen tool"-t kapunk vissza.
+    const outcome = await executeTool('listCategories', {});
+
+    expect(outcome.ok).toBe(true);
+    expect(outcome.resultSummary).toContain('szobanövény');
+  });
+
+  it('ismeretlen toolra hibaszöveget ad, nem dob kivételt', async () => {
+    const outcome = await executeTool('nincsIlyenTool', {});
+
+    expect(outcome.ok).toBe(false);
+    expect(outcome.resultSummary).toContain('Ismeretlen tool');
   });
 });
 
@@ -76,6 +94,11 @@ describe('saját kiegészítés 5 — javított system prompt', () => {
 
   it('előírja a COALESCE(sale_price, price) árlogikát', () => {
     expect(SYSTEM_PROMPT).toContain('COALESCE(sale_price, price)');
+  });
+
+  it('a buildSystemPrompt() wrapper pontosan a konstanst adja vissza', () => {
+    // A 03. alkalom hívási alakja — a bájtazonosság a konstanson marad.
+    expect(buildSystemPrompt()).toBe(SYSTEM_PROMPT);
   });
 });
 
