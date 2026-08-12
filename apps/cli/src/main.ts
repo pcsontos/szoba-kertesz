@@ -1,5 +1,6 @@
+import { join } from 'node:path';
 import { Command } from 'commander';
-import { askAgent, closeReadonlyPool } from '@szoba-kertesz/core';
+import { askAgent, closeReadonlyPool, setWatchLog } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
 import { printPrompt } from './lib/print-prompt.js';
 
@@ -38,25 +39,34 @@ program
     '--show-prompt',
     'a modellnek ténylegesen elküldött system prompt és üzenet-tömb kiírása a válasz előtt',
   )
-  .action(async (question: string, options: { showPrompt?: boolean }) => {
-    try {
-      const result = await askAgent(question);
-      if (options.showPrompt) {
-        printPrompt(result.systemPrompt, result.messages);
+  .option(
+    '--quiet',
+    'az élő, színes Trace elnémítása — csak a végső válasz jelenik meg (a watch-log és a JSONL ettől függetlenül ír)',
+  )
+  .action(
+    async (
+      question: string,
+      options: { showPrompt?: boolean; quiet?: boolean },
+    ) => {
+      try {
+        const result = await askAgent(question, { print: !options.quiet });
+        if (options.showPrompt) {
+          printPrompt(result.systemPrompt, result.messages);
+        }
+        console.log(result.answer);
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exitCode = 1;
+      } finally {
+        // Az `ask` egyszeri, egy-körös hívás — a runSql esetleg nyitva hagyott
+        // read-only DB pool-ját mindig lezárjuk (siker és hiba esetén is),
+        // különben a pg alapértelmezett `idleTimeoutMillis`-e miatt a folyamat
+        // ~10 másodpercig életben marad a válasz kiírása után is. Biztonságos
+        // no-op, ha runSql-t egyáltalán nem hívta a kérdés (nem jött létre pool).
+        await closeReadonlyPool();
       }
-      console.log(result.answer);
-    } catch (error) {
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    } finally {
-      // Az `ask` egyszeri, egy-körös hívás — a runSql esetleg nyitva hagyott
-      // read-only DB pool-ját mindig lezárjuk (siker és hiba esetén is),
-      // különben a pg alapértelmezett `idleTimeoutMillis`-e miatt a folyamat
-      // ~10 másodpercig életben marad a válasz kiírása után is. Biztonságos
-      // no-op, ha runSql-t egyáltalán nem hívta a kérdés (nem jött létre pool).
-      await closeReadonlyPool();
-    }
-  });
+    },
+  );
 
 // Argumentum nélkül indítva (process.argv: [node, script]) az interaktív mód
 // indul a Commander help-je helyett. Explicit argv-hossz ellenőrzést használunk
@@ -70,9 +80,18 @@ program
 // nélkül) az "üres hívás" részének tekintjük, és bekapcsolt flag-gel indítjuk
 // az interaktív módot — ehhez ki kell szűrni az argv-ből, mielőtt az
 // "üres-e" döntést meghoznánk.
+// A `--quiet` ugyanígy viselkedik: interaktív módban is értelmes, tehát
+// önmagában állva nem teszi "nem üressé" a hívást.
+const STANDALONE_FLAGS = ['--show-prompt', '--quiet'];
+
 const cliArgs = process.argv.slice(2);
 const showPromptFlag = cliArgs.includes('--show-prompt');
-const nonFlagArgs = cliArgs.filter((arg) => arg !== '--show-prompt');
+const quietFlag = cliArgs.includes('--quiet');
+const nonFlagArgs = cliArgs.filter((arg) => !STANDALONE_FLAGS.includes(arg));
+
+// Folyamatos watch-log ("control room"): a `--quiet`-tól FÜGGETLENÜL ír, így
+// egy másik terminálban `tail -f logs/agent.log`-gal végig követhető a futás.
+setWatchLog(join(process.cwd(), 'logs', 'agent.log'));
 
 function handleFatalError(error: unknown): void {
   console.error(error instanceof Error ? error.message : String(error));
@@ -80,7 +99,9 @@ function handleFatalError(error: unknown): void {
 }
 
 if (nonFlagArgs.length === 0) {
-  runInteractive({ showPrompt: showPromptFlag }).catch(handleFatalError);
+  runInteractive({ showPrompt: showPromptFlag, print: !quietFlag }).catch(
+    handleFatalError,
+  );
 } else {
   program.parseAsync(process.argv).catch(handleFatalError);
 }

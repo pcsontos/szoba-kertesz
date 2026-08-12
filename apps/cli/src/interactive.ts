@@ -8,6 +8,8 @@ import { printPrompt } from './lib/print-prompt.js';
 
 export interface RunInteractiveOptions {
   readonly showPrompt?: boolean;
+  /** Élő, színes Trace. Alapból true; a CLI `--quiet` kapcsolójára false. */
+  readonly print?: boolean;
   // Teszteléshez injektálható függőségek (interactive.spec.ts) — alapból a
   // valódi stdin/stdout és a valódi askAgent. Injektálás nélkül a viselkedés
   // változatlan.
@@ -52,7 +54,9 @@ export function runInteractive(
   options: RunInteractiveOptions = {},
 ): Promise<void> {
   const showPrompt = options.showPrompt ?? false;
-  const ask = options.ask ?? askAgent;
+  const print = options.print ?? true;
+  const ask =
+    options.ask ?? ((question: string) => askAgent(question, { print }));
 
   return new Promise((resolve) => {
     const rl = createInterface({

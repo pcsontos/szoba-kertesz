@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { loadConfig, type Config } from './config.js';
 import { SYSTEM_PROMPT } from './prompts.js';
 import { executeTool, tools } from './tools/index.js';
+import { Trace } from './trace.js';
 import type { DbReadonlyDeps } from './tools/db-readonly.js';
 import {
   logInteraction,
@@ -33,6 +34,16 @@ export interface AskAgentDeps {
   // A runSql tool adatbázis-kapcsolatának injektálása teszteléshez (lásd
   // db-readonly.ts) — alapból a valódi, lustán létrehozott, megosztott pool.
   readonly dbPool?: DbReadonlyDeps['pool'];
+  /**
+   * Élő, színes konzol-nyom (Trace). Alapból `true`; a CLI `--quiet`
+   * kapcsolójára `false`. A watch-log és a JSONL ettől függetlenül ír.
+   */
+  readonly print?: boolean;
+  /**
+   * A `logs/<ts>.json` Trace-nyom kiírása. Alapból `true`; a tesztek
+   * `false`-szal futnak, hogy ne gyártsanak artifactot.
+   */
+  readonly persistTrace?: boolean;
 }
 
 export interface AskAgentResult {
@@ -124,14 +135,29 @@ export async function askAgent(
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
+  // Élő nyom a konzolra és a watch-logba. A JSONL-naplózás (`log`) ettől
+  // FÜGGETLENÜL fut tovább — a kettő egymást kiegészíti, nem váltja ki.
+  const trace = new Trace({
+    question,
+    model: config.anthropicModel,
+    systemPrompt: SYSTEM_PROMPT,
+    print: deps.print ?? true,
+    persist: deps.persistTrace ?? true,
+  });
+
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
-    const response = await client.messages.create({
+    // A kérés egyben — így a Trace pontosan azt tudja kiírni, amit elküldünk.
+    const request = {
       model: config.anthropicModel,
       max_tokens: MAX_TOKENS,
       system: SYSTEM_PROMPT,
       messages: toApiMessages(messages),
       tools,
-    });
+    };
+    trace.request(iteration + 1, request);
+
+    const response = await client.messages.create(request);
+    const turn = trace.modelTurn(iteration + 1, response);
 
     totalInputTokens += response.usage.input_tokens;
     totalOutputTokens += response.usage.output_tokens;
@@ -148,6 +174,8 @@ export async function askAgent(
         outputTokens: totalOutputTokens,
       };
 
+      // Két, egymást kiegészítő nyom: JSONL (token usage, költségbecsléshez)
+      // és a kör-strukturált Trace-JSON.
       await log({
         systemPrompt: SYSTEM_PROMPT,
         messages,
@@ -155,6 +183,7 @@ export async function askAgent(
         usage,
         toolSteps,
       });
+      trace.finish(answer, usage);
 
       return { answer, systemPrompt: SYSTEM_PROMPT, messages, usage, toolSteps };
     }
@@ -167,11 +196,9 @@ export async function askAgent(
     for (const block of toolUseBlocks) {
       // Az ismeretlen tool kezelése is az `executeTool` dolga — az agent-loop
       // nem tud arról, MILYEN toolok léteznek.
-      const { ok, sql, rowCount, resultSummary } = await executeTool(
-        block.name,
-        block.input,
-        dbDeps,
-      );
+      const outcome = await executeTool(block.name, block.input, dbDeps);
+      const { ok, sql, rowCount, resultSummary } = outcome;
+      trace.toolStep(turn, block, outcome);
 
       toolSteps.push({
         toolName: block.name,
