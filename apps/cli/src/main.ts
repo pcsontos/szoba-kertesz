@@ -49,11 +49,17 @@ program
       options: { showPrompt?: boolean; quiet?: boolean },
     ) => {
       try {
-        const result = await askAgent(question, { print: !options.quiet });
+        const print = !options.quiet;
+        const result = await askAgent(question, { print });
         if (options.showPrompt) {
           printPrompt(result.systemPrompt, result.messages);
         }
-        console.log(result.answer);
+        // A végső választ élő Trace mellett már a Trace kiírja (✓ VÁLASZ
+        // blokk, lásd trace.ts finish()) — itt csak akkor írjuk ki, ha a
+        // Trace néma (--quiet), különben kétszer jelenne meg ugyanaz.
+        if (!print) {
+          console.log(result.answer);
+        }
       } catch (error) {
         console.error(error instanceof Error ? error.message : String(error));
         process.exitCode = 1;
