@@ -128,7 +128,7 @@ pnpm nx run cli:lint       # ESLint
 
 ## Debugolás VS Code-ban
 
-A `.vscode/launch.json` négy indítási (launch) és egy csatlakozási (attach) konfigurációt tartalmaz. Mindegyik launch-config automatikusan lebuildeli a CLI-t (`development` konfigurációval, hogy a sourcemapek megmaradjanak) egy `preLaunchTask`-on keresztül, mielőtt elindítja.
+A `.vscode/launch.json` öt indítási (launch) és egy csatlakozási (attach) konfigurációt tartalmaz. A négy `dist`-alapú launch-config automatikusan lebuildeli a CLI-t (`development` konfigurációval, hogy a sourcemapek megmaradjanak) egy `preLaunchTask`-on keresztül, mielőtt elindítja; az ötödik (`tsx`) build nélkül, közvetlenül a TypeScript forrásból fut.
 
 Nyisd meg a Run and Debug panelt (⇧⌘D), válaszd ki az egyiket, majd F5:
 
@@ -138,9 +138,15 @@ Nyisd meg a Run and Debug panelt (⇧⌘D), válaszd ki az egyiket, majd F5:
 | **Debug @szoba-kertesz/cli (interactive --show-prompt)** | interaktív mód, minden válasz előtt kiírja a teljes promptot |
 | **Debug @szoba-kertesz/cli (ask)** | felugró mezőben bekéri a kérdést, egyszeri `ask` lefutás |
 | **Debug @szoba-kertesz/cli (ask --show-prompt)** | mint fent, plusz kiírja a promptot |
+| **Debug from source (tsx, ask)** | build nélkül, `tsx`-szel futtatja az `apps/cli/src/main.ts`-t — a leggyorsabb kör |
 | **Attach to @szoba-kertesz/cli (terminal)** | lásd alább |
 
-Bármelyiket választod, tehetsz breakpointot közvetlenül a TypeScript forrásban (`apps/cli/src/`, `packages/core/src/`) — a sourcemapek miatt a debugger a valódi `.ts` sorokon áll meg, nem a lebuildelt `.js`-ben.
+Bármelyiket választod, tehetsz breakpointot közvetlenül a TypeScript forrásban (`apps/cli/src/`, `packages/core/src/`) — a debugger a valódi `.ts` sorokon áll meg, nem a lebuildelt `.js`-ben.
+
+A két út máshogy jut el ugyanoda, és ezt érdemes tudni, ha egy breakpoint mégsem kötne be:
+
+- A **`dist`-alapú** configok a lebuildelt kódot futtatják. A `@szoba-kertesz/core` futásidőben a `packages/core/dist/index.js`-re oldódik fel (nem az `apps/cli/dist/` alá másolt példányra!), ezért az `outFiles`-nak tartalmaznia kell a `packages/*/dist/**` mintát is — enélkül a VS Code be sem olvassa a `core` sourcemapjeit, és a `packages/core/src/` breakpointjai szürkék maradnak.
+- A **`tsx`** config a `--conditions=@szoba-kertesz/source` flaggel indul, ami a `packages/core/package.json` `@szoba-kertesz/source` export-conditionjét aktiválja, így a `core` is a `src/index.ts`-ből töltődik. A flag nélkül a `tsx` is a `dist`-et használná a `core`-hoz. Ugyanez a flag van a `pnpm cli` scriptben is.
 
 ### Csatlakozás egy terminálból indított folyamathoz
 

@@ -13,6 +13,7 @@
       "sourceMaps": true,
       "outFiles": [
         "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "${workspaceFolder}/packages/*/dist/**/*.(m|c|)js",
         "!**/node_modules/**"
       ]
     },
@@ -29,6 +30,7 @@
       "sourceMaps": true,
       "outFiles": [
         "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "${workspaceFolder}/packages/*/dist/**/*.(m|c|)js",
         "!**/node_modules/**"
       ]
     },
@@ -45,6 +47,7 @@
       "sourceMaps": true,
       "outFiles": [
         "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "${workspaceFolder}/packages/*/dist/**/*.(m|c|)js",
         "!**/node_modules/**"
       ]
     },
@@ -61,6 +64,25 @@
       "sourceMaps": true,
       "outFiles": [
         "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "${workspaceFolder}/packages/*/dist/**/*.(m|c|)js",
+        "!**/node_modules/**"
+      ]
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug from source (tsx, ask)",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--import", "tsx", "--conditions=@szoba-kertesz/source"],
+      "program": "${workspaceFolder}/apps/cli/src/main.ts",
+      "args": ["ask", "${input:askQuestion}"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "skipFiles": ["<node_internals>/**", "**/node_modules/tsx/**"],
+      "sourceMaps": true,
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
         "!**/node_modules/**"
       ]
     },
@@ -74,6 +96,7 @@
       "sourceMaps": true,
       "outFiles": [
         "${workspaceFolder}/apps/cli/dist/**/*.(m|c|)js",
+        "${workspaceFolder}/packages/*/dist/**/*.(m|c|)js",
         "!**/node_modules/**"
       ]
     }

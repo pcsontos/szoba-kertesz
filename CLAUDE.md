@@ -9,7 +9,7 @@ Working CLI agent, built as an Nx monorepo. `packages/core` (agent logic), `pack
 ### Commands
 
 - **Local DB:** `docker compose up -d` (Postgres on host `5433`), then `pnpm exec prisma migrate deploy` + `pnpm exec prisma db seed` (schema + ~30 plants).
-- **Build & run:** `pnpm cli ask "<kérdés>"` runs straight from source via `tsx` (no build). `pnpm nx run cli:build` + `node apps/cli/dist/main.js ask "<kérdés>"` (or `pnpm szobakertesz ...`) still works for the built path. No-arg run starts interactive mode; `--show-prompt` dumps the full system prompt + message array, `--quiet` silences the live Trace.
+- **Build & run:** `pnpm cli ask "<kérdés>"` runs straight from source via `tsx` (no build). The `--conditions=@szoba-kertesz/source` flag in that script is load-bearing: it activates the `@szoba-kertesz/source` export condition in `packages/core/package.json`, so `@szoba-kertesz/core` resolves to `src/index.ts`. **Without the flag `tsx` falls back to `packages/core/dist/index.js`** — i.e. it would silently run a possibly stale build of `core` while only `apps/cli/src` came from source. `pnpm nx run cli:build` + `node apps/cli/dist/main.js ask "<kérdés>"` (or `pnpm szobakertesz ...`) still works for the built path. No-arg run starts interactive mode; `--show-prompt` dumps the full system prompt + message array, `--quiet` silences the live Trace.
 - **Tests:** `pnpm nx test core` / `pnpm nx test cli` (Vitest). Some `core` specs hit the real local DB via `DATABASE_URL_READONLY`, so the DB must be up + seeded for them to pass.
 - **Typecheck / lint:** `pnpm nx run <core|cli>:typecheck` / `:lint`.
 
