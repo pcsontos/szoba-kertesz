@@ -16,8 +16,18 @@
 # Következmény: a kommentet a "github-actions[bot]" írja, nem a Claude app.
 name: Claude Review
 
+# IGÉNY SZERINT FUT, nem minden push-ra. Egy review ~11 perc valódi API-költség,
+# ezért nem indul automatikusan minden PR-frissítésnél. Kérése: tedd rá a
+# `claude-review` címkét a PR-re (a címke újbóli felrakása újra elindítja).
+#
+#   gh pr edit <PR> --add-label claude-review
+#
+# Miért nem `workflow_dispatch`? Ott nincs PR-kontextus, az actionnek nem lenne
+# mit review-znia. A `labeled` esemény viszont teljes PR-kontextust ad, és a
+# `track_progress` is támogatja.
 on:
   pull_request:
+    types: [labeled]
 
 permissions:
   contents: read
@@ -27,6 +37,7 @@ permissions:
 
 jobs:
   claude-review:
+    if: github.event.label.name == 'claude-review'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
