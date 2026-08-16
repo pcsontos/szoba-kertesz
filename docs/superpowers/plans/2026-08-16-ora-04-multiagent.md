@@ -1215,19 +1215,41 @@ jobs:
             Rövid, tételes összefoglalót írj PR-kommentbe: probléma → fájl:sor → javaslat.
 ```
 
-- [ ] **Step 3: A repo-secret beállítása — ezt NEKED kell megtenned**
+- [ ] **Step 3: KÉT előfeltétel — mindkettőt NEKED kell megtenned**
+
+**(a) A repo-secret:**
 
 ```bash
 gh secret set ANTHROPIC_API_KEY --repo pcsontos/szoba-kertesz
 ```
 
-A parancs interaktívan kéri a kulcsot. **Ez a lépés nem automatizálható az ügynök részéről** — ha a secret hiányzik, a `claude-review` job minden PR-en elhasal. Ellenőrzés:
+A parancs interaktívan kéri a kulcsot. Ellenőrzés:
 
 ```bash
 gh secret list --repo pcsontos/szoba-kertesz
 ```
 
 Expected: a listában szerepel az `ANTHROPIC_API_KEY`.
+
+**(b) A Claude Code GitHub App telepítése a repóra** — 🌐 <https://github.com/apps/claude>
+
+> ⚠️ **Végrehajtási lelet (2026-08-16, T5).** A terv eredetileg CSAK a secretet írta elő. **Ez nem elég.** Beállított secrettel is elhasal a job:
+>
+> ```
+> App token exchange failed: 401 Unauthorized - Claude Code is not installed
+> on this repository. Please install the Claude Code GitHub App at
+> https://github.com/apps/claude
+> ```
+>
+> A `claude-code-action@v1` OIDC-tokent cserél GitHub-app-tokenre (ezért kell az `id-token: write` jog), és ehhez a **GitHub App telepítése** is szükséges — az `anthropic_api_key` csak a modellhívást fedezi, a PR-re írás jogát nem.
+>
+> Egyik lépés sem automatizálható az ügynök részéről: a secret a kulcs birtoklását igényli, az app-telepítés pedig a repo-tulajdonos böngészős jóváhagyását.
+
+Mindkettő megvan → a `claude-review` job újrafuttatható a PR-en:
+
+```bash
+gh run rerun <run-id> --failed
+```
 
 - [ ] **Step 4: Ellenőrzés — élő PR (⚠️ felhasználói jóváhagyáshoz kötött)**
 
@@ -1243,6 +1265,43 @@ gh run watch
 Expected: a `CI / main` job zöld; a `Claude Review` job kommentet ír a PR-re. Ha a review job elhasal → nézd meg a logot; leggyakoribb ok a hiányzó secret (Step 3).
 
 > Ha nem kérsz PR-t, a workflow-fájlok akkor is a helyükön maradnak, és a következő PR-nél élesednek — a task ettől nem sikertelen, csak az élő ellenőrzés marad el. Ezt írd le explicit módon.
+
+---
+
+#### Task 4 — végrehajtási leletek (2026-08-16)
+
+**PR #3** megnyitva a `master` ellen, mindkét workflow lefutott:
+
+| Job | Eredmény | Bizonyíték |
+|---|---|---|
+| `CI / main` | ✅ **success** | `Successfully ran targets lint, typecheck, build for 3 projects` |
+| `Claude Review` | ❌ **failure** | `401 Unauthorized — Claude Code is not installed on this repository` |
+
+1. **A CI-kapu bizonyítottan működik.** A `ci.yml` a runneren, generált Prisma-kliens nélkül is zöld — ezt a PR előtt lokálisan is szimuláltam (a `packages/db/generated` a repón KÍVÜLRE mozgatva; **fontos:** a repón belüli átnevezés hamis eredményt ad, mert a `.bak` mappa kikerül a lint-ignore alól, és a generált kód több ezer lint-hibát dob).
+
+2. **A `claude-review` a hiányzó GitHub App miatt bukott, nem a secret miatt** — lásd a Step 3 (b) pontját. A secret ekkor már be volt állítva (`gh secret list` igazolta).
+
+3. **A `ci.yml` push-triggere `master`-re szűkített**, ezért a feature-branchre való push önmagában NEM indít CI-t — csak a PR. Ezt szándékosan hagytam így (a PR a kapu), de tudni kell róla: PR nélkül nincs élő visszajelzés.
+
+**A `claude-review` három egymást követő javítást igényelt.** Mindegyik csak élesben derült ki:
+
+| # | Tünet | Ok | Javítás |
+|---|---|---|---|
+| 1 | `401 Unauthorized`, 16 mp alatt | nincs telepítve a Claude Code GitHub App | **`github_token: ${{ secrets.GITHUB_TOKEN }}`** — az `action.yml` szerint a `github_token` és az App **vagylagos** út; a beépített token a `permissions` blokk jogaival elég |
+| 2 | ZÖLD futás, de **néma** — 11 perc, nulla komment | prompt-módban az alapértelmezés `track_progress: false` és `use_sticky_comment: false`, így a review eredménye csak a log-ban marad | **`track_progress: true`** — `pull_request` eseményen tag módot kényszerít követő kommenttel |
+| 3 | minden push ~11 perc valódi API-költséget okoz | a `pull_request:` trigger minden frissítésre indít | **igény szerinti futás:** `types: [labeled]` + `if: github.event.label.name == 'claude-review'` |
+
+> **A Claude Code GitHub App NEM előfeltétel** — a Step 3 (b) pontja ezzel tárgytalanná vált. Az App telepítése egyébként a `claude.ai` szervezeti beállításain át vezet, ami Team/Enterprise előfizetést igényel; a `github_token`-es út ezt megkerüli. Ára: a kommentet a `github-actions[bot]` írja, nem a Claude app.
+>
+> **`workflow_dispatch` nem járható út** kézi indításra: ott nincs PR-kontextus, az actionnek nem lenne mit review-znia. A címke-trigger ad teljes kontextust, és a `track_progress` is támogatja a `labeled` eseményt.
+
+**A review indítása mostantól:**
+
+```bash
+gh pr edit 3 --add-label claude-review
+```
+
+⚠️ A `track_progress: true` **még nincs élesben igazolva** — a 2. javítás után a 3. (címke-trigger) miatt már nem futott automatikusan. Az első címkézésnél ellenőrizendő, hogy tényleg megjelenik-e a komment; ha nem, a következő próba a `use_sticky_comment: true`.
 
 ---
 
