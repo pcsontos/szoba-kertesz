@@ -1443,6 +1443,19 @@ export async function askAgent(
 >
 > A `query-prompt.ts` `buildSystemPrompt()` függvényét nevezd át `buildQueryPrompt()`-ra, és tartsd meg `buildSystemPrompt` néven is deprecated aliasként, amíg a `query-prompt.spec.ts` 10 tesztje át nem áll — a `SYSTEM_PROMPT` konstans **bájtazonos marad** a `docs/system-prompt.md`-vel.
 
+- [ ] **Step 4b: Vezesd át a manifeszt `executeTool`-os tesztjeit — ⚠️ KÖTELEZŐ**
+
+**A Step 1 `git rm`-je elvágja a manifesztet.** A `packages/core/src/lib/own-additions.spec.ts` importálja az `executeTool`-t a törlendő `tools/index.ts`-ből, és **két** teszt épül rá (a „saját kiegészítés 1" blokkban):
+
+| Teszt | Mit bizonyít ma | Mivel váltsd ki |
+|---|---|---|
+| `be van kötve az executeTool dispatchbe` | a `listCategories` a NEVÉN keresztül elérhető, nem „Ismeretlen tool" | a tool-factory közvetlen meghajtása: `listCategoriesTool().execute?.({}, …)`, vagy — egyszerűbben — a `LIST_CATEGORIES_TOOL_NAME` + `executeListCategoriesTool` páros, ami a dispatch nélkül is ugyanazt állítja |
+| `ismeretlen toolra hibaszöveget ad, nem dob kivételt` | a loop nem száll el ismeretlen toolnévtől | **már fedve** az `agent.spec.ts` „ismeretlen tool nevére sem dob kivételt" tesztjében (AI SDK-szinten) — itt a manifesztből **elhagyható**, de akkor a darabszám csökken, ezért írd át inkább a query-agent toolkészletére: `Object.keys(buildTools)` tartalmazza mind a hármat |
+
+**Ne töröld a blokkot** — a #1 saját kiegészítés (`listCategories`) védőhálója. Ha a darabszám emiatt csökkenne, az **STOP**.
+
+Az `executeTool` import a manifeszt tetejéről is kikerül; helyette a `tools/list-categories/list-categories-tool.js` exportjai jönnek a `../index.js`-en át.
+
 - [ ] **Step 5: Vezesd át a CLI típusneveit**
 
 Az `apps/cli/src/interactive.ts` ma `AskAgentResult`-ot és `ChatMessage`-et importál a core-ból; a Step 3 átnevezése után ezek `AskResult` és `Message`. A `RunInteractiveOptions.ask` mezőjének típusa is ezzel változik:
@@ -1500,13 +1513,17 @@ export * from './lib/echo.js';
 
 - [ ] **Step 7: Ellenőrzés**
 
+**Kiindulási állapot a Task 5 elején** (mérve 2026-08-16, a Task 4 után): `core` **96 teszt / 13 fájl**, `cli` **9 teszt / 3 fájl**, typecheck és lint zöld mindkét projekten, PR #3 nyitva.
+
 ```bash
 pnpm nx reset
-pnpm nx run core:typecheck && pnpm nx run cli:typecheck && pnpm nx test core && pnpm nx test cli
+pnpm nx run core:typecheck --skip-nx-cache && pnpm nx run cli:typecheck --skip-nx-cache
+pnpm nx test core --skip-nx-cache && pnpm nx test cli --skip-nx-cache
+pnpm nx run core:lint --skip-nx-cache && pnpm nx run cli:lint --skip-nx-cache
 grep -rn "tools/index" packages/core/src apps/cli/src
 ```
 
-Expected: typecheck és teszt zöld; a `grep` **üres**; a darabszám a Task 3-ban rögzítetthez képest **nem csökkent** (tisztán mozgatás). Csökkenés → STOP.
+Expected: typecheck, teszt és lint zöld; a `grep` **üres**; a darabszám **96 / 9**, nem kevesebb (tisztán mozgatás). Csökkenés → STOP.
 
 ---
 
