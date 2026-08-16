@@ -1,6 +1,12 @@
 import { join } from 'node:path';
 import { Command } from 'commander';
-import { askAgent, closeReadonlyPool, setWatchLog } from '@szoba-kertesz/core';
+import {
+  askAgent,
+  askIngestAgent,
+  closeReadonlyPool,
+  closeReadWritePool,
+  setWatchLog,
+} from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
 import { printPrompt } from './lib/print-prompt.js';
 
@@ -73,6 +79,33 @@ program
       }
     },
   );
+
+program
+  .command('ingest <instruction>')
+  .description(
+    'Katalógus-kezelő agent: természetes nyelvű utasításból vesz fel vagy frissít ' +
+      'terméket. FIGYELEM: ez a parancs ÍR az adatbázisba.',
+  )
+  .option(
+    '--quiet',
+    'az élő, színes Trace elnémítása — csak a végső válasz jelenik meg (a watch-log és a JSONL ettől függetlenül ír)',
+  )
+  .action(async (instruction: string, options: { quiet?: boolean }) => {
+    try {
+      const print = !options.quiet;
+      const result = await askIngestAgent(instruction, { print });
+      if (!print) {
+        console.log(result.answer);
+      }
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    } finally {
+      // Az ingest-agent OLVAS (read-only pool) ÉS ÍR (read-write pool) — mindkettőt zárjuk,
+      // különben a pg idleTimeoutMillis-e miatt a folyamat életben maradna.
+      await Promise.all([closeReadonlyPool(), closeReadWritePool()]);
+    }
+  });
 
 // Argumentum nélkül indítva (process.argv: [node, script]) az interaktív mód
 // indul a Commander help-je helyett. Explicit argv-hossz ellenőrzést használunk

@@ -12,6 +12,8 @@
 export * from './lib/agents/agent-loop.js';
 export * from './lib/agents/query-agent/query-agent.js';
 export * from './lib/agents/query-agent/query-prompt.js';
+export * from './lib/agents/ingest-agent/ingest-agent.js';
+export * from './lib/agents/ingest-agent/ingest-prompt.js';
 
 export * from './lib/tools/tool-outcome.js';
 export * from './lib/tools/run-sql/run-sql-tool.js';
