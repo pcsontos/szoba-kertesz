@@ -14,12 +14,14 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  LIST_CATEGORIES_TOOL_NAME,
   SYSTEM_PROMPT,
   buildSystemPrompt,
   executeListCategoriesTool,
   executeRunSqlTool,
   executeTool,
   askAgent,
+  getSessionLogFilePath,
   guardSql,
   logInteraction,
 } from '../index.js';
@@ -164,5 +166,41 @@ describe('saját kiegészítés 6 — JSONL-logger token usage-dzsel', () => {
     // A token usage tényleg naplózva van — ez a HF3 költségbecslés alapja.
     expect(JSON.stringify(parsed)).toContain('11');
     expect(JSON.stringify(parsed)).toContain('22');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 04. alkalom — manifeszt-keményítés a framework-migráció ELŐTT.
+//
+// A következő három blokk azt a három drótot rögzíti, amit a Vercel AI SDK-ra
+// állás elvágna. SZÁNDÉKOSAN típus- és névszinten állítanak, NEM az askAgent
+// belső injektálási mechanizmusán (`deps.client`) — így a migráció után is
+// változtatás nélkül érvényesek maradnak.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('saját kiegészítés 7 — a --show-prompt adatforrása', () => {
+  it('az askAgent eredménye típusszinten hordozza a systemPrompt-ot', async () => {
+    // Fordítási idejű állítás: ha az AskResult-ból kiesik a systemPrompt, ez a
+    // sor NEM fordul le, és a typecheck bukik — nem csak a teszt.
+    type Result = Awaited<ReturnType<typeof askAgent>>;
+    const readSystemPrompt = (result: Result): string => result.systemPrompt;
+
+    expect(typeof readSystemPrompt).toBe('function');
+  });
+});
+
+describe('saját kiegészítés 6 — a JSONL-logger a csomag felületén marad', () => {
+  it('a logInteraction és a session-fájl útja exportált marad', () => {
+    expect(typeof logInteraction).toBe('function');
+    expect(typeof getSessionLogFilePath).toBe('function');
+    // A .jsonl kiterjesztés a Trace .json nyomától való elkülönülés garanciája:
+    // a kettő egymás MELLETT él, nem váltja ki egymást.
+    expect(getSessionLogFilePath()).toMatch(/\.jsonl$/);
+  });
+});
+
+describe('saját kiegészítés 1 — a listCategories neve nem tűnhet el', () => {
+  it('a tool neve exportált konstans, és pontosan "listCategories"', () => {
+    expect(LIST_CATEGORIES_TOOL_NAME).toBe('listCategories');
   });
 });
