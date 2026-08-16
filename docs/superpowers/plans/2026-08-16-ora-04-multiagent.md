@@ -1943,6 +1943,13 @@ pnpm nx run core:typecheck && pnpm nx test core && pnpm nx test cli
 
 Expected: zöld; **+6 core teszt** (5 séma + 1 tool). Csökkenés → STOP.
 
+> **Végrehajtva 2026-08-16:** core 107/16 (+6), cli 9/3; typecheck és lint zöld. Az `upsertProduct`
+> a Files-lista szerint az `upsert-product-tool.ts`-be került (a mi `db-readwrite.ts`-ünk generikus
+> maradt). A tervezett tool-teszt csak a hibaágat fedi, ezért a két írási utat egy scratchpad-próba
+> ellenőrizte valódi DB-n, tranzakcióban visszagördítve: INSERT → `created` (id=61), UPDATE →
+> `updated` (ugyanaz az id, a 19 oszlop a helyére íródott), ROLLBACK után nulla nyom, a katalógus
+> 30 termék maradt. A 19 oszlop tehát élesben is illeszkedik a `products` táblára.
+
 ---
 
 ### Task 8: `fetchFeed` — az élő Shopify-feed
@@ -2041,6 +2048,34 @@ pnpm nx run core:typecheck && pnpm nx test core && pnpm nx test cli
 ```
 
 Expected: zöld; **+2 core teszt**; a teszt-futás **nem megy ki a hálózatra** (ha lassú vagy hálózati hibát ad, az injektálás nem sikerült → STOP).
+
+> **Végrehajtási lelet (2026-08-16, T5) — a `NON_PLANT_TYPES` ezen a feeden gyakorlatilag nem szűr.**
+>
+> A terv szerint a motor „változtatás nélkül átvehető". A tesztek zölden lefutottak (core 109/17,
+> a feed-spec 3 ms — tehát valóban nem ment ki hálózatra), a **valódi `tropicalhome.hu` feeden
+> futtatott próba viszont mást mutatott**: a 307 termék `product_type`-jai magyarok/latinok
+> (`Kaspók` 66, `Hoya` 40, `Monstera` 13…), a kurzus tiltólistája viszont csupa angol, kisbetűs
+> név. Ebből a feeden csak az `Accessories` (8) és a `Soil` (10) akadt fenn — a **`Kaspók` mind a
+> 66 átment**, azaz a 229 jelölt negyede kerámia kaspó volt. Az ingest-agent kaspót írhatott volna
+> a NÖVÉNY-katalógusba, valós áron, latin névnek látszó címmel.
+>
+> **Javítva (felhasználói jóváhagyással, T2 — additív):** a `NON_PLANT_TYPES` két blokkra bontva —
+> a kurzus angol listája, alatta a mért `kaspók` / `kaspó` / `pots & planters` / `gift card` /
+> `ajándékutalvány`. A szűrés szándékosan determinisztikus marad, nem az LLM dolga. Mellé egy
+> regressziós teszt mockolt feeden (kaspó kiesik, Monstera marad).
+>
+> **Mérés a javítás után, ugyanazon az élő feeden:** jelöltek 229 → **167**, `Kaspók` az első
+> 100-ban 25 → **0**, a `filter: "monstera"` változatlanul 7 találat.
+>
+> **Végrehajtva 2026-08-16:** core 110/17 (**+3**, a tervezett +2 helyett — a regressziós teszttel),
+> cli 9/3; typecheck, lint és prettier zöld. Két további eltérés a referenciától: a kimenő
+> `User-Agent` `plantbase-ingest` → `szoba-kertesz-ingest` (saját projektnévvel azonosítjuk magunkat
+> külső szolgáltató felé), és a `fetchFeedCandidates` második, opcionális `deps` paramétere
+> (`{ fetch? }`) a terv szerint.
+>
+> **Nyitva a Task 9-hez:** a feed 307 termékéből **31-nek üres a `product_type`-ja**, ezeket az
+> üres string a tiltólistán változatlanul kidobja. Lehet köztük valódi növény — érdemes megnézni,
+> mielőtt a katalógus-frissítést élesben ráengedjük.
 
 ---
 
