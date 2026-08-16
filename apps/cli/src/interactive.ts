@@ -3,11 +3,18 @@ import {
   askAgent,
   closeReadonlyPool,
   type AskAgentResult,
+  type ChatMessage,
 } from '@szoba-kertesz/core';
 import { printPrompt } from './lib/print-prompt.js';
 
 export interface RunInteractiveOptions {
   readonly showPrompt?: boolean;
+  /**
+   * Élő, színes Trace. Alapból true; a CLI `--quiet` kapcsolójára false.
+   * Egyben azt is eldönti, ki írja ki a végső választ: `true` esetén a Trace
+   * (✓ VÁLASZ blokk), `false` esetén ez a modul — sosem mindkettő.
+   */
+  readonly print?: boolean;
   // Teszteléshez injektálható függőségek (interactive.spec.ts) — alapból a
   // valódi stdin/stdout és a valódi askAgent. Injektálás nélkül a viselkedés
   // változatlan.
@@ -52,7 +59,15 @@ export function runInteractive(
   options: RunInteractiveOptions = {},
 ): Promise<void> {
   const showPrompt = options.showPrompt ?? false;
-  const ask = options.ask ?? askAgent;
+  const print = options.print ?? true;
+
+  // Beszélgetés-memória: minden forduló után eltesszük a teljes, frissített
+  // üzenet-tömböt, és a következő hívásnak visszaadjuk — enélkül a
+  // visszautaló kérdés ("és olcsóbbat?") értelmezhetetlen a modellnek.
+  let history: readonly ChatMessage[] = [];
+  const ask =
+    options.ask ??
+    ((question: string) => askAgent(question, { print, history }));
 
   return new Promise((resolve) => {
     const rl = createInterface({
@@ -93,10 +108,16 @@ export function runInteractive(
 
         try {
           const result = await ask(question);
+          history = result.messages;
           if (showPrompt) {
             printPrompt(result.systemPrompt, result.messages);
           }
-          console.log(result.answer);
+          // Lásd main.ts: élő Trace mellett a választ a Trace írja ki
+          // (✓ VÁLASZ blokk), itt csak a néma (--quiet) ág írja — így nem
+          // duplázódik.
+          if (!print) {
+            console.log(result.answer);
+          }
         } catch (error) {
           console.error(error instanceof Error ? error.message : String(error));
         }

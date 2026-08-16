@@ -1,17 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { loadConfig, type Config } from './config.js';
-import { SYSTEM_PROMPT } from './system-prompt.js';
-import {
-  executeRunSqlTool,
-  runSqlToolDefinition,
-  RUN_SQL_TOOL_NAME,
-} from './runsql-tool.js';
-import {
-  executeListCategoriesTool,
-  listCategoriesToolDefinition,
-  LIST_CATEGORIES_TOOL_NAME,
-} from './list-categories-tool.js';
-import type { DbReadonlyDeps } from './db-readonly.js';
+import { SYSTEM_PROMPT } from './prompts.js';
+import { executeTool, tools } from './tools/index.js';
+import { Trace } from './trace.js';
+import type { DbReadonlyDeps } from './tools/db-readonly.js';
 import {
   logInteraction,
   type ChatMessage,
@@ -42,6 +34,23 @@ export interface AskAgentDeps {
   // A runSql tool adatbázis-kapcsolatának injektálása teszteléshez (lásd
   // db-readonly.ts) — alapból a valódi, lustán létrehozott, megosztott pool.
   readonly dbPool?: DbReadonlyDeps['pool'];
+  /**
+   * Élő, színes konzol-nyom (Trace). Alapból `true`; a CLI `--quiet`
+   * kapcsolójára `false`. A watch-log és a JSONL ettől függetlenül ír.
+   */
+  readonly print?: boolean;
+  /**
+   * A `logs/<ts>.json` Trace-nyom kiírása. Alapból `true`; a tesztek
+   * `false`-szal futnak, hogy ne gyártsanak artifactot.
+   */
+  readonly persistTrace?: boolean;
+  /**
+   * Korábbi beszélgetés (interaktív mód) — ezt folytatjuk. A visszakapott
+   * `AskAgentResult.messages`-t kell visszaadni a következő híváshoz, így a
+   * modell látja az előzményt és a visszautaló kérdés ("és olcsóbbat?")
+   * értelmezhető.
+   */
+  readonly history?: readonly ChatMessage[];
 }
 
 export interface AskAgentResult {
@@ -97,44 +106,6 @@ function toApiMessages(
 }
 
 /**
- * Egy tool-végrehajtás eredményét a naplózáshoz (`ToolStep`) és a
- * modellnek visszaküldhető `tool_result` blokkhoz szükséges egységes
- * alakra hozza — `runSql`-nél a lefuttatott SQL-t és a sorok JSON-ját,
- * `listCategories`-nél a kategórianevek JSON-ját adja vissza. Hiba esetén
- * mindkét tool ugyanazt a hibaüzenetet adja tovább.
- */
-interface ToolDispatchResult {
-  readonly ok: boolean;
-  readonly sql?: string;
-  readonly rowCount?: number;
-  readonly resultSummary: string;
-}
-
-async function dispatchToolUse(
-  block: Anthropic.ToolUseBlock,
-  dbDeps: DbReadonlyDeps,
-): Promise<ToolDispatchResult> {
-  if (block.name === RUN_SQL_TOOL_NAME) {
-    const result = await executeRunSqlTool(block.input, dbDeps);
-    return {
-      ok: result.ok,
-      sql: result.sql,
-      rowCount: result.ok ? result.rowCount : undefined,
-      resultSummary: result.ok ? JSON.stringify(result.rows) : result.error,
-    };
-  }
-
-  const result = await executeListCategoriesTool(block.input, dbDeps);
-  return {
-    ok: result.ok,
-    rowCount: result.ok ? result.categories.length : undefined,
-    resultSummary: result.ok
-      ? JSON.stringify(result.categories)
-      : result.error,
-  };
-}
-
-/**
  * Kézzel írt tool-use hurok (B3.5) a hivatalos Anthropic SDK kliensén
  * keresztül — nincs `toolRunner`/`betaZodTool` SDK-segéd, a mechanika
  * végig látható marad:
@@ -166,19 +137,37 @@ export async function askAgent(
   const log = deps.log ?? logInteraction;
   const dbDeps: DbReadonlyDeps = { config, pool: deps.dbPool };
 
-  let messages: ChatMessage[] = [{ role: 'user', content: question }];
+  let messages: ChatMessage[] = [
+    ...(deps.history ?? []),
+    { role: 'user', content: question },
+  ];
   const toolSteps: ToolStep[] = [];
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
 
+  // Élő nyom a konzolra és a watch-logba. A JSONL-naplózás (`log`) ettől
+  // FÜGGETLENÜL fut tovább — a kettő egymást kiegészíti, nem váltja ki.
+  const trace = new Trace({
+    question,
+    model: config.anthropicModel,
+    systemPrompt: SYSTEM_PROMPT,
+    print: deps.print ?? true,
+    persist: deps.persistTrace ?? true,
+  });
+
   for (let iteration = 0; iteration < MAX_TOOL_ITERATIONS; iteration += 1) {
-    const response = await client.messages.create({
+    // A kérés egyben — így a Trace pontosan azt tudja kiírni, amit elküldünk.
+    const request = {
       model: config.anthropicModel,
       max_tokens: MAX_TOKENS,
       system: SYSTEM_PROMPT,
       messages: toApiMessages(messages),
-      tools: [runSqlToolDefinition, listCategoriesToolDefinition],
-    });
+      tools,
+    };
+    trace.request(iteration + 1, request);
+
+    const response = await client.messages.create(request);
+    const turn = trace.modelTurn(iteration + 1, response);
 
     totalInputTokens += response.usage.input_tokens;
     totalOutputTokens += response.usage.output_tokens;
@@ -195,6 +184,8 @@ export async function askAgent(
         outputTokens: totalOutputTokens,
       };
 
+      // Két, egymást kiegészítő nyom: JSONL (token usage, költségbecsléshez)
+      // és a kör-strukturált Trace-JSON.
       await log({
         systemPrompt: SYSTEM_PROMPT,
         messages,
@@ -202,6 +193,7 @@ export async function askAgent(
         usage,
         toolSteps,
       });
+      trace.finish(answer, usage);
 
       return { answer, systemPrompt: SYSTEM_PROMPT, messages, usage, toolSteps };
     }
@@ -212,23 +204,11 @@ export async function askAgent(
 
     const toolResultBlocks: ChatMessageContentBlock[] = [];
     for (const block of toolUseBlocks) {
-      if (
-        block.name !== RUN_SQL_TOOL_NAME &&
-        block.name !== LIST_CATEGORIES_TOOL_NAME
-      ) {
-        toolResultBlocks.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: `Ismeretlen tool: "${block.name}".`,
-          is_error: true,
-        });
-        continue;
-      }
-
-      const { ok, sql, rowCount, resultSummary } = await dispatchToolUse(
-        block,
-        dbDeps,
-      );
+      // Az ismeretlen tool kezelése is az `executeTool` dolga — az agent-loop
+      // nem tud arról, MILYEN toolok léteznek.
+      const outcome = await executeTool(block.name, block.input, dbDeps);
+      const { ok, sql, rowCount, resultSummary } = outcome;
+      trace.toolStep(turn, block, outcome);
 
       toolSteps.push({
         toolName: block.name,

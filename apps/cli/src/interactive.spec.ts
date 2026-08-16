@@ -57,7 +57,8 @@ describe('runInteractive', () => {
   it('answers a question and exits cleanly on "exit"', async () => {
     const ask = vi.fn().mockResolvedValue(makeResult('a válasz'));
 
-    const done = runInteractive({ input, output, ask });
+    // print: false = néma Trace (--quiet), ilyenkor a választ ez a modul írja.
+    const done = runInteractive({ input, output, ask, print: false });
     input.write('mi az a pozsgás?\n');
     await flushAsync();
     input.write('exit\n');
@@ -65,6 +66,22 @@ describe('runInteractive', () => {
 
     expect(ask).toHaveBeenCalledExactlyOnceWith('mi az a pozsgás?');
     expect(logSpy).toHaveBeenCalledWith('a válasz');
+    expect(logSpy).toHaveBeenCalledWith('Viszlát!');
+  });
+
+  it('does not echo the answer when the Trace is live — the Trace prints it (double-print regression)', async () => {
+    const ask = vi.fn().mockResolvedValue(makeResult('a válasz'));
+
+    // print: true (alapértelmezés) = élő Trace: a ✓ VÁLASZ blokkot a Trace
+    // írja ki, tehát itt NEM szabad még egyszer kiírni ugyanazt.
+    const done = runInteractive({ input, output, ask, print: true });
+    input.write('mi az a pozsgás?\n');
+    await flushAsync();
+    input.write('exit\n');
+    await done;
+
+    expect(ask).toHaveBeenCalledExactlyOnceWith('mi az a pozsgás?');
+    expect(logSpy).not.toHaveBeenCalledWith('a válasz');
     expect(logSpy).toHaveBeenCalledWith('Viszlát!');
   });
 
@@ -88,7 +105,7 @@ describe('runInteractive', () => {
     const deferred = createDeferred<AskAgentResult>();
     const ask = vi.fn().mockReturnValue(deferred.promise);
 
-    const done = runInteractive({ input, output, ask });
+    const done = runInteractive({ input, output, ask, print: false });
     input.write('folyamatban lévő kérdés\n');
     await flushAsync();
     expect(ask).toHaveBeenCalledExactlyOnceWith('folyamatban lévő kérdés');
@@ -123,7 +140,7 @@ describe('runInteractive', () => {
       });
     });
 
-    const done = runInteractive({ input, output, ask });
+    const done = runInteractive({ input, output, ask, print: false });
     input.write('első kérdés\n');
     input.write('második kérdés\n');
     await flushAsync();

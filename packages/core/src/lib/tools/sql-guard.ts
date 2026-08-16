@@ -1,7 +1,7 @@
 /**
  * SELECT-only guard a `runSql` tool számára (B3.2).
  *
- * Ez az alkalmazás-szintű védelmi réteg — a system prompt (`system-prompt.ts`)
+ * Ez az alkalmazás-szintű védelmi réteg — a system prompt (`prompts.ts`)
  * már instruálja a modellt, hogy csak SELECT-et írjon és mindig tegyen LIMIT-et,
  * de ez a modul regex/parszolás alapon *ténylegesen* kikényszeríti ezt, mielőtt
  * bármi eljutna a valódi adatbázis-kapcsolathoz (`db-readonly.ts`).

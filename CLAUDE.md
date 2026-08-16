@@ -9,15 +9,23 @@ Working CLI agent, built as an Nx monorepo. `packages/core` (agent logic), `pack
 ### Commands
 
 - **Local DB:** `docker compose up -d` (Postgres on host `5433`), then `pnpm exec prisma migrate deploy` + `pnpm exec prisma db seed` (schema + ~30 plants).
-- **Build & run:** `pnpm nx run cli:build`, then `node apps/cli/dist/main.js ask "<kérdés>"` (or `pnpm szobakertesz ...`). No-arg run starts interactive mode; add `--show-prompt` to dump the full system prompt + message array.
+- **Build & run:** `pnpm cli ask "<kérdés>"` runs straight from source via `tsx` (no build). The `--conditions=@szoba-kertesz/source` flag in that script is load-bearing: it activates the `@szoba-kertesz/source` export condition in `packages/core/package.json`, so `@szoba-kertesz/core` resolves to `src/index.ts`. **Without the flag `tsx` falls back to `packages/core/dist/index.js`** — i.e. it would silently run a possibly stale build of `core` while only `apps/cli/src` came from source. `pnpm nx run cli:build` + `node apps/cli/dist/main.js ask "<kérdés>"` (or `pnpm szobakertesz ...`) still works for the built path. No-arg run starts interactive mode; `--show-prompt` dumps the full system prompt + message array, `--quiet` silences the live Trace.
 - **Tests:** `pnpm nx test core` / `pnpm nx test cli` (Vitest). Some `core` specs hit the real local DB via `DATABASE_URL_READONLY`, so the DB must be up + seeded for them to pass.
 - **Typecheck / lint:** `pnpm nx run <core|cli>:typecheck` / `:lint`.
 
 ### Key files
 
 - `packages/core/src/lib/agent.ts` — `askAgent`, the hand-rolled multi-step tool-use loop over the Anthropic SDK.
-- `packages/core/src/lib/{runsql-tool,list-categories-tool,sql-guard,db-readonly}.ts` — the two read-only tools, the SELECT-only guard (wraps queries in a subquery to force `LIMIT`), and the single readonly `pg` pool.
-- `packages/core/src/lib/system-prompt.ts` — the product system prompt; **must stay byte-identical to `docs/system-prompt.md`** (kept in lockstep; improvements are documented in `docs/system-prompt-javitas.md`).
+- `packages/core/src/lib/tools/` — the tool layer: `index.ts` (the `tools` array + `executeTool` dispatch — the single place that knows which tools exist), `run-sql.ts`, `list-categories.ts`, `client-preferences.ts` (a non-SQL tool), plus `sql-guard.ts` (SELECT-only guard, wraps queries in a subquery to force `LIMIT`) and `db-readonly.ts` (the single readonly `pg` pool). Adding a tool = one new file here + two lines in `index.ts`; the agent loop does not change.
+- `packages/core/src/lib/trace.ts` — the live, colored console trace (`Trace` class + `setWatchLog`/`traceLog`); shows the context growing turn by turn and writes `logs/<timestamp>.json`.
+- `packages/core/src/lib/prompts.ts` — the product system prompt. The `SYSTEM_PROMPT` constant **must stay byte-identical to the ` ```xml ` block inside `docs/system-prompt.md`** (the doc wraps it in a heading + fence; only the fenced body is the contract). Verify with:
+
+  ```bash
+  diff <(sed -n '/^export const SYSTEM_PROMPT = `/,/^`;$/p' packages/core/src/lib/prompts.ts | sed '1s/^export const SYSTEM_PROMPT = `//' | sed '$d') \
+       <(awk '/^```xml$/{f=1;next} /^```$/{f=0} f' docs/system-prompt.md)
+  ```
+
+  Improvements are documented in `docs/system-prompt-javitas.md`; `buildSystemPrompt()` is a thin wrapper returning the constant.
 - `packages/db/prisma/` — `schema.prisma`, migrations, `seed.ts`, `plants.ts` (catalog seed data).
 - `apps/cli/src/{main,interactive}.ts` — commander `ask` command + `node:readline` interactive mode.
 
@@ -49,7 +57,7 @@ Key design invariants to preserve:
 - **Framework-agnostic core**: `packages/core` must not know about its entry point (CLI/API/web). A new surface is a new app, not a rewrite.
 - **Two DB connections, two privilege levels**: the agent's read-only tools (`runSql` and `listCategories`) only ever use `DATABASE_URL_READONLY` (SELECT-only). Prisma uses `DATABASE_URL`. The agent must never query through Prisma.
 - **Hand-rolled agent loop**: `askAgent` is built directly on the Anthropic SDK (official client, not raw HTTP) with a manual tool-use loop — no agent framework — so the mechanics stay visible.
-- **Transparency by default**: every interaction is logged as JSONL (`logs/<timestamp>.jsonl`): system prompt, messages, generated SQL, result, response, token usage. A `--show-prompt` flag dumps the full message array.
+- **Transparency by default — two complementary traces, neither replaces the other**: (1) JSONL (`logs/<timestamp>.jsonl`) via `logger.ts`: system prompt, messages, generated SQL, result, response, token usage — this is the evidence base for cost estimates; (2) the live `Trace` (`trace.ts`): colored console output plus a turn-structured `logs/<timestamp>.json`, and a continuous `logs/agent.log` watch log for `tail -f`. `--show-prompt` dumps the full message array; `--quiet` silences only the console half. In tests, `print: false` and `persistTrace: false` keep both quiet so no artifacts are written.
 - **Prisma lives in `packages/db`**, not the repo root, so the schema is part of the Nx dependency graph and both `core` and the seed script import from there.
 - Before coding against a new or rarely-used library API (e.g. Prisma), look up current docs via Context7 first — reduces errors under test.
 

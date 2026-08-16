@@ -26,7 +26,10 @@ interface MockResponse {
   >;
   readonly stop_reason: string;
   readonly stop_sequence: null;
-  readonly usage: { readonly input_tokens: number; readonly output_tokens: number };
+  readonly usage: {
+    readonly input_tokens: number;
+    readonly output_tokens: number;
+  };
 }
 
 function textOnlyResponse(text: string): MockResponse {
@@ -105,13 +108,17 @@ function createFakePool(rows: readonly Record<string, unknown>[]): Pool {
 describe('askAgent', () => {
   it('answers directly (no tool call) when the model resolves on the first turn', async () => {
     const client = createClient(
-      textOnlyResponse('Egy szobanövény fényigénye az eredeti élőhelyétől függ.'),
+      textOnlyResponse(
+        'Egy szobanövény fényigénye az eredeti élőhelyétől függ.',
+      ),
     );
     const log = vi.fn().mockResolvedValue(undefined);
 
     const result = await askAgent('Mitől függ egy növény fényigénye?', {
       client,
       config: TEST_CONFIG,
+      print: false,
+      persistTrace: false,
       log,
     });
 
@@ -124,6 +131,7 @@ describe('askAgent', () => {
     expect(call.tools).toEqual([
       expect.objectContaining({ name: 'runSql' }),
       expect.objectContaining({ name: 'listCategories' }),
+      expect.objectContaining({ name: 'getClientPreferences' }),
     ]);
     expect(call.messages).toEqual([
       { role: 'user', content: 'Mitől függ egy növény fényigénye?' },
@@ -143,7 +151,10 @@ describe('askAgent', () => {
       { id: 2, name: 'Zamioculcas', pet_safe: true },
     ];
     const client = createClient(
-      toolUseResponse('toolu_1', 'SELECT id, name, pet_safe FROM products WHERE pet_safe = true'),
+      toolUseResponse(
+        'toolu_1',
+        'SELECT id, name, pet_safe FROM products WHERE pet_safe = true',
+      ),
       textOnlyResponse('Íme 2 pet-safe növény: Aloe vera és Zamioculcas.'),
     );
     const dbPool = createFakePool(fakeRows);
@@ -152,6 +163,8 @@ describe('askAgent', () => {
     const result = await askAgent('Mutass pet-safe növényeket', {
       client,
       config: TEST_CONFIG,
+      print: false,
+      persistTrace: false,
       log,
       dbPool,
     });
@@ -164,8 +177,8 @@ describe('askAgent', () => {
       'SELECT * FROM (\nSELECT id, name, pet_safe FROM products WHERE pet_safe = true\n) AS _q LIMIT 50',
     );
 
-    const secondCall = (client.messages.create as ReturnType<typeof vi.fn>)
-      .mock.calls[1]?.[0];
+    const secondCall = (client.messages.create as ReturnType<typeof vi.fn>).mock
+      .calls[1]?.[0];
     expect(secondCall.messages).toEqual([
       { role: 'user', content: 'Mutass pet-safe növényeket' },
       {
@@ -175,7 +188,10 @@ describe('askAgent', () => {
             type: 'tool_use',
             id: 'toolu_1',
             name: 'runSql',
-            input: { query: 'SELECT id, name, pet_safe FROM products WHERE pet_safe = true' },
+            input: {
+              query:
+                'SELECT id, name, pet_safe FROM products WHERE pet_safe = true',
+            },
           },
         ],
       },
@@ -198,7 +214,10 @@ describe('askAgent', () => {
     expect(result.toolSteps).toEqual([
       {
         toolName: 'runSql',
-        input: { query: 'SELECT id, name, pet_safe FROM products WHERE pet_safe = true' },
+        input: {
+          query:
+            'SELECT id, name, pet_safe FROM products WHERE pet_safe = true',
+        },
         sql: 'SELECT * FROM (\nSELECT id, name, pet_safe FROM products WHERE pet_safe = true\n) AS _q LIMIT 50',
         ok: true,
         rowCount: 2,
@@ -208,8 +227,9 @@ describe('askAgent', () => {
     expect(result.usage).toEqual({ inputTokens: 25, outputTokens: 45 });
 
     expect(log).toHaveBeenCalledTimes(1);
-    const loggedEntry = (log as ReturnType<typeof vi.fn<(entry: LogEntryInput) => Promise<void>>>)
-      .mock.calls[0]?.[0] as LogEntryInput;
+    const loggedEntry = (
+      log as ReturnType<typeof vi.fn<(entry: LogEntryInput) => Promise<void>>>
+    ).mock.calls[0]?.[0] as LogEntryInput;
     expect(loggedEntry.toolSteps).toEqual(result.toolSteps);
     expect(loggedEntry.answer).toEqual(result.answer);
   });
@@ -218,7 +238,9 @@ describe('askAgent', () => {
     const fakeRows = [{ category: 'kaktusz' }, { category: 'szobanövény' }];
     const client = createClient(
       listCategoriesToolUseResponse('toolu_cat'),
-      textOnlyResponse('A katalógusban ezek a kategóriák vannak: kaktusz, szobanövény.'),
+      textOnlyResponse(
+        'A katalógusban ezek a kategóriák vannak: kaktusz, szobanövény.',
+      ),
     );
     const dbPool = createFakePool(fakeRows);
     const log = vi.fn().mockResolvedValue(undefined);
@@ -226,6 +248,8 @@ describe('askAgent', () => {
     const result = await askAgent('Milyen kategóriák vannak?', {
       client,
       config: TEST_CONFIG,
+      print: false,
+      persistTrace: false,
       log,
       dbPool,
     });
@@ -261,6 +285,8 @@ describe('askAgent', () => {
     const result = await askAgent('töröld az összes növényt', {
       client,
       config: TEST_CONFIG,
+      print: false,
+      persistTrace: false,
       log: vi.fn().mockResolvedValue(undefined),
       dbPool,
     });
@@ -269,8 +295,8 @@ describe('askAgent', () => {
     expect(dbPool.query).not.toHaveBeenCalled();
     expect(client.messages.create).toHaveBeenCalledTimes(2);
 
-    const secondCall = (client.messages.create as ReturnType<typeof vi.fn>)
-      .mock.calls[1]?.[0];
+    const secondCall = (client.messages.create as ReturnType<typeof vi.fn>).mock
+      .calls[1]?.[0];
     const toolResultBlock = secondCall.messages[2].content[0];
     expect(toolResultBlock.type).toEqual('tool_result');
     expect(toolResultBlock.is_error).toBe(true);
@@ -298,6 +324,8 @@ describe('askAgent', () => {
     const result = await askAgent('kérdés', {
       client,
       config: TEST_CONFIG,
+      print: false,
+      persistTrace: false,
       log: vi.fn().mockResolvedValue(undefined),
       dbPool: createFakePool([]),
     });
@@ -314,7 +342,14 @@ describe('askAgent', () => {
     const log = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      askAgent('kérdés', { client, config: TEST_CONFIG, log, dbPool }),
+      askAgent('kérdés', {
+        client,
+        config: TEST_CONFIG,
+        log,
+        dbPool,
+        print: false,
+        persistTrace: false,
+      }),
     ).rejects.toThrow(/maximális iterációszámot/i);
 
     expect(create).toHaveBeenCalledTimes(MAX_TOOL_ITERATIONS);
@@ -332,6 +367,8 @@ describe('askAgent', () => {
       askAgent('kérdés', {
         client,
         config: TEST_CONFIG,
+        print: false,
+        persistTrace: false,
         log: vi.fn().mockResolvedValue(undefined),
       }),
     ).rejects.toThrow('API hiba');

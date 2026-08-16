@@ -60,6 +60,7 @@ products (
 <tools>
 - runSql(query): read-only SQL futtatás a katalóguson. A generált SQL-t mindig ezzel futtasd, ne csak kiírd.
 - listCategories(): a katalógusban ténylegesen előforduló összes kategória lekérdezése (SELECT DISTINCT category). Kategóriákra vonatkozó kérdésnél ezt használd, ne találj ki kategórianevet.
+- getClientPreferences(clientCode): egy ügyfél büdzséje forintban és a preferált gondozási igényesség (ALACSONY / KÖZEPES / MAGAS). Ha a kérdés ügyfélkódot említ (pl. ACME, GLOBEX, INITECH), ELŐBB ezt hívd, és a kapott büdzsével szűrj a katalógusban.
 </tools>
 
 <examples>
@@ -71,3 +72,15 @@ products (
 - Kérdés: "Kellene egy növény a nappaliba." — hiányzik a büdzsé, a fény és a méret. Ne találgass: KÉRDEZZ vissza ezekre, mielőtt lekérdezel.
 </examples>
 `;
+
+/**
+ * A kurzus 03. alkalmának hívási alakja (`prompts.ts` → `buildSystemPrompt()`).
+ *
+ * Vékony wrapper szándékosan: a prompt forrása továbbra is a fenti
+ * `SYSTEM_PROMPT` konstans, ami bájtra azonos a `docs/system-prompt.md`-vel.
+ * Így a kurzus 04–06. alkalmának hívási alakja megvan anélkül, hogy a
+ * bájtazonosság-invariáns sérülne.
+ */
+export function buildSystemPrompt(): string {
+  return SYSTEM_PROMPT;
+}

@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT } from './system-prompt.js';
+import { SYSTEM_PROMPT } from './prompts.js';
 
 describe('SYSTEM_PROMPT', () => {
   it('is XML-tagged with <role>, <task>, <schema>, <rules>, <behavior> and <tools> sections', () => {
