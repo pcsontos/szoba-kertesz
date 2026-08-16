@@ -8,6 +8,11 @@ export default [
     ignores: [
       '**/dist',
       '**/build',
+      // A `prisma generate` kimenete (packages/db/generated) — gitignore-olt,
+      // gépi generálású kód, nem a mi konvencióink szerint íródik. Lintelve
+      // több száz hibát ad (no-var, {} típus, enforce-module-boundaries), ami
+      // pirosra viszi a `db:lint`-et anélkül, hogy bármi javítható lenne benne.
+      '**/generated',
       '**/vite.config.*.timestamp*',
       '**/vitest.config.*.timestamp*',
     ],
