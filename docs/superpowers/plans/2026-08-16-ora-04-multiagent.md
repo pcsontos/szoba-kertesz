@@ -42,7 +42,9 @@ Találgatás nincs, és a saját megoldást nem írjuk felül a kurzuséval.
 
 **Darabszám-kapu:** az induló alap **core 90 teszt / 13 fájl**, **cli 9 teszt / 3 fájl** (mérve 2026-08-16-án, `pnpm nx test core` + `pnpm nx test cli`). Minden teszt-futtatás kiírja a számot; **csökkenés = megállás**, akkor is, ha a suite zöld. Egyetlen tervezett kivétel: a **Task 3** átírja az `agent.spec.ts` 7 tesztjét — ott a kapu az, hogy az utódfájl **legalább 7** tesztet tartalmaz, és mind a hét eredeti viselkedést lefedi (a task tételesen felsorolja).
 
-**Manifeszt-kapu:** a `packages/core/src/lib/own-additions.spec.ts` (11 teszt) és az `apps/cli/src/own-additions.spec.ts` (3 teszt) **minden task után zöld**. Ezek a 7 saját kiegészítés védőhálói — NE töröld, NE gyengítsd őket.
+**Manifeszt-kapu:** a `packages/core/src/lib/own-additions.spec.ts` (11 teszt → a Task 1 után **14**) és az `apps/cli/src/own-additions.spec.ts` (3 teszt) **minden task után zöld**. Ezek a 7 saját kiegészítés védőhálói — NE töröld, NE gyengítsd őket.
+
+> ⚠️ **A Task 1 végrehajtása közben talált lelet (2026-08-16).** A core manifeszt **nem teljesen refaktor-stabil**: a „beszélgetés-memória (03. alkalom, c00055a)" blokk `askAgent`-et hív `deps.client`-tel injektált **Anthropic-mockkal**, és a `sent.messages[0].content`-en állít. A Task 3 megszünteti a `deps.client`-et, tehát **ez az egy teszt a Task 3-ban törni fog** — ez tervezett, nem regresszió. A Task 3 Step 4b írja át a mock-modell szeamre. A manifeszt többi 13 tesztje érintetlen marad.
 
 **A hét saját kiegészítés, amit minden refaktornak túl kell élnie:**
 
@@ -193,6 +195,8 @@ pnpm nx test core --skip-nx-cache && pnpm nx test cli --skip-nx-cache
 Expected: `isStepCount function | generateText function`, `ai 7.0.66 | @ai-sdk/anthropic 4.0.39`; typecheck zöld; **core 90, cli 9** (a függőség még nincs használatban, tehát nem változhat). Csökkenés → STOP.
 
 > **Végrehajtva 2026-08-16:** mind a négy ellenőrzés zölden lefutott a fenti értékekkel. A `@anthropic-ai/sdk` szándékosan a `packages/core/package.json`-ban maradt — a Task 3 Step 6 vezeti ki.
+>
+> ⚠️ **Amit ez a lépés NEM ellenőrzött (a Task 2-ben derült ki):** a `lint` hiányzott a kapuból. A `@nx/dependency-checks` szabály hibát ad a deklarált, de még nem használt függőségekre — a Task 0 után **mindkét** új csomagra (`ai`, `@ai-sdk/anthropic`), a Task 2 után már csak a `@ai-sdk/anthropic`-ra (az `ai`-t a tool-factory-k használják). Ez **tervezett, átmeneti pirosság**: a `createAnthropic` importja a Task 3 Step 3-ban oldja fel. Mostantól minden task ellenőrzésében szerepel a `lint` is.
 
 ---
 
@@ -410,21 +414,82 @@ export const getClientPreferencesTool = (report?: ToolReporter) =>
 
 > A `z.enum(CLIENT_CODES)` helyett itt szándékosan `z.string()` áll a modell-sémában: az érvényes kódok listája a `description`-ben van, a szigorú enum-ellenőrzés pedig az `executeGetClientPreferencesTool`-ban — így ismeretlen kódra a saját magyar hibaszövegünk megy vissza, amiből a modell javítani tud.
 
-- [ ] **Step 5: Vedd fel az exportot**
+- [ ] **Step 5: Vedd fel az exportot — ⚠️ NEM `export *`-gal**
 
 `packages/core/src/index.ts`, a `tools/index.js` sora **fölé**:
 
 ```typescript
-export * from './lib/tools/tool-outcome.js';
+// A `ToolOutcome` SZÁNDÉKOSAN nem innen jön még: a `tools/index.ts` régi,
+// azonos nevű típusa ütközne vele (TS2308 — `export *` nem old fel
+// kétértelműséget). A két alak a Task 5-ig egymás mellett él; ott a
+// `tools/index.ts` törlődik, és ez a sor `export *`-ra bővül.
+export type { ToolReporter } from './lib/tools/tool-outcome.js';
 ```
+
+> **Végrehajtási lelet (2026-08-16, T5).** A terv eredetileg `export * from './lib/tools/tool-outcome.js';`-t írt elő. Ez **nem fordul le**:
+>
+> ```
+> src/index.ts(12,1): error TS2308: Module './lib/tools/tool-outcome.js' has
+>   already exported a member named 'ToolOutcome'. Consider explicitly
+>   re-exporting to resolve the ambiguity.
+> ```
+>
+> A fenti, névre szűkített re-export a javítás. A csomagon KÍVÜLRŐL az új `ToolOutcome`-ra a Task 5-ig nincs szükség (az `agent.ts` közvetlen fájlútvonalon importálja), tehát ez nem korlátoz semmit.
+
+- [ ] **Step 5b: Annotáld a tool-factory-k visszatérési típusát — ⚠️ pnpm-specifikus**
+
+A három `export const …Tool = (report?: ToolReporter) => tool({…})` **típusannotáció nélkül nem fordul le** ebben a repóban:
+
+```
+src/lib/tools/run-sql.ts(119,14): error TS2742: The inferred type of 'runSqlTool'
+  cannot be named without a reference to
+  '.pnpm/@ai-sdk+provider-utils@5.0.27_zod@4.4.3/node_modules/@ai-sdk/provider-utils'.
+  This is likely not portable. A type annotation is necessary.
+```
+
+**Ok:** a `core` `emitDeclarationOnly`/`composite` módban fordul, és a pnpm izolált `node_modules`-szerkezetében a `tool()` következtetett típusa tranzitív csomagokra hivatkozna, amiket a `.d.ts` nem tud megnevezni. (Lapos npm-telepítés + `noEmit` mellett ez a hiba **nem jelentkezik** — ezért nem fogta meg a tervezéskor futtatott scratchpad-próba.)
+
+**Javítás:** explicit `Tool<INPUT, OUTPUT>` annotáció, a `Tool` típust az `ai`-ból importálva:
+
+```typescript
+import { tool, type Tool } from 'ai';
+
+export const runSqlTool = (
+  report?: ToolReporter,
+): Tool<{ query: string }, string> => tool({ /* … */ });
+
+export const listCategoriesTool = (
+  report?: ToolReporter,
+): Tool<Record<string, never>, string> => tool({ /* … */ });
+
+export const getClientPreferencesTool = (
+  report?: ToolReporter,
+): Tool<{ clientCode: string }, string> => tool({ /* … */ });
+```
+
+Ugyanez a minta kell majd a Task 7 `upsertProductTool`-jára és a Task 8 `fetchFeedTool`-jára is.
+
+Egy apróság még: a `description: xToolDefinition.description` **`string | undefined`** (az `Anthropic.Tool.description` opcionális), a `tool()` viszont `string`-et vár — `?? ''` kell a végére.
 
 - [ ] **Step 6: Ellenőrzés**
 
 ```bash
-pnpm nx run core:typecheck && pnpm nx run cli:typecheck && pnpm nx test core && pnpm nx test cli
+pnpm nx run core:typecheck --skip-nx-cache && pnpm nx run cli:typecheck --skip-nx-cache
+pnpm nx test core --skip-nx-cache && pnpm nx test cli --skip-nx-cache
+pnpm nx run core:lint --skip-nx-cache
 ```
 
-Expected: zöld; **core 93, cli 9** — a darabszám nem változik (adapter-réteg, még nincs saját tesztje; a Task 3 loop-tesztje fogja meghajtani). Csökkenés → STOP.
+Expected: typecheck és teszt zöld; **core 93, cli 9** — a darabszám nem változik (adapter-réteg, még nincs saját tesztje; a Task 3 loop-tesztje fogja meghajtani). Csökkenés → STOP.
+
+A `lint` **egyetlen, ismert hibát ad**, és ez rendben van:
+
+```
+The "@ai-sdk/anthropic" package is not used by "@szoba-kertesz/core" project  @nx/dependency-checks
+```
+
+A `createAnthropic` importja a Task 3 Step 3-ban oldja fel. **Bármi MÁS lint-hiba → STOP.**
+
+> **Végrehajtva 2026-08-16:** core 93 / cli 9, mindkét typecheck zöld, lint pontosan a fenti egy hibával.
 
 ---
 
@@ -954,6 +1019,56 @@ describe('askAgent — AI SDK 7 loop', () => {
 > **A 3. és 5. sor a táblázatból** (`listCategories` kör, ismeretlen tool) — a `listCategories`-t a fenti harmadik teszt hajtja meg; az ismeretlen toolra írj egy hatodik esetet `toolStep('call_x', 'deleteEverything', {})` + `textStep(...)` párossal, és állítsd, hogy a hívás **nem dob** (`await expect(...).resolves.toBeDefined()`). Ha az AI SDK 7 a nem regisztrált toolnévre kivételt dob, az **T5 → STOP**: jelezd a tényleges hibaüzenettel, mielőtt a tesztet a viselkedéshez igazítanád.
 >
 > A `runSql`-t meghajtó tesztek **valódi read-only DB-t hívnak** (a tool-factory a produkciós utat köti be) — ezért kell futó, seedelt adatbázis. Ez összhangban van a `db-readonly.spec.ts` meglévő gyakorlatával.
+
+- [ ] **Step 4b: Írd át a manifeszt beszélgetés-memória tesztjét**
+
+**A Task 1-ben felfedezett T3.** A core manifeszt „beszélgetés-memória (03. alkalom, c00055a)" blokkja `deps.client`-tel injektál Anthropic-mockot, és a kiküldött `messages` tömbön állít — ez a Step 3 után nem fordul le. **Ne töröld**, írd át a mock-modell szeamre; az állítás lényege ugyanaz marad: a `history` a kérdés ELÉ fűződik.
+
+```typescript
+describe('beszélgetés-memória (03. alkalom, c00055a)', () => {
+  it('a history a kérdés ELÉ fűződik, így a modell látja az előzményt', async () => {
+    const seen: unknown[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        seen.push(options.prompt);
+        return {
+          content: [{ type: 'text' as const, text: 'ok' }],
+          finishReason: { unified: 'stop' as const },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1, text: 1, reasoning: 0 },
+            totalTokens: 2,
+          },
+          warnings: [],
+        };
+      },
+    });
+
+    const result = await askAgent('És olcsóbbat?', {
+      model,
+      config: {
+        anthropicApiKey: 'sk-ant-test',
+        anthropicModel: 'teszt',
+        databaseUrlReadonly: 'postgresql://ro:ro@localhost:5433/teszt',
+      },
+      log: async () => undefined,
+      print: false,
+      persistTrace: false,
+      history: [
+        { role: 'user', content: 'Ajánlj egy pozsgást.' },
+        { role: 'assistant', content: 'Íme az Echeveria.' },
+      ],
+    });
+
+    // A modellhez kiküldött prompt SORRENDJE a lényeg: előzmény, majd az új kérdés.
+    expect(result.messages[0]?.content).toBe('Ajánlj egy pozsgást.');
+    expect(result.messages[2]?.content).toBe('És olcsóbbat?');
+    expect(seen).toHaveLength(1);
+  });
+});
+```
+
+> A `doGenerate` `options.prompt`-jának pontos alakját **futtatva ellenőrizd** — ha az `expect(seen)` állítás nem a várt alakot kapja, a *tesztet* igazítsd a mért kimenethez, és a `result.messages`-en álló két sort tartsd meg változatlanul (az a lényegi regressziós állítás).
 
 - [ ] **Step 5: Vezesd át a `trace.spec.ts`-t és a hívókat**
 
