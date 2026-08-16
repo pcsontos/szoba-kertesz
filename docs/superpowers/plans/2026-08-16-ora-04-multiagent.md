@@ -1108,6 +1108,26 @@ Expected: a commander súgója megjelenik, **`ERR_REQUIRE_ESM` nélkül**. Ha il
 
 ---
 
+#### Task 3 — végrehajtási leletek (2026-08-16)
+
+**Eredmény:** core **93 → 96** (az `agent.spec.ts` 7 tesztje 10-re nőtt), cli 9 változatlan; typecheck **és lint** zöld mindkét projekten; a CJS-build `--help`-je hiba nélkül fut.
+
+Öt eltérés a tervtől, mind a végrehajtás közben derült ki:
+
+1. **A `@anthropic-ai/sdk` kivezetéséhez halott kódot kellett törölni.** A Step 6 csak egy `grep`-et írt elő, de négy forrásfájl még hivatkozott a típusra. A `tools/index.ts` `tools: Anthropic.Tool[]` tömbjét **semmi nem használta** az agent átállása után (ellenőrizve `grep`-pel) — törölve. A három `*ToolDefinition` konstansról lekerült az `Anthropic.Tool` annotáció; a típus most következtetett. Az `executeTool` dispatch marad, mert a manifeszt hajtja meg.
+
+2. **Ettől elromlott egy meglévő teszt** (`list-categories.spec.ts`): az `input_schema.required` mezőre állított, ami a következtetett típuson nem létezik (TS2339). Az állítás **erősebbre** cserélve: `.not.toHaveProperty('required')` + a `properties` ürességére. A szándék („nincs kötelező bemenete") változatlan.
+
+3. **A `Trace.toolStep` nem tudja SQL-ként kezelni a `summary`-t.** A közös `ToolOutcome.summary` generikus (a `getClientPreferences`-nél `"ACME · keret 1000 Ft · ALACSONY"`), a régi `sql` mező viszont SQL-specifikus volt. Ha a Trace vakon SQL-ként írná ki, hazudna. **Javítás:** a `toolStep` a bemenet `query` mezőjéből dönti el, SQL-es tool futott-e, és eszerint választ címkét (`SQL (guard után):` vs `összegzés:`), illetve tölti a JSON-nyom `guardedSql` mezőjét (nem-SQL toolnál `null`). A 03. alkalom „(lefuttatjuk a DB-n)" feltételes utótagja így is megmarad.
+
+4. **A Step 4b `sentPromptLength` állítása hibás volt.** A mért valóság: az AI SDK 7 a **system promptot is az üzenet-tömbbe teszi**, tehát a `doGenerate` `options.prompt`-ja `['system', 'user', 'assistant', 'user']` — négy elem, nem három. A teszt mostantól a **szerepek sorrendjére** állít (informatívabb, mint egy hossz), a lényegi regressziós állítás (`result.messages[0]` / `[2]`) változatlan.
+
+5. **Két CLI teszt-helper elromlott** (`interactive.spec.ts`, `own-additions.spec.ts`): az `AskAgentResult`-ba bekerült a kötelező `stopReason`, ezért a `makeResult()` helperek `stopReason: 'stop'`-pal egészültek ki. A CLI manifeszt állításai változatlanok.
+
+**Amit ez a task feloldott:** a Task 0 óta fennálló lint-hiba (`@ai-sdk/anthropic` is not used) megszűnt — a `createAnthropic` importja használatba vette, a `@anthropic-ai/sdk` pedig kikerült a `packages/core/package.json`-ból és a root `package.json`-ból is. **A branch mostantól lint-zöld.**
+
+---
+
 ### Task 4: CI — build-kapu és Claude code review (doksi Lépés 2)
 
 **Files:**
