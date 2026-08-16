@@ -1,5 +1,5 @@
 import { Pool, type QueryResult, type QueryResultRow } from 'pg';
-import { loadConfig, type Config } from '../config.js';
+import { loadConfig, type Config } from '../../config.js';
 
 /**
  * A `runSql` tool egyetlen adatbázis-kapcsolati rétege: kizárólag a

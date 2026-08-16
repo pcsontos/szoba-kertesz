@@ -1,7 +1,7 @@
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
-import { queryReadonly, type DbReadonlyDeps } from './db-readonly.js';
-import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
+import { queryReadonly, type DbReadonlyDeps } from '../run-sql/db-readonly.js';
+import type { ToolOutcome, ToolReporter } from '../tool-outcome.js';
 
 export const LIST_CATEGORIES_TOOL_NAME = 'listCategories';
 

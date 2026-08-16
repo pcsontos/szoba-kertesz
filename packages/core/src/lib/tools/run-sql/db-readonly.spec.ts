@@ -8,7 +8,7 @@ import { closeReadonlyPool, queryReadonly } from './db-readonly.js';
 // CLI belépési pontjában (`apps/cli/src/main.ts`) használt mintát követve,
 // explicit útvonallal töltjük be, ENOENT-toleránsan.
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRootEnvPath = resolve(here, '../../../../.env');
+const repoRootEnvPath = resolve(here, '../../../../../../.env');
 try {
   process.loadEnvFile(repoRootEnvPath);
 } catch (error) {

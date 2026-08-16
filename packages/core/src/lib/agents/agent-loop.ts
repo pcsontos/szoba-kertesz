@@ -7,23 +7,24 @@ import {
   type ToolSet,
 } from 'ai';
 import { createAnthropic, type AnthropicProvider } from '@ai-sdk/anthropic';
-import { loadConfig, type Config } from './config.js';
-import { SYSTEM_PROMPT } from './prompts.js';
-import { runSqlTool } from './tools/run-sql.js';
-import { listCategoriesTool } from './tools/list-categories.js';
-import { getClientPreferencesTool } from './tools/client-preferences.js';
-import type { ToolOutcome } from './tools/tool-outcome.js';
-import { Trace } from './trace.js';
+import { loadConfig, type Config } from '../config.js';
+import type { ToolOutcome, ToolReporter } from '../tools/tool-outcome.js';
+import { Trace } from '../trace.js';
 import {
   logInteraction,
   type LogEntryInput,
   type ToolStep,
   type UsageInfo,
-} from './logger.js';
+} from '../logger.js';
 
-// agent.ts — az agent-loop a Vercel AI SDK-n. A 2–3. órán KÉZZEL írtuk meg ugyanezt
-// (prompt → hívás → stop_reason → tool → tool_result → vissza) a nyers Anthropic SDK fölött —
-// ezért pontosan tudjuk, mit csinál helyettünk a framework:
+// agent-loop.ts — AZ agent-loop, egy helyen. MINDEN agent (query, ingest, …) EZT
+// futtatja; a különbség köztük csak annyi, hogy mit adnak be:
+//
+//     egy agent = system prompt + toolkészlet + (közös) loop
+//
+// A 2–3. órán KÉZZEL írtuk meg ugyanezt (prompt → hívás → stop_reason → tool →
+// tool_result → vissza) a nyers Anthropic SDK fölött — ezért pontosan tudjuk, mit
+// csinál helyettünk a framework:
 //   - a loopot a `generateText` pörgeti, amíg a modell toolt kér (finishReason: 'tool-calls'),
 //   - a kör-limitünk a `stopWhen: isStepCount(n)` (régen: MAX_TOOL_ITERATIONS for-ciklus),
 //   - a tool-dispatch a tool-definíciók `execute`-ja (régen: executeTool switch),
@@ -37,14 +38,29 @@ import {
 //   (a v7-ben a `response.messages` CSAK az utolsó kört tartalmazza — a teljes
 //    beszélgetés a `responseMessages`; az interaktív memória ezen áll vagy bukik.)
 
-const MAX_TOKENS = 1024;
-
-/** A kör-limit. Régen a for-ciklus felső határa; most deklaratívan a `stopWhen`. */
-export const MAX_TOOL_ITERATIONS = 6;
-
 export type Message = ModelMessage;
 
-export interface AskAgentDeps {
+/**
+ * Amivel egy AGENT paraméterezi a közös loopot: a személyisége és a képességei.
+ * Ez a négy-öt mező KÜLÖNBÖZTETI MEG az agenteket egymástól — minden más közös.
+ */
+export interface AgentDefinition {
+  /** Az agent szerepe és szabályai (a system prompt). */
+  readonly systemPrompt: string;
+  /**
+   * Az agent toolkészlete. A `report`-ot minden tool megkapja — ezen jelent a
+   * Trace-nek és a JSONL-naplónak, a modell felé eső `content`-től függetlenül.
+   */
+  readonly buildTools: (report: ToolReporter) => ToolSet;
+  /** Max hány kört mehet a loop (tool-hívásokkal együtt). */
+  readonly maxSteps: number;
+  /** A modell válaszának token-kerete. Nagy tool-argumentumhoz (upsert) nagyobb kell. */
+  readonly maxOutputTokens: number;
+  /** Ha a loop a limit miatt válasz nélkül áll meg, ezt mondjuk a felhasználónak. */
+  readonly emptyAnswer: string;
+}
+
+export interface AskOptions {
   readonly config?: Config;
   readonly log?: (entry: LogEntryInput) => Promise<void>;
   /**
@@ -59,19 +75,19 @@ export interface AskAgentDeps {
   readonly persistTrace?: boolean;
   /**
    * Korábbi beszélgetés (interaktív mód) — ezt folytatjuk. A visszakapott
-   * `AskAgentResult.messages`-t kell visszaadni a következő híváshoz.
+   * `AskResult.messages`-t kell visszaadni a következő híváshoz.
    */
   readonly history?: readonly Message[];
   /**
    * Teszt-szeam: kész modell (pl. `MockLanguageModelV4` az `ai/test`-ből) a
    * valódi Anthropic-provider helyett. A kézi loop `deps.client`-jének utódja.
    * A `deps.dbPool` viszont MEGSZŰNT: a tool-factory-k a produkciós utat kötik
-   * be, a DB-injektálást a tool-szintű specek fedik (`run-sql.spec.ts` stb.).
+   * be, a DB-injektálást a tool-szintű specek fedik (`run-sql-tool.spec.ts` stb.).
    */
   readonly model?: LanguageModel;
 }
 
-export interface AskAgentResult {
+export interface AskResult {
   readonly answer: string;
   readonly systemPrompt: string;
   readonly messages: readonly Message[];
@@ -89,35 +105,41 @@ function getProvider(apiKey: string): AnthropicProvider {
 }
 
 /**
- * Egy kérdés → válasz, a közös tool-use loopon keresztül.
+ * Egy kérdés → válasz, a KÖZÖS tool-use loopon keresztül, tetszőleges agenttel.
+ *
+ * A loop nem tudja, MELYIK agentet futtatja, és nem tudja, milyen toolok
+ * léteznek — csak azt, hogy minden tool ugyanazt a `ToolOutcome` alakot jelenti
+ * vissza a `report` mellék-csatornán. Ettől tud a Trace és a napló BÁRMILYEN
+ * agentet egyformán megmutatni.
  *
  * A két, egymást KIEGÉSZÍTŐ nyom megmarad: a JSONL-napló (`logInteraction`,
  * token usage-dzsel — a HF3 költségbecslés bizonyítékbázisa) és a kör-
  * strukturált Trace. A framework egyiket sem váltja ki.
  */
-export async function askAgent(
+export async function runAgentLoop(
   question: string,
-  deps: AskAgentDeps = {},
-): Promise<AskAgentResult> {
+  agent: AgentDefinition,
+  options: AskOptions = {},
+): Promise<AskResult> {
   const trimmed = question.trim();
   if (trimmed === '') {
     throw new Error('Üres kérdést nem lehet feltenni.');
   }
 
-  const config = deps.config ?? loadConfig();
-  const log = deps.log ?? logInteraction;
-  const systemPrompt = SYSTEM_PROMPT;
+  const config = options.config ?? loadConfig();
+  const log = options.log ?? logInteraction;
+  const systemPrompt = agent.systemPrompt;
 
   const trace = new Trace({
     question: trimmed,
     model: config.anthropicModel,
     systemPrompt,
-    print: deps.print ?? true,
-    persist: deps.persistTrace ?? true,
+    print: options.print ?? true,
+    persist: options.persistTrace ?? true,
   });
 
   const messages: Message[] = [
-    ...(deps.history ?? []),
+    ...(options.history ?? []),
     { role: 'user', content: trimmed },
   ];
 
@@ -128,20 +150,12 @@ export async function askAgent(
     string,
     { name: string; input: unknown; outcome: ToolOutcome }
   >();
-  const report = (
-    toolCallId: string,
-    name: string,
-    input: unknown,
-    outcome: ToolOutcome,
-  ): void => {
+  const report: ToolReporter = (toolCallId, name, input, outcome): void => {
     outcomes.set(toolCallId, { name, input, outcome });
   };
 
-  const tools: ToolSet = {
-    runSql: runSqlTool(report),
-    listCategories: listCategoriesTool(report),
-    getClientPreferences: getClientPreferencesTool(report),
-  };
+  // A toolkészletet az AGENT adja — a loop csak megkapja és felkínálja a modellnek.
+  const tools = agent.buildTools(report);
   const toolNames = Object.keys(tools);
 
   // A JSONL-napló tool-lépései (saját kiegészítés #6). Az AI SDK nem gyűjti ezt
@@ -149,21 +163,22 @@ export async function askAgent(
   const toolSteps: ToolStep[] = [];
 
   const result = await generateText({
-    model: deps.model ?? getProvider(config.anthropicApiKey)(config.anthropicModel),
-    maxOutputTokens: MAX_TOKENS,
+    model:
+      options.model ?? getProvider(config.anthropicApiKey)(config.anthropicModel),
+    maxOutputTokens: agent.maxOutputTokens,
     system: systemPrompt,
     messages,
     tools,
     // Régen: for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) — most deklaratívan
-    // mondjuk meg, meddig mehet a loop.
-    stopWhen: isStepCount(MAX_TOOL_ITERATIONS),
+    // mondjuk meg, meddig mehet a loop. A limit is az AGENTÉ.
+    stopWhen: isStepCount(agent.maxSteps),
 
     // HÍVÁS ELŐTT: ezt küldjük ki — a teljes, körről körre növekvő kontextus.
     // A stepNumber 0-alapú, ezért +1 megy a Trace-nek.
     prepareStep: ({ stepNumber, messages: outgoing }) => {
       trace.request(stepNumber + 1, {
         model: config.anthropicModel,
-        maxOutputTokens: MAX_TOKENS,
+        maxOutputTokens: agent.maxOutputTokens,
         system: systemPrompt,
         toolNames,
         messages: outgoing,
@@ -208,10 +223,7 @@ export async function askAgent(
     },
   });
 
-  const answer =
-    result.text.trim() !== ''
-      ? result.text.trim()
-      : `Nem sikerült végső választ adni a megengedett lépésszámon belül (${MAX_TOOL_ITERATIONS} kör). Pontosítsd a kérdést.`;
+  const answer = result.text.trim() !== '' ? result.text.trim() : agent.emptyAnswer;
 
   // ⚠️ AI SDK 7: a `result.response.messages` CSAK az utolsó kört tartalmazza.
   // A teljes beszélgetés (assistant + tool üzenetek együtt) a `responseMessages`.

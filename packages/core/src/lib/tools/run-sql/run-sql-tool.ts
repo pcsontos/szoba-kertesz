@@ -2,7 +2,7 @@ import { tool, type Tool } from 'ai';
 import { z } from 'zod';
 import { guardSql } from './sql-guard.js';
 import { queryReadonly, type DbReadonlyDeps } from './db-readonly.js';
-import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
+import type { ToolOutcome, ToolReporter } from '../tool-outcome.js';
 
 export const RUN_SQL_TOOL_NAME = 'runSql';
 

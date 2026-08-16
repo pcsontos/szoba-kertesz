@@ -1,8 +1,8 @@
 import { PassThrough } from 'node:stream';
-import type { AskAgentResult } from '@szoba-kertesz/core';
+import type { AskResult } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
 
-function makeResult(answer: string): AskAgentResult {
+function makeResult(answer: string): AskResult {
   return {
     answer,
     systemPrompt: '<role>teszt</role>',
@@ -103,7 +103,7 @@ describe('runInteractive', () => {
   });
 
   it('still resolves and prints the answer of an in-flight question when exit arrives during the call', async () => {
-    const deferred = createDeferred<AskAgentResult>();
+    const deferred = createDeferred<AskResult>();
     const ask = vi.fn().mockReturnValue(deferred.promise);
 
     const done = runInteractive({ input, output, ask, print: false });
@@ -130,10 +130,10 @@ describe('runInteractive', () => {
     let active = 0;
     let maxActive = 0;
     const resolvers: Array<() => void> = [];
-    const ask = vi.fn((question: string): Promise<AskAgentResult> => {
+    const ask = vi.fn((question: string): Promise<AskResult> => {
       active += 1;
       maxActive = Math.max(maxActive, active);
-      return new Promise<AskAgentResult>((resolve) => {
+      return new Promise<AskResult>((resolve) => {
         resolvers.push(() => {
           active -= 1;
           resolve(makeResult(`válasz erre: ${question}`));

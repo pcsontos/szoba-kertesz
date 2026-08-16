@@ -4,10 +4,12 @@
  * Ettől tud a loop és a Trace BÁRMILYEN toolt egyformán kezelni — az agent-loop
  * nem tudja, milyen toolok léteznek.
  *
- * Ez az alak a `tools/index.ts` régi `ToolOutcome`-ja MELLETT él a 04. alkalom
- * Task 5-éig: a régi (`ok`/`sql`/`rowCount`/`resultSummary`) a JSONL-logger
- * `ToolStep` szerződését szolgálja ki, ez pedig a Trace-ét és a loopét. A
- * `tools/index.ts` a Task 5-ben tűnik el, és vele a régi alak is.
+ * A 04. alkalomig egy központi `tools/index.ts` dispatch adta a tool-eredményt
+ * a JSONL-logger alakjában (`ok`/`sql`/`rowCount`/`resultSummary`). Az a fájl
+ * megszűnt: a toolkészletét mostantól minden agent maga állítja össze, és ez az
+ * EGY alak szolgálja ki mind a hármat — a modellt (`content`), a Trace-t
+ * (`summary`/`rowCount`) és a naplót. A loopban történik a `ToolStep`-re
+ * képezés, egy helyen.
  */
 
 export interface ToolOutcome {

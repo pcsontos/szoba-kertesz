@@ -20,12 +20,41 @@ import {
   buildSystemPrompt,
   executeListCategoriesTool,
   executeRunSqlTool,
-  executeTool,
   askAgent,
   getSessionLogFilePath,
   guardSql,
   logInteraction,
 } from '../index.js';
+
+const TEST_CONFIG = {
+  anthropicApiKey: 'sk-ant-test',
+  anthropicModel: 'teszt',
+  databaseUrlReadonly: 'postgresql://ro:ro@localhost:5433/teszt',
+};
+
+/** Néma futás: se konzol-nyom, se logs/ artifact, se valódi API-hívás. */
+const QUIET = {
+  config: TEST_CONFIG,
+  log: async () => undefined,
+  print: false,
+  persistTrace: false,
+} as const;
+
+/**
+ * PROVIDER-szintű (v4) válasz-alak. A `finishReason` objektum, a `usage`
+ * ágyazott — lapos alakkal mindkettő NÉMÁN `undefined` lenne, és a tesztek
+ * hamis zöldet mutatnának.
+ */
+const modelStep = (content: unknown[], finish: 'stop' | 'tool-calls') => ({
+  content,
+  finishReason: { unified: finish },
+  usage: {
+    inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 1, text: 1, reasoning: 0 },
+    totalTokens: 2,
+  },
+  warnings: [],
+});
 
 describe('saját kiegészítés 1 — listCategories tool', () => {
   it('a katalógus valódi kategórialistáját adja vissza', async () => {
@@ -38,20 +67,60 @@ describe('saját kiegészítés 1 — listCategories tool', () => {
     expect(result.categories).toContain('szobanövény');
   });
 
-  it('be van kötve az executeTool dispatchbe', async () => {
-    // Ez a lényegi regressziós állítás: a refaktor után is a NEVÉN keresztül
-    // elérhető, nem "Ismeretlen tool"-t kapunk vissza.
-    const outcome = await executeTool('listCategories', {});
+  // A 04. alkalomig ezt a két állítást a központi `executeTool` dispatch fedte.
+  // A dispatch megszűnt (minden agent maga mondja meg a toolkészletét), ezért az
+  // állítások ODA költöztek, ahol a bekötés MOST történik: a query-agent
+  // toolkészletébe. A lényeg változatlan — a listCategories a NEVÉN elérhető,
+  // és valódi adatot ad vissza.
 
-    expect(outcome.ok).toBe(true);
-    expect(outcome.resultSummary).toContain('szobanövény');
+  it('a NEVÉN ott van a query-agent toolkészletében', async () => {
+    // Ha kiesne a toolkészletből, a modell soha nem tudná meghívni — némán
+    // elveszne a saját kiegészítésünk, a suite meg zöld maradna.
+    let offered: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: (async (options: { tools?: { name: string }[] }) => {
+        offered = (options.tools ?? []).map((tool) => tool.name);
+        return modelStep([{ type: 'text', text: 'kész' }], 'stop');
+      }) as never,
+    });
+
+    await askAgent('kérdés', { ...QUIET, model });
+
+    expect(offered).toContain(LIST_CATEGORIES_TOOL_NAME);
   });
 
-  it('ismeretlen toolra hibaszöveget ad, nem dob kivételt', async () => {
-    const outcome = await executeTool('nincsIlyenTool', {});
+  it('a NEVÉN meghívva valódi kategóriákat juttat vissza a modellhez', async () => {
+    // A dispatch másik fele: a név nem "Ismeretlen tool"-ra fut, hanem tényleg
+    // lefuttatja a toolt, és az eredménye megjelenik a napló tool-lépésében.
+    let round = 0;
+    const model = new MockLanguageModelV4({
+      doGenerate: (async () =>
+        round++ === 0
+          ? modelStep(
+              [
+                {
+                  type: 'tool-call',
+                  toolCallId: 'call_cat',
+                  toolName: LIST_CATEGORIES_TOOL_NAME,
+                  input: '{}',
+                },
+              ],
+              'tool-calls',
+            )
+          : modelStep(
+              [{ type: 'text', text: 'Ezek a kategóriák.' }],
+              'stop',
+            )) as never,
+    });
 
-    expect(outcome.ok).toBe(false);
-    expect(outcome.resultSummary).toContain('Ismeretlen tool');
+    const result = await askAgent('Milyen kategóriák vannak?', {
+      ...QUIET,
+      model,
+    });
+
+    expect(result.toolSteps[0]?.toolName).toBe(LIST_CATEGORIES_TOOL_NAME);
+    expect(result.toolSteps[0]?.ok).toBe(true);
+    expect(result.toolSteps[0]?.resultSummary).toContain('szobanövény');
   });
 });
 

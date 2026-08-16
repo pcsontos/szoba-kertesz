@@ -1,6 +1,6 @@
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
-import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
+import type { ToolOutcome, ToolReporter } from '../tool-outcome.js';
 
 /**
  * A `getClientPreferences` tool: ügyfélkód alapján adja vissza az ügyfél
@@ -8,7 +8,9 @@ import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
  * (mennyire gondozásigényes növényt szeret).
  *
  * Ez a lecke szerkezeti tanulsága: egy nem-SQL-es, második tool hozzáadása
- * NEM érinti az agent-loopot. Egy fájl + két sor a `tools/index.ts`-ben.
+ * NEM érinti az agent-loopot. A 04. alkalomtól egy új tool = egy új könyvtár
+ * itt (minden hozzávalójával) + egy sor annak az agentnek a `buildTools`-ában,
+ * amelyik használhatja — központi dispatch nincs többé.
  *
  * A `CLIENT_PREFERENCES` az EGYETLEN forrás — ebből származik a tool-séma
  * `enum`-ja ÉS a Zod-guard is, így a kettő nem csúszhat el.

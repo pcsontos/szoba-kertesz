@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockLanguageModelV4 } from 'ai/test';
-import { askAgent, MAX_TOOL_ITERATIONS } from './agent.js';
+import { askAgent, MAX_TOOL_ITERATIONS } from './query-agent/query-agent.js';
 
 /**
- * Az agent-loop tesztjei az AI SDK 7 mock-modelljén (`ai/test`). Ez a
+ * A KÖZÖS agent-loop (`agent-loop.ts`) tesztjei — a query-agenten keresztül
+ * meghajtva, mert a loopot mindig egy agent futtatja (prompt + toolok + loop).
+ * Amit itt állítunk (kör-limit, tool-váltás, usage-összegzés, üzenet-görgetés),
+ * az a loop viselkedése, nem a query-agenté; az ingest-agent ugyanezt kapja.
+ *
+ * A tesztek az AI SDK 7 mock-modelljén (`ai/test`) futnak. Ez a
  * `deps.client` Anthropic-mock utódja: a `@ai-sdk/anthropic@4`
  * `specificationVersion`-je `'v4'`, ezért `MockLanguageModelV4` kell (a V3
  * is fut, de nem a valódi providert modellezi).

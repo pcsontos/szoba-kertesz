@@ -2,7 +2,7 @@ import { createInterface } from 'node:readline';
 import {
   askAgent,
   closeReadonlyPool,
-  type AskAgentResult,
+  type AskResult,
   type Message,
 } from '@szoba-kertesz/core';
 import { printPrompt } from './lib/print-prompt.js';
@@ -20,7 +20,7 @@ export interface RunInteractiveOptions {
   // változatlan.
   readonly input?: NodeJS.ReadableStream;
   readonly output?: NodeJS.WritableStream;
-  readonly ask?: (question: string) => Promise<AskAgentResult>;
+  readonly ask?: (question: string) => Promise<AskResult>;
 }
 
 /**

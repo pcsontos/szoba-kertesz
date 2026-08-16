@@ -4,7 +4,7 @@ import {
   CLIENT_PREFERENCES,
   executeGetClientPreferencesTool,
   getClientPreferencesToolDefinition,
-} from './client-preferences.js';
+} from './get-client-preferences-tool.js';
 
 describe('getClientPreferences tool', () => {
   it('ismert ügyfélkódra visszaadja a büdzsét és az igényességet', async () => {
