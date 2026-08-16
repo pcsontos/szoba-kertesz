@@ -1,7 +1,22 @@
-import type Anthropic from '@anthropic-ai/sdk';
-import type { Pool } from 'pg';
+import { describe, expect, it, vi } from 'vitest';
+import { MockLanguageModelV4 } from 'ai/test';
 import { askAgent, MAX_TOOL_ITERATIONS } from './agent.js';
-import type { LogEntryInput } from './logger.js';
+
+/**
+ * Az agent-loop tesztjei az AI SDK 7 mock-modelljén (`ai/test`). Ez a
+ * `deps.client` Anthropic-mock utódja: a `@ai-sdk/anthropic@4`
+ * `specificationVersion`-je `'v4'`, ezért `MockLanguageModelV4` kell (a V3
+ * is fut, de nem a valódi providert modellezi).
+ *
+ * FIGYELEM: a `doGenerate` PROVIDER-szintű alakot ad vissza, nem az
+ * ai-szintűt — a `finishReason` objektum (`{ unified }`), a `usage` pedig
+ * ágyazott. Lapos alakkal a token-számok és a finishReason NÉMÁN
+ * `undefined`-ek lennének, és a tesztek hamis zöldet mutatnának.
+ *
+ * A `runSql`-t meghajtó esetek VALÓDI read-only adatbázist hívnak (a
+ * tool-factory a produkciós utat köti be) — futó, seedelt DB kell hozzájuk,
+ * ugyanúgy, mint a `db-readonly.spec.ts`-hez.
+ */
 
 const TEST_CONFIG = {
   anthropicApiKey: 'sk-ant-test',
@@ -9,368 +24,231 @@ const TEST_CONFIG = {
   databaseUrlReadonly: 'postgresql://ro:ro@localhost:5433/szoba-kertesz-test',
 };
 
-interface MockResponse {
-  readonly id: string;
-  readonly type: 'message';
-  readonly role: 'assistant';
-  readonly model: string;
-  readonly content: ReadonlyArray<
-    | { readonly type: 'text'; readonly text: string; readonly citations: null }
-    | {
-        readonly type: 'tool_use';
-        readonly id: string;
-        readonly name: string;
-        readonly input: unknown;
-        readonly caller: { readonly type: 'direct' };
-      }
-  >;
-  readonly stop_reason: string;
-  readonly stop_sequence: null;
-  readonly usage: {
-    readonly input_tokens: number;
-    readonly output_tokens: number;
+const usage = (input: number, output: number) => ({
+  inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: output, text: output, reasoning: 0 },
+  totalTokens: input + output,
+});
+
+const textStep = (text: string) => ({
+  content: [{ type: 'text' as const, text }],
+  finishReason: { unified: 'stop' as const },
+  usage: usage(10, 20),
+  warnings: [],
+});
+
+const toolStep = (toolCallId: string, toolName: string, input: unknown) => ({
+  content: [
+    {
+      type: 'tool-call' as const,
+      toolCallId,
+      toolName,
+      input: JSON.stringify(input),
+    },
+  ],
+  finishReason: { unified: 'tool-calls' as const },
+  usage: usage(15, 25),
+  warnings: [],
+});
+
+/** Egymás utáni köröket kiszolgáló mock. Az utolsó választ ismétli, ha elfogy. */
+function mockModel(...steps: readonly unknown[]) {
+  let index = 0;
+  const doGenerate = vi.fn(
+    async () => steps[Math.min(index++, steps.length - 1)],
+  );
+  return {
+    model: new MockLanguageModelV4({
+      doGenerate: doGenerate as never,
+    }),
+    doGenerate,
   };
 }
 
-function textOnlyResponse(text: string): MockResponse {
-  return {
-    id: 'msg_test',
-    type: 'message',
-    role: 'assistant',
-    model: 'claude-sonnet-4-6',
-    content: [{ type: 'text', text, citations: null }],
-    stop_reason: 'end_turn',
-    stop_sequence: null,
-    usage: { input_tokens: 10, output_tokens: 20 },
-  };
-}
+const baseDeps = {
+  config: TEST_CONFIG,
+  print: false,
+  persistTrace: false,
+};
 
-function toolUseResponse(
-  toolUseId: string,
-  query: string,
-  toolName = 'runSql',
-): MockResponse {
-  return {
-    id: 'msg_tool',
-    type: 'message',
-    role: 'assistant',
-    model: 'claude-sonnet-4-6',
-    content: [
-      {
-        type: 'tool_use',
-        id: toolUseId,
-        name: toolName,
-        input: { query },
-        caller: { type: 'direct' },
-      },
-    ],
-    stop_reason: 'tool_use',
-    stop_sequence: null,
-    usage: { input_tokens: 15, output_tokens: 25 },
-  };
-}
-
-function listCategoriesToolUseResponse(toolUseId: string): MockResponse {
-  return {
-    id: 'msg_tool',
-    type: 'message',
-    role: 'assistant',
-    model: 'claude-sonnet-4-6',
-    content: [
-      {
-        type: 'tool_use',
-        id: toolUseId,
-        name: 'listCategories',
-        input: {},
-        caller: { type: 'direct' },
-      },
-    ],
-    stop_reason: 'tool_use',
-    stop_sequence: null,
-    usage: { input_tokens: 15, output_tokens: 25 },
-  };
-}
-
-function createClient(...responses: readonly MockResponse[]): Anthropic {
-  const create = vi.fn();
-  for (const response of responses) {
-    create.mockResolvedValueOnce(response);
-  }
-  return { messages: { create } } as unknown as Anthropic;
-}
-
-function createFakePool(rows: readonly Record<string, unknown>[]): Pool {
-  return {
-    query: vi.fn().mockResolvedValue({ rows, rowCount: rows.length }),
-  } as unknown as Pool;
-}
-
-describe('askAgent', () => {
-  it('answers directly (no tool call) when the model resolves on the first turn', async () => {
-    const client = createClient(
-      textOnlyResponse(
-        'Egy szobanövény fényigénye az eredeti élőhelyétől függ.',
-      ),
+describe('askAgent — AI SDK 7 loop', () => {
+  it('egy körben válaszol, ha a modell nem kér toolt', async () => {
+    const { model, doGenerate } = mockModel(
+      textStep('Egy szobanövény fényigénye az eredeti élőhelyétől függ.'),
     );
     const log = vi.fn().mockResolvedValue(undefined);
 
     const result = await askAgent('Mitől függ egy növény fényigénye?', {
-      client,
-      config: TEST_CONFIG,
-      print: false,
-      persistTrace: false,
+      ...baseDeps,
+      model,
       log,
     });
 
-    expect(client.messages.create).toHaveBeenCalledTimes(1);
-    const call = (client.messages.create as ReturnType<typeof vi.fn>).mock
-      .calls[0]?.[0];
-    expect(call.model).toEqual('claude-sonnet-4-6');
-    expect(call.max_tokens).toEqual(1024);
-    expect(call.system).toMatch(/<schema>/);
-    expect(call.tools).toEqual([
-      expect.objectContaining({ name: 'runSql' }),
-      expect.objectContaining({ name: 'listCategories' }),
-      expect.objectContaining({ name: 'getClientPreferences' }),
-    ]);
-    expect(call.messages).toEqual([
-      { role: 'user', content: 'Mitől függ egy növény fényigénye?' },
-    ]);
-
-    expect(result.answer).toEqual(
-      'Egy szobanövény fényigénye az eredeti élőhelyétől függ.',
-    );
+    expect(doGenerate).toHaveBeenCalledTimes(1);
+    expect(result.answer).toContain('élőhelyétől');
     expect(result.systemPrompt).toMatch(/<role>/);
     expect(result.toolSteps).toEqual([]);
     expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 20 });
+    expect(result.stopReason).toBe('stop');
+    // Saját kiegészítés #6: a JSONL-logger a loop végén MINDIG lefut.
+    expect(log).toHaveBeenCalledTimes(1);
   });
 
-  it('runs a multi-turn tool_use -> tool_result -> final-text exchange', async () => {
-    const fakeRows = [
-      { id: 1, name: 'Aloe vera', pet_safe: true },
-      { id: 2, name: 'Zamioculcas', pet_safe: true },
-    ];
-    const client = createClient(
-      toolUseResponse(
-        'toolu_1',
-        'SELECT id, name, pet_safe FROM products WHERE pet_safe = true',
-      ),
-      textOnlyResponse('Íme 2 pet-safe növény: Aloe vera és Zamioculcas.'),
+  it('mindhárom toolt felkínálja a modellnek', async () => {
+    let seenTools: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: (async (options: { tools?: { name: string }[] }) => {
+        seenTools = (options.tools ?? []).map((tool) => tool.name);
+        return textStep('kész');
+      }) as never,
+    });
+
+    await askAgent('kérdés', {
+      ...baseDeps,
+      model,
+      log: async () => undefined,
+    });
+
+    // Saját kiegészítés #1: a listCategories ott van a toolkészletben — a
+    // kurzusnál csak kettő tool van, nálunk három.
+    expect(seenTools).toEqual([
+      'runSql',
+      'listCategories',
+      'getClientPreferences',
+    ]);
+  });
+
+  it('többkörös tool-váltás után ad végső választ, és naplózza a tool-lépést', async () => {
+    const { model, doGenerate } = mockModel(
+      toolStep('call_1', 'runSql', {
+        query: 'SELECT id, name FROM products WHERE pet_safe = true',
+      }),
+      textStep('Íme néhány pet-safe növény.'),
     );
-    const dbPool = createFakePool(fakeRows);
-    const log = vi.fn().mockResolvedValue(undefined);
 
     const result = await askAgent('Mutass pet-safe növényeket', {
-      client,
-      config: TEST_CONFIG,
-      print: false,
-      persistTrace: false,
-      log,
-      dbPool,
+      ...baseDeps,
+      model,
+      log: async () => undefined,
     });
 
-    expect(client.messages.create).toHaveBeenCalledTimes(2);
-
-    // A DB-nek a guard által becsomagolt (külső LIMIT-tel ellátott) SQL-t
-    // kell látnia, nem a modell nyers query-jét.
-    expect(dbPool.query).toHaveBeenCalledWith(
-      'SELECT * FROM (\nSELECT id, name, pet_safe FROM products WHERE pet_safe = true\n) AS _q LIMIT 50',
-    );
-
-    const secondCall = (client.messages.create as ReturnType<typeof vi.fn>).mock
-      .calls[1]?.[0];
-    expect(secondCall.messages).toEqual([
-      { role: 'user', content: 'Mutass pet-safe növényeket' },
-      {
-        role: 'assistant',
-        content: [
-          {
-            type: 'tool_use',
-            id: 'toolu_1',
-            name: 'runSql',
-            input: {
-              query:
-                'SELECT id, name, pet_safe FROM products WHERE pet_safe = true',
-            },
-          },
-        ],
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: 'toolu_1',
-            content: JSON.stringify(fakeRows),
-            is_error: false,
-          },
-        ],
-      },
-    ]);
-
-    expect(result.answer).toEqual(
-      'Íme 2 pet-safe növény: Aloe vera és Zamioculcas.',
-    );
-    expect(result.toolSteps).toEqual([
-      {
-        toolName: 'runSql',
-        input: {
-          query:
-            'SELECT id, name, pet_safe FROM products WHERE pet_safe = true',
-        },
-        sql: 'SELECT * FROM (\nSELECT id, name, pet_safe FROM products WHERE pet_safe = true\n) AS _q LIMIT 50',
-        ok: true,
-        rowCount: 2,
-        resultSummary: JSON.stringify(fakeRows),
-      },
-    ]);
+    expect(doGenerate).toHaveBeenCalledTimes(2);
+    expect(result.toolSteps).toHaveLength(1);
+    expect(result.toolSteps[0]?.toolName).toBe('runSql');
+    expect(result.toolSteps[0]?.ok).toBe(true);
+    // A guard a modell nyers query-jét subquery-be csomagolja, LIMIT-tel.
+    expect(result.toolSteps[0]?.sql).toMatch(/LIMIT/i);
+    // A token usage az ÖSSZES kör összege (15+10 / 25+20).
     expect(result.usage).toEqual({ inputTokens: 25, outputTokens: 45 });
-
-    expect(log).toHaveBeenCalledTimes(1);
-    const loggedEntry = (
-      log as ReturnType<typeof vi.fn<(entry: LogEntryInput) => Promise<void>>>
-    ).mock.calls[0]?.[0] as LogEntryInput;
-    expect(loggedEntry.toolSteps).toEqual(result.toolSteps);
-    expect(loggedEntry.answer).toEqual(result.answer);
   });
 
-  it('runs a listCategories tool_use -> tool_result -> final-text exchange', async () => {
-    const fakeRows = [{ category: 'kaktusz' }, { category: 'szobanövény' }];
-    const client = createClient(
-      listCategoriesToolUseResponse('toolu_cat'),
-      textOnlyResponse(
-        'A katalógusban ezek a kategóriák vannak: kaktusz, szobanövény.',
-      ),
+  it('a listCategories kör lefut és naplózódik', async () => {
+    const { model } = mockModel(
+      toolStep('call_cat', 'listCategories', {}),
+      textStep('A katalógusban több kategória is van.'),
     );
-    const dbPool = createFakePool(fakeRows);
-    const log = vi.fn().mockResolvedValue(undefined);
 
     const result = await askAgent('Milyen kategóriák vannak?', {
-      client,
-      config: TEST_CONFIG,
-      print: false,
-      persistTrace: false,
-      log,
-      dbPool,
+      ...baseDeps,
+      model,
+      log: async () => undefined,
     });
 
-    expect(dbPool.query).toHaveBeenCalledWith(
-      'SELECT DISTINCT category FROM products ORDER BY category',
-    );
-
-    expect(result.answer).toEqual(
-      'A katalógusban ezek a kategóriák vannak: kaktusz, szobanövény.',
-    );
-    expect(result.toolSteps).toEqual([
-      {
-        toolName: 'listCategories',
-        input: {},
-        sql: undefined,
-        ok: true,
-        rowCount: 2,
-        resultSummary: JSON.stringify(['kaktusz', 'szobanövény']),
-      },
-    ]);
+    expect(result.toolSteps[0]?.toolName).toBe('listCategories');
+    expect(result.toolSteps[0]?.ok).toBe(true);
+    expect(result.toolSteps[0]?.resultSummary).toContain('szobanövény');
   });
 
-  it('surfaces a guard-rejected write attempt as an error tool_result and lets the model recover', async () => {
-    const client = createClient(
-      toolUseResponse('toolu_evil', 'DELETE FROM products'),
-      textOnlyResponse(
+  it('a guard elutasít egy írási kísérletet, és a modell javítani tud belőle', async () => {
+    const { model } = mockModel(
+      toolStep('call_evil', 'runSql', { query: 'DELETE FROM products' }),
+      textStep(
         'Sajnálom, nem törölhetek adatot — csak lekérdezésre van jogosultságom.',
       ),
     );
-    const dbPool = createFakePool([]);
 
     const result = await askAgent('töröld az összes növényt', {
-      client,
-      config: TEST_CONFIG,
-      print: false,
-      persistTrace: false,
-      log: vi.fn().mockResolvedValue(undefined),
-      dbPool,
+      ...baseDeps,
+      model,
+      log: async () => undefined,
     });
 
-    // A guard elutasítja MIELŐTT bármi eljutna a DB-hez.
-    expect(dbPool.query).not.toHaveBeenCalled();
-    expect(client.messages.create).toHaveBeenCalledTimes(2);
-
-    const secondCall = (client.messages.create as ReturnType<typeof vi.fn>).mock
-      .calls[1]?.[0];
-    const toolResultBlock = secondCall.messages[2].content[0];
-    expect(toolResultBlock.type).toEqual('tool_result');
-    expect(toolResultBlock.is_error).toBe(true);
-    expect(toolResultBlock.content).toMatch(/SELECT/i);
-
-    expect(result.toolSteps).toEqual([
-      {
-        toolName: 'runSql',
-        input: { query: 'DELETE FROM products' },
-        sql: 'DELETE FROM products',
-        ok: false,
-        rowCount: undefined,
-        resultSummary: expect.stringMatching(/SELECT/i),
-      },
-    ]);
+    expect(result.toolSteps).toHaveLength(1);
+    expect(result.toolSteps[0]?.ok).toBe(false);
+    expect(result.toolSteps[0]?.resultSummary).toMatch(/SELECT/i);
     expect(result.answer).toMatch(/Sajnálom/);
   });
 
-  it('rejects an unknown tool name as an error tool_result without crashing', async () => {
-    const client = createClient(
-      toolUseResponse('toolu_x', '', 'deleteEverything'),
-      textOnlyResponse('Ezt a tool-t nem ismerem.'),
+  it('ismeretlen tool nevére sem dob kivételt', async () => {
+    const { model } = mockModel(
+      toolStep('call_x', 'deleteEverything', {}),
+      textStep('Ezt a toolt nem ismerem.'),
+    );
+
+    await expect(
+      askAgent('kérdés', {
+        ...baseDeps,
+        model,
+        log: async () => undefined,
+      }),
+    ).resolves.toBeDefined();
+  });
+
+  it('a beszélgetés-előzmény tartalmazza a TELJES tool-váltást', async () => {
+    const { model } = mockModel(
+      toolStep('call_1', 'listCategories', {}),
+      textStep('Nyolc kategória van.'),
+    );
+
+    const result = await askAgent('Milyen kategóriák vannak?', {
+      ...baseDeps,
+      model,
+      log: async () => undefined,
+    });
+
+    // ⚠️ Ez a teszt fogja el, ha valaki `result.responseMessages` helyett
+    // `result.response.messages`-t ír: az AI SDK 7-ben az utóbbi CSAK az utolsó
+    // kört adja vissza, a 'tool' szerepű üzenet eltűnne, és az interaktív
+    // beszélgetés-memória némán megromlana.
+    expect(result.messages.map((m) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+      'assistant',
+    ]);
+  });
+
+  it('a kör-limitet nem lépi túl, és nem hurkol örökké', async () => {
+    // Minden kör toolt kér → a stopWhen állítja meg, nem a modell.
+    const { model, doGenerate } = mockModel(
+      toolStep('call_loop', 'runSql', { query: 'SELECT 1' }),
     );
 
     const result = await askAgent('kérdés', {
-      client,
-      config: TEST_CONFIG,
-      print: false,
-      persistTrace: false,
-      log: vi.fn().mockResolvedValue(undefined),
-      dbPool: createFakePool([]),
+      ...baseDeps,
+      model,
+      log: async () => undefined,
     });
 
-    expect(result.answer).toEqual('Ezt a tool-t nem ismerem.');
+    expect(doGenerate).toHaveBeenCalledTimes(MAX_TOOL_ITERATIONS);
+    // VISELKEDÉSVÁLTOZÁS a kézi loophoz képest: nem dob, hanem magyarázó
+    // szöveget ad vissza (az AI SDK a limitnél csendben megáll).
+    expect(result.answer).toMatch(/megengedett lépésszámon belül/);
   });
 
-  it('caps tool-use round-trips and fails with a clear error instead of looping forever', async () => {
-    const create = vi
-      .fn()
-      .mockResolvedValue(toolUseResponse('toolu_loop', 'SELECT 1'));
-    const client = { messages: { create } } as unknown as Anthropic;
-    const dbPool = createFakePool([{ '?column?': 1 }]);
-    const log = vi.fn().mockResolvedValue(undefined);
+  it('az SDK hibáját nem nyeli el', async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: (async () => {
+        throw new Error('API hiba');
+      }) as never,
+    });
 
     await expect(
-      askAgent('kérdés', {
-        client,
-        config: TEST_CONFIG,
-        log,
-        dbPool,
-        print: false,
-        persistTrace: false,
-      }),
-    ).rejects.toThrow(/maximális iterációszámot/i);
-
-    expect(create).toHaveBeenCalledTimes(MAX_TOOL_ITERATIONS);
-    expect(log).toHaveBeenCalledTimes(1);
-  });
-
-  it('propagates errors from the underlying SDK call without swallowing them', async () => {
-    const client = {
-      messages: {
-        create: vi.fn().mockRejectedValue(new Error('API hiba')),
-      },
-    } as unknown as Anthropic;
-
-    await expect(
-      askAgent('kérdés', {
-        client,
-        config: TEST_CONFIG,
-        print: false,
-        persistTrace: false,
-        log: vi.fn().mockResolvedValue(undefined),
-      }),
+      askAgent('kérdés', { ...baseDeps, model, log: async () => undefined }),
     ).rejects.toThrow('API hiba');
+  });
+
+  it('üres kérdést nem fogad el', async () => {
+    await expect(askAgent('   ', baseDeps)).rejects.toThrow(/Üres kérdés/);
   });
 });

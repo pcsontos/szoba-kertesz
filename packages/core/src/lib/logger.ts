@@ -74,7 +74,14 @@ export interface ToolStep {
 
 export interface LogEntryInput {
   readonly systemPrompt: string;
-  readonly messages: readonly ChatMessage[];
+  /**
+   * A beszélgetés üzenetei. SZÁNDÉKOSAN `unknown[]`: a 04. alkalom óta ide az
+   * AI SDK `ModelMessage` alakja érkezik, nem a fenti `ChatMessage` — a logger
+   * viszont csak `JSON.stringify`-jal írja ki, tehát az alak nem érdekli. Így a
+   * JSONL-napló (a HF3 költségbecslés bizonyítékbázisa) túléli a
+   * framework-váltást anélkül, hogy a logger a modell-SDK-hoz kötődne.
+   */
+  readonly messages: readonly unknown[];
   readonly answer: string;
   readonly usage: UsageInfo;
   readonly toolSteps: readonly ToolStep[];

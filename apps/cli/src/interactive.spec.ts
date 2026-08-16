@@ -9,6 +9,7 @@ function makeResult(answer: string): AskAgentResult {
     messages: [{ role: 'user', content: 'teszt kérdés' }],
     usage: { inputTokens: 1, outputTokens: 2 },
     toolSteps: [],
+    stopReason: 'stop',
   };
 }
 

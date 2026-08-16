@@ -1,4 +1,4 @@
-import type { ChatMessage } from '@szoba-kertesz/core';
+import type { Message } from '@szoba-kertesz/core';
 
 /**
  * A `--show-prompt` flag kimenete: a ténylegesen elküldött system promptot
@@ -8,7 +8,7 @@ import type { ChatMessage } from '@szoba-kertesz/core';
  */
 export function printPrompt(
   systemPrompt: string,
-  messages: readonly ChatMessage[],
+  messages: readonly Message[],
 ): void {
   console.log('--- system prompt ---');
   console.log(systemPrompt);

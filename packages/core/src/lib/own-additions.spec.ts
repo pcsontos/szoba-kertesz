@@ -9,7 +9,8 @@
  * NE TÖRÖLD refaktornál. Ha egy kurzus-lépés törölné, az T3-eltérés:
  * megállás és jelzés, nem felülírás.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { MockLanguageModelV4 } from 'ai/test';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -107,19 +108,28 @@ describe('saját kiegészítés 5 — javított system prompt', () => {
 
 describe('beszélgetés-memória (03. alkalom, c00055a)', () => {
   it('a history a kérdés ELÉ fűződik, így a modell látja az előzményt', async () => {
-    const create = vi.fn().mockResolvedValue({
-      id: 'msg',
-      type: 'message',
-      role: 'assistant',
-      model: 'teszt',
-      content: [{ type: 'text', text: 'ok', citations: null }],
-      stop_reason: 'end_turn',
-      stop_sequence: null,
-      usage: { input_tokens: 1, output_tokens: 1 },
+    // A 04. alkalom framework-váltása után a szeam a `deps.model` (mock-modell),
+    // nem a `deps.client` (Anthropic-mock). Az ÁLLÍTÁS lényege változatlan:
+    // előzmény elöl, az új kérdés a végén.
+    let sentRoles: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: (async (options: { prompt?: { role: string }[] }) => {
+        sentRoles = (options.prompt ?? []).map((m) => m.role);
+        return {
+          content: [{ type: 'text' as const, text: 'ok' }],
+          finishReason: { unified: 'stop' as const },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1, text: 1, reasoning: 0 },
+            totalTokens: 2,
+          },
+          warnings: [],
+        };
+      }) as never,
     });
 
-    await askAgent('És olcsóbbat?', {
-      client: { messages: { create } } as never,
+    const result = await askAgent('És olcsóbbat?', {
+      model,
       config: {
         anthropicApiKey: 'sk-ant-test',
         anthropicModel: 'teszt',
@@ -134,12 +144,12 @@ describe('beszélgetés-memória (03. alkalom, c00055a)', () => {
       ],
     });
 
-    const sent = create.mock.calls[0]?.[0] as {
-      messages: { role: string; content: unknown }[];
-    };
-    expect(sent.messages).toHaveLength(3);
-    expect(sent.messages[0]?.content).toBe('Ajánlj egy pozsgást.');
-    expect(sent.messages[2]?.content).toBe('És olcsóbbat?');
+    // MÉRT alak (AI SDK 7): a system prompt az üzenet-tömb ELSŐ eleme lesz,
+    // utána jön a 2 előzmény és az új kérdés.
+    expect(sentRoles).toEqual(['system', 'user', 'assistant', 'user']);
+    // A lényegi regressziós állítás: az előzmény elöl, az új kérdés a végén.
+    expect(result.messages[0]?.content).toBe('Ajánlj egy pozsgást.');
+    expect(result.messages[2]?.content).toBe('És olcsóbbat?');
   });
 });
 

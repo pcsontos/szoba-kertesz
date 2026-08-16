@@ -1,4 +1,3 @@
-import type Anthropic from '@anthropic-ai/sdk';
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
 import { guardSql } from './sql-guard.js';
@@ -21,7 +20,7 @@ const RunSqlInputSchema = z.object({
  * `messages.create` hívás `tools` tömbjébe. A leírás szándékosan tükrözi a
  * `docs/system-prompt.md` `<tools>` szekcióját.
  */
-export const runSqlToolDefinition: Anthropic.Tool = {
+export const runSqlToolDefinition = {
   name: RUN_SQL_TOOL_NAME,
   description:
     'Read-only SQL lekérdezés futtatása a products növénykatalógus-táblán. ' +
@@ -120,7 +119,7 @@ export const runSqlTool = (
   report?: ToolReporter,
 ): Tool<{ query: string }, string> =>
   tool({
-    description: runSqlToolDefinition.description ?? '',
+    description: runSqlToolDefinition.description,
     inputSchema: z.object({
       query: z
         .string()

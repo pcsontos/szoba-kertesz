@@ -1,4 +1,3 @@
-import type Anthropic from '@anthropic-ai/sdk';
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
 import { queryReadonly, type DbReadonlyDeps } from './db-readonly.js';
@@ -18,7 +17,7 @@ const ListCategoriesInputSchema = z.object({}).passthrough();
  * bemeneti mezője, mert a mögötte futó lekérdezés fix
  * (`SELECT DISTINCT category`), nem a modell által generált SQL.
  */
-export const listCategoriesToolDefinition: Anthropic.Tool = {
+export const listCategoriesToolDefinition = {
   name: LIST_CATEGORIES_TOOL_NAME,
   description:
     'A products katalógusban ténylegesen előforduló összes kategória lekérdezése ' +
@@ -90,7 +89,7 @@ export const listCategoriesTool = (
   report?: ToolReporter,
 ): Tool<Record<string, never>, string> =>
   tool({
-    description: listCategoriesToolDefinition.description ?? '',
+    description: listCategoriesToolDefinition.description,
     inputSchema: z.object({}),
     execute: async (input, { toolCallId }) => {
       const result = await executeListCategoriesTool(input);

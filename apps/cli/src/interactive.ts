@@ -3,7 +3,7 @@ import {
   askAgent,
   closeReadonlyPool,
   type AskAgentResult,
-  type ChatMessage,
+  type Message,
 } from '@szoba-kertesz/core';
 import { printPrompt } from './lib/print-prompt.js';
 
@@ -64,7 +64,7 @@ export function runInteractive(
   // Beszélgetés-memória: minden forduló után eltesszük a teljes, frissített
   // üzenet-tömböt, és a következő hívásnak visszaadjuk — enélkül a
   // visszautaló kérdés ("és olcsóbbat?") értelmezhetetlen a modellnek.
-  let history: readonly ChatMessage[] = [];
+  let history: readonly Message[] = [];
   const ask =
     options.ask ??
     ((question: string) => askAgent(question, { print, history }));

@@ -12,30 +12,25 @@
  * A `deps` opcionális harmadik paraméter a tesztinjektálást tartja életben
  * (`DbReadonlyDeps`); elhagyva a hívási alak azonos a kurzuséval.
  */
-import type Anthropic from '@anthropic-ai/sdk';
 import type { DbReadonlyDeps } from './db-readonly.js';
-import {
-  executeRunSqlTool,
-  runSqlToolDefinition,
-  RUN_SQL_TOOL_NAME,
-} from './run-sql.js';
+import { executeRunSqlTool, RUN_SQL_TOOL_NAME } from './run-sql.js';
 import {
   executeListCategoriesTool,
-  listCategoriesToolDefinition,
   LIST_CATEGORIES_TOOL_NAME,
 } from './list-categories.js';
 import {
   executeGetClientPreferencesTool,
-  getClientPreferencesToolDefinition,
   GET_CLIENT_PREFERENCES_TOOL_NAME,
 } from './client-preferences.js';
 
-/** A modellnek felkínált tool-definíciók, egy helyen. */
-export const tools: Anthropic.Tool[] = [
-  runSqlToolDefinition,
-  listCategoriesToolDefinition,
-  getClientPreferencesToolDefinition,
-];
+// A 04. alkalom óta a modell felé eső tool-listát NEM ez a fájl adja: az AI SDK
+// tool-factory-i (`runSqlTool`, `listCategoriesTool`, `getClientPreferencesTool`)
+// szolgáltatják a sémát, és az agent maga állítja össze a toolkészletét. Az
+// egykori `tools: Anthropic.Tool[]` tömb ezzel halott kóddá vált, ezért törölve —
+// vele az utolsó `@anthropic-ai/sdk` import is kikerült a forrásból.
+//
+// Ami maradt: az `executeTool` dispatch, amit a regressziós manifeszt hajt meg.
+// Ez a fájl a Task 5-ben tűnik el, amikor minden agent maga mondja meg a toolkészletét.
 
 /**
  * Egyetlen tool-futás kimenetele, tool-típustól függetlenül — a loop és a

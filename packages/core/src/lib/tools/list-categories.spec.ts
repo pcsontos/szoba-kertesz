@@ -24,7 +24,15 @@ try {
 describe('listCategoriesToolDefinition', () => {
   it('is named listCategories and takes no required input', () => {
     expect(listCategoriesToolDefinition.name).toEqual('listCategories');
-    expect(listCategoriesToolDefinition.input_schema.required).toBeUndefined();
+    // Nincs kötelező bemenet: a `required` kulcs egyáltalán nem szerepel, és a
+    // properties üres. (A 04. alkalomtól a definíció típusa következtetett, nem
+    // `Anthropic.Tool` — ezért állítunk a kulcs LÉTÉRE, nem az értékére.)
+    expect(listCategoriesToolDefinition.input_schema).not.toHaveProperty(
+      'required',
+    );
+    expect(
+      Object.keys(listCategoriesToolDefinition.input_schema.properties),
+    ).toHaveLength(0);
   });
 });
 

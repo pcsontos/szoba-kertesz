@@ -1,4 +1,3 @@
-import type Anthropic from '@anthropic-ai/sdk';
 import { tool, type Tool } from 'ai';
 import { z } from 'zod';
 import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
@@ -43,7 +42,7 @@ export const CLIENT_CODES = Object.keys(CLIENT_PREFERENCES) as [
   ...ClientCode[],
 ];
 
-export const getClientPreferencesToolDefinition: Anthropic.Tool = {
+export const getClientPreferencesToolDefinition = {
   name: GET_CLIENT_PREFERENCES_TOOL_NAME,
   description:
     'Visszaadja egy adott ügyfél preferenciáit: a büdzsét forintban és a preferált növény ' +
@@ -119,7 +118,7 @@ export const getClientPreferencesTool = (
   report?: ToolReporter,
 ): Tool<{ clientCode: string }, string> =>
   tool({
-    description: getClientPreferencesToolDefinition.description ?? '',
+    description: getClientPreferencesToolDefinition.description,
     inputSchema: z.object({
       clientCode: z
         .string()

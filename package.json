@@ -44,7 +44,6 @@
     "vitest": "~4.1.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.107.0",
     "@prisma/client": "6.19.3",
     "commander": "^15.0.0",
     "pg": "^8.22.0",
