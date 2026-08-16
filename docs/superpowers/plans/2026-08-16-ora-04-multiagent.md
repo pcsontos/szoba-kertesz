@@ -2222,6 +2222,25 @@ Expected: zöld; **+4 core teszt**; a `--help` kiírja az `ingest` parancsot **A
 
 ⚠️ Ellenőrizd, hogy az `apps/cli/src/own-additions.spec.ts` 3 tesztje (readline-guard, `--show-prompt`) **továbbra is zöld** — az `interactive.ts` hozzányúlása a 4. saját kiegészítést fenyegeti.
 
+> **Végrehajtva 2026-08-16:** core 114/18 (+4), cli 9/3; core/cli typecheck, mindkét lint és a
+> prettier zöld. A `pnpm cli ingest --help` **API-hívás nélkül** kiírja a parancsot, és a
+> `szobakertesz --help` listáján is ott áll az `ask` mellett, a „FIGYELEM: ez a parancs ÍR az
+> adatbázisba" figyelmeztetéssel. Az `apps/cli/src/own-additions.spec.ts` 3 tesztje zöld — a
+> readline-guard és a `--show-prompt` (4. és 7. saját kiegészítés) sértetlen.
+>
+> **Eltérés a tervtől (T4, tervezési pontatlanság):** a Files-lista az `apps/cli/src/interactive.ts`-t
+> is módosítandóként sorolja, de a Step 4 csak a `main.ts`-t írja elő, és tartalmilag sincs rá szükség:
+> az **interaktív mód a query-agenté marad** (kérdés-válasz beszélgetés, `history`-val), az `ingest`
+> pedig egylövetű parancs. Ezért az `interactive.ts`-hez NEM nyúltunk — így a readline-guardot sem
+> kockáztattuk. Ha később kell interaktív ingest-mód, az külön döntés és külön task.
+>
+> Apróság: a `maxSteps: 8` és a `maxOutputTokens: 4096` elnevezett konstansba került
+> (`MAX_INGEST_STEPS`, `MAX_TOKENS`) a `query-agent.ts` mintájára — az érték a terv szerinti.
+>
+> **A Task 11 élő futásához vigyük tovább a Task 8 nyitott pontját:** a feed 307 termékéből 31-nek
+> üres a `product_type`-ja, ezeket a motor kidobja. Ha az élő ingest során hiányolunk egy növényt a
+> jelöltek közül, ez az első hely, ahol keresni kell.
+
 ---
 
 ### Task 10: Dokumentáció-igazítás
