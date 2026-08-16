@@ -37,6 +37,12 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Enélkül a job ZÖLDEN fut le, de NEM ír kommentet: prompt-módban az
+          # action alapból se követő, se sticky kommentet nem hoz létre
+          # (`track_progress: false`, `use_sticky_comment: false`), így a review
+          # eredménye csak a futás logjában marad. A `track_progress: true`
+          # pull_request eseményen "tag módot" kényszerít követő kommenttel.
+          track_progress: true
           prompt: |
             Review-old ezt a pull requestet magyarul. Fókusz: hibák, hiányzó
             tesztek, a repo konvencióinak (docs/konvenciók.md) megsértése,
