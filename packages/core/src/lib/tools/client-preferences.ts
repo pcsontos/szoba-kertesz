@@ -1,5 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { tool, type Tool } from 'ai';
 import { z } from 'zod';
+import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
 
 /**
  * A `getClientPreferences` tool: ügyfélkód alapján adja vissza az ügyfél
@@ -103,3 +105,42 @@ export async function executeGetClientPreferencesTool(
     preference: CLIENT_PREFERENCES[parsed.data.clientCode],
   };
 }
+
+/**
+ * Az AI SDK felé eső tool-definíció.
+ *
+ * A modell-sémában SZÁNDÉKOSAN `z.string()` áll a `z.enum(CLIENT_CODES)` helyett:
+ * az érvényes kódok listája a `description`-ben van, a szigorú enum-ellenőrzés
+ * pedig az `executeGetClientPreferencesTool`-ban — így ismeretlen kódra a saját
+ * magyar hibaszövegünk megy vissza, amiből a modell javítani tud, nem az SDK
+ * séma-kivétele, ami megszakítaná a kört.
+ */
+export const getClientPreferencesTool = (
+  report?: ToolReporter,
+): Tool<{ clientCode: string }, string> =>
+  tool({
+    description: getClientPreferencesToolDefinition.description ?? '',
+    inputSchema: z.object({
+      clientCode: z
+        .string()
+        .describe('Az ügyfél kódja, amelyhez a preferenciákat kérjük.'),
+    }),
+    execute: async (input, { toolCallId }) => {
+      const result = await executeGetClientPreferencesTool(input);
+      const outcome: ToolOutcome = result.ok
+        ? {
+            content: JSON.stringify(result.preference),
+            isError: false,
+            summary: `${result.clientCode} · keret ${result.preference.budget} Ft · ${result.preference.careLevel}`,
+            rowCount: null,
+          }
+        : {
+            content: result.error,
+            isError: true,
+            summary: null,
+            rowCount: null,
+          };
+      report?.(toolCallId, GET_CLIENT_PREFERENCES_TOOL_NAME, input, outcome);
+      return outcome.content;
+    },
+  });

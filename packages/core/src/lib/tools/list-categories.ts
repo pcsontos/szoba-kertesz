@@ -1,6 +1,8 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { tool, type Tool } from 'ai';
 import { z } from 'zod';
 import { queryReadonly, type DbReadonlyDeps } from './db-readonly.js';
+import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
 
 export const LIST_CATEGORIES_TOOL_NAME = 'listCategories';
 
@@ -79,3 +81,33 @@ export async function executeListCategoriesTool(
     };
   }
 }
+
+/**
+ * Az AI SDK felé eső tool-definíció. Paraméter nélküli tool — üres
+ * objektum-séma; a mögötte futó lekérdezés fix, nem a modell szövegéből épül.
+ */
+export const listCategoriesTool = (
+  report?: ToolReporter,
+): Tool<Record<string, never>, string> =>
+  tool({
+    description: listCategoriesToolDefinition.description ?? '',
+    inputSchema: z.object({}),
+    execute: async (input, { toolCallId }) => {
+      const result = await executeListCategoriesTool(input);
+      const outcome: ToolOutcome = result.ok
+        ? {
+            content: JSON.stringify(result.categories),
+            isError: false,
+            summary: `${result.categories.length} kategória`,
+            rowCount: result.categories.length,
+          }
+        : {
+            content: result.error,
+            isError: true,
+            summary: null,
+            rowCount: null,
+          };
+      report?.(toolCallId, LIST_CATEGORIES_TOOL_NAME, input, outcome);
+      return outcome.content;
+    },
+  });

@@ -1,7 +1,9 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { tool, type Tool } from 'ai';
 import { z } from 'zod';
 import { guardSql } from './sql-guard.js';
 import { queryReadonly, type DbReadonlyDeps } from './db-readonly.js';
+import type { ToolOutcome, ToolReporter } from './tool-outcome.js';
 
 export const RUN_SQL_TOOL_NAME = 'runSql';
 
@@ -101,3 +103,45 @@ export async function executeRunSqlTool(
     };
   }
 }
+
+/**
+ * Az AI SDK felé eső tool-definíció — a kétrétegű tool-felület felső rétege.
+ *
+ * A séma SZÁNDÉKOSAN megengedő (csak típus): a szigorú validáció alatta, az
+ * `executeRunSqlTool`-ban marad (Zod + `sql-guard`), így hibás bemenetre is a
+ * SAJÁT magyar hibaszövegünk megy vissza a modellnek, nem az SDK kivétele — és
+ * a modell tud belőle javítani.
+ *
+ * A `description` a meglévő `runSqlToolDefinition`-ből jön, nem duplikálva: a
+ * modell felé eső szöveg egy helyen marad, és nem csúszhat el a
+ * `docs/system-prompt.md` `<tools>` szekciójától.
+ */
+export const runSqlTool = (
+  report?: ToolReporter,
+): Tool<{ query: string }, string> =>
+  tool({
+    description: runSqlToolDefinition.description ?? '',
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe('Egyetlen SELECT SQL utasítás a products táblán (LIMIT-tel).'),
+    }),
+    execute: async (input, { toolCallId }) => {
+      const result = await executeRunSqlTool(input);
+      const outcome: ToolOutcome = result.ok
+        ? {
+            content: JSON.stringify(result.rows),
+            isError: false,
+            summary: result.sql,
+            rowCount: result.rowCount,
+          }
+        : {
+            content: result.error,
+            isError: true,
+            summary: result.sql ?? null,
+            rowCount: null,
+          };
+      report?.(toolCallId, RUN_SQL_TOOL_NAME, input, outcome);
+      return outcome.content; // a modell PONTOSAN azt kapja, amit a kézi loopban is
+    },
+  });
