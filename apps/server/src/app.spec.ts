@@ -39,54 +39,88 @@ const answer = (text: string) => ({
   stopReason: 'stop',
 });
 
-describe('POST /api/chat', () => {
-  it('a kérdést az agentnek adja, és a válaszát JSON-ben küldi vissza', async () => {
-    const ask = vi
-      .fn()
-      .mockResolvedValue(answer('Hét pozsgás van 5000 Ft alatt.'));
+/** A useChat MINDIG a teljes előzményt küldi — ez a kérés alakja. */
+const uiMessage = (role: 'user' | 'assistant', text: string) => ({
+  id: `${role}-${text.slice(0, 5)}`,
+  role,
+  parts: [{ type: 'text', text }],
+});
+
+describe('POST /api/chat — streamelve', () => {
+  it('az utolsó user-üzenet a kérdés, a többi az előzmény', async () => {
+    const ask = vi.fn().mockImplementation(async (_question, options) => {
+      options.onTextDelta?.('Kész.');
+      return answer('Kész.');
+    });
     const url = await start(ask as unknown as AskFn);
 
     const response = await fetch(`${url}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: 'Hány pozsgás van 5000 Ft alatt?' }),
+      body: JSON.stringify({
+        messages: [
+          uiMessage('user', 'Hány pozsgás van?'),
+          uiMessage('assistant', 'Hét darab.'),
+          uiMessage('user', 'És olcsóbbat?'),
+        ],
+      }),
     });
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
-      answer: 'Hét pozsgás van 5000 Ft alatt.',
-    });
-    expect(ask).toHaveBeenCalledTimes(1);
-    expect(ask.mock.calls[0]?.[0]).toBe('Hány pozsgás van 5000 Ft alatt?');
-    // A szerver konzolján ugyanaz a színes trace fusson le, mint a CLI-ben.
-    expect(ask.mock.calls[0]?.[1]).toMatchObject({ print: true });
+    expect(await response.text()).toBe('Kész.');
+    expect(ask.mock.calls[0]?.[0]).toBe('És olcsóbbat?');
+    // A korábbi körök az askAgent history-jává alakulnak — enélkül a
+    // visszautaló kérdés ("és olcsóbbat?") értelmezhetetlen lenne.
+    expect(ask.mock.calls[0]?.[1]?.history).toHaveLength(2);
   });
 
-  it('üres vagy hiányzó kérdésre 400-at ad, és az agentet meg sem hívja', async () => {
+  it('a válasz DARABONKÉNT megy ki, nem egyben', async () => {
+    const ask = vi.fn().mockImplementation(async (_question, options) => {
+      options.onTextDelta?.('Nyolc ');
+      options.onTextDelta?.('kategória.');
+      return answer('Nyolc kategória.');
+    });
+    const url = await start(ask as unknown as AskFn);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [uiMessage('user', 'Kategóriák?')] }),
+    });
+
+    expect(response.headers.get('content-type')).toContain('text/plain');
+    expect(await response.text()).toBe('Nyolc kategória.');
+  });
+
+  it('üres vagy user nélküli kérésre 400, az agent hívása nélkül', async () => {
     const ask = vi.fn();
     const url = await start(ask as unknown as AskFn);
 
     const response = await fetch(`${url}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: '   ' }),
+      body: JSON.stringify({ messages: [] }),
     });
 
     expect(response.status).toBe(400);
     expect(ask).not.toHaveBeenCalled();
   });
 
-  it('az agent hibáját nem nyeli el: 500 + a hibaüzenet', async () => {
-    const ask = vi.fn().mockRejectedValue(new Error('API hiba'));
+  it('ha MÁR streamelt, a hibát csak lezárni tudja — nem ír státuszt', async () => {
+    const ask = vi.fn().mockImplementation(async (_question, options) => {
+      options.onTextDelta?.('Elkezdem…');
+      throw new Error('API hiba a második körben');
+    });
     const url = await start(ask as unknown as AskFn);
 
     const response = await fetch(`${url}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ message: 'kérdés' }),
+      body: JSON.stringify({ messages: [uiMessage('user', 'kérdés')] }),
     });
 
-    expect(response.status).toBe(500);
-    expect(JSON.stringify(await response.json())).toContain('API hiba');
+    // A státusz már 200, mert a fejlécek kimentek az első darabbal.
+    // Ez a "Cannot set headers after they are sent" buktató kezelése.
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('Elkezdem…');
   });
 });

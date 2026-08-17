@@ -1,55 +1,33 @@
 import { useState, type FormEvent } from 'react';
+import { useChat } from '@ai-sdk/react';
+import { TextStreamChatTransport } from 'ai';
 import { Button } from './components/ui/button.js';
 import { Input } from './components/ui/input.js';
 
-// App.tsx — minimál chat. EBBEN A LÉPÉSBEN sima fetch: a válasz EGYBEN érkezik meg,
-// addig a felület vár. A Task 8 írja át streamelőre (useChat) — a különbség
-// ("várakozás + blokk" vs "szavanként épül") ekkor lesz demózható.
+// App.tsx — a chat MOST MÁR streamel. A useChat a TextStreamChatTransport-tal
+// nyers szöveg-folyamot olvas (text/plain), és minden darabbal újrarendereli az
+// utolsó üzenetet: a válasz szavanként épül fel, nem egyben ugrik be.
+// A hook minden küldésnél a TELJES előzményt átküldi — a szerver ebből csinál
+// history-t, így a visszautaló kérdés ("és olcsóbbat?") is működik.
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
-interface ChatMessage {
-  readonly role: 'user' | 'assistant';
-  readonly text: string;
-}
-
 export function App() {
-  const [messages, setMessages] = useState<readonly ChatMessage[]>([]);
   const [input, setInput] = useState('');
-  const [pending, setPending] = useState(false);
+  const { messages, sendMessage, status } = useChat({
+    transport: new TextStreamChatTransport({ api: `${API_URL}/api/chat` }),
+  });
 
-  async function handleSubmit(event: FormEvent): Promise<void> {
+  const streaming = status === 'streaming' || status === 'submitted';
+
+  function handleSubmit(event: FormEvent): void {
     event.preventDefault();
     const question = input.trim();
-    if (question === '' || pending) {
+    if (question === '' || streaming) {
       return;
     }
-
-    setMessages((prev) => [...prev, { role: 'user', text: question }]);
     setInput('');
-    setPending(true);
-
-    try {
-      const response = await fetch(`${API_URL}/api/chat`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ message: question }),
-      });
-      const data: unknown = await response.json();
-      const answer =
-        typeof data === 'object' && data !== null && 'answer' in data
-          ? String((data as { answer: unknown }).answer)
-          : 'A szerver nem küldött választ.';
-      setMessages((prev) => [...prev, { role: 'assistant', text: answer }]);
-    } catch (error: unknown) {
-      const detail = error instanceof Error ? error.message : String(error);
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', text: `Hiba a szerver hívásakor: ${detail}` },
-      ]);
-    } finally {
-      setPending(false);
-    }
+    void sendMessage({ text: question });
   }
 
   return (
@@ -63,19 +41,22 @@ export function App() {
             alatt?"
           </p>
         )}
-        {messages.map((message, index) => (
+        {messages.map((message) => (
           <div
-            key={index}
+            key={message.id}
             className={
               message.role === 'user'
                 ? 'ml-auto max-w-[80%] rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white'
                 : 'mr-auto max-w-[80%] whitespace-pre-wrap rounded-lg bg-neutral-100 px-3 py-2 text-sm'
             }
           >
-            {message.text}
+            {message.parts
+              .filter((part) => part.type === 'text')
+              .map((part, index) => (
+                <span key={index}>{part.text}</span>
+              ))}
           </div>
         ))}
-        {pending && <p className="text-sm text-neutral-400">Gondolkodom…</p>}
       </div>
 
       <form onSubmit={handleSubmit} className="flex gap-2">
@@ -83,9 +64,8 @@ export function App() {
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="Írd ide a kérdésed…"
-          disabled={pending}
         />
-        <Button type="submit" disabled={pending || input.trim() === ''}>
+        <Button type="submit" disabled={streaming || input.trim() === ''}>
           Küldés
         </Button>
       </form>
