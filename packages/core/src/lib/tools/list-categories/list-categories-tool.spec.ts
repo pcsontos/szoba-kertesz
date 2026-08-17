@@ -1,16 +1,16 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import type { Pool } from 'pg';
-import { closeReadonlyPool } from './db-readonly.js';
+import { closeReadonlyPool } from '../run-sql/db-readonly.js';
 import {
   executeListCategoriesTool,
   listCategoriesToolDefinition,
-} from './list-categories.js';
+} from './list-categories-tool.js';
 
 // Lásd runsql-tool.spec.ts — ugyanaz a minta: a repo gyökerén lévő .env
 // explicit betöltése, mert a vitest cwd-je `packages/core`.
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRootEnvPath = resolve(here, '../../../../.env');
+const repoRootEnvPath = resolve(here, '../../../../../../.env');
 try {
   process.loadEnvFile(repoRootEnvPath);
 } catch (error) {
@@ -24,7 +24,15 @@ try {
 describe('listCategoriesToolDefinition', () => {
   it('is named listCategories and takes no required input', () => {
     expect(listCategoriesToolDefinition.name).toEqual('listCategories');
-    expect(listCategoriesToolDefinition.input_schema.required).toBeUndefined();
+    // Nincs kötelező bemenet: a `required` kulcs egyáltalán nem szerepel, és a
+    // properties üres. (A 04. alkalomtól a definíció típusa következtetett, nem
+    // `Anthropic.Tool` — ezért állítunk a kulcs LÉTÉRE, nem az értékére.)
+    expect(listCategoriesToolDefinition.input_schema).not.toHaveProperty(
+      'required',
+    );
+    expect(
+      Object.keys(listCategoriesToolDefinition.input_schema.properties),
+    ).toHaveLength(0);
   });
 });
 

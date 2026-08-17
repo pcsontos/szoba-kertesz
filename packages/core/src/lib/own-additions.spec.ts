@@ -9,20 +9,52 @@
  * NE TÖRÖLD refaktornál. Ha egy kurzus-lépés törölné, az T3-eltérés:
  * megállás és jelzés, nem felülírás.
  */
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { MockLanguageModelV4 } from 'ai/test';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  LIST_CATEGORIES_TOOL_NAME,
   SYSTEM_PROMPT,
   buildSystemPrompt,
   executeListCategoriesTool,
   executeRunSqlTool,
-  executeTool,
   askAgent,
+  getSessionLogFilePath,
   guardSql,
   logInteraction,
 } from '../index.js';
+
+const TEST_CONFIG = {
+  anthropicApiKey: 'sk-ant-test',
+  anthropicModel: 'teszt',
+  databaseUrlReadonly: 'postgresql://ro:ro@localhost:5433/teszt',
+};
+
+/** Néma futás: se konzol-nyom, se logs/ artifact, se valódi API-hívás. */
+const QUIET = {
+  config: TEST_CONFIG,
+  log: async () => undefined,
+  print: false,
+  persistTrace: false,
+} as const;
+
+/**
+ * PROVIDER-szintű (v4) válasz-alak. A `finishReason` objektum, a `usage`
+ * ágyazott — lapos alakkal mindkettő NÉMÁN `undefined` lenne, és a tesztek
+ * hamis zöldet mutatnának.
+ */
+const modelStep = (content: unknown[], finish: 'stop' | 'tool-calls') => ({
+  content,
+  finishReason: { unified: finish },
+  usage: {
+    inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 1, text: 1, reasoning: 0 },
+    totalTokens: 2,
+  },
+  warnings: [],
+});
 
 describe('saját kiegészítés 1 — listCategories tool', () => {
   it('a katalógus valódi kategórialistáját adja vissza', async () => {
@@ -35,20 +67,60 @@ describe('saját kiegészítés 1 — listCategories tool', () => {
     expect(result.categories).toContain('szobanövény');
   });
 
-  it('be van kötve az executeTool dispatchbe', async () => {
-    // Ez a lényegi regressziós állítás: a refaktor után is a NEVÉN keresztül
-    // elérhető, nem "Ismeretlen tool"-t kapunk vissza.
-    const outcome = await executeTool('listCategories', {});
+  // A 04. alkalomig ezt a két állítást a központi `executeTool` dispatch fedte.
+  // A dispatch megszűnt (minden agent maga mondja meg a toolkészletét), ezért az
+  // állítások ODA költöztek, ahol a bekötés MOST történik: a query-agent
+  // toolkészletébe. A lényeg változatlan — a listCategories a NEVÉN elérhető,
+  // és valódi adatot ad vissza.
 
-    expect(outcome.ok).toBe(true);
-    expect(outcome.resultSummary).toContain('szobanövény');
+  it('a NEVÉN ott van a query-agent toolkészletében', async () => {
+    // Ha kiesne a toolkészletből, a modell soha nem tudná meghívni — némán
+    // elveszne a saját kiegészítésünk, a suite meg zöld maradna.
+    let offered: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: (async (options: { tools?: { name: string }[] }) => {
+        offered = (options.tools ?? []).map((tool) => tool.name);
+        return modelStep([{ type: 'text', text: 'kész' }], 'stop');
+      }) as never,
+    });
+
+    await askAgent('kérdés', { ...QUIET, model });
+
+    expect(offered).toContain(LIST_CATEGORIES_TOOL_NAME);
   });
 
-  it('ismeretlen toolra hibaszöveget ad, nem dob kivételt', async () => {
-    const outcome = await executeTool('nincsIlyenTool', {});
+  it('a NEVÉN meghívva valódi kategóriákat juttat vissza a modellhez', async () => {
+    // A dispatch másik fele: a név nem "Ismeretlen tool"-ra fut, hanem tényleg
+    // lefuttatja a toolt, és az eredménye megjelenik a napló tool-lépésében.
+    let round = 0;
+    const model = new MockLanguageModelV4({
+      doGenerate: (async () =>
+        round++ === 0
+          ? modelStep(
+              [
+                {
+                  type: 'tool-call',
+                  toolCallId: 'call_cat',
+                  toolName: LIST_CATEGORIES_TOOL_NAME,
+                  input: '{}',
+                },
+              ],
+              'tool-calls',
+            )
+          : modelStep(
+              [{ type: 'text', text: 'Ezek a kategóriák.' }],
+              'stop',
+            )) as never,
+    });
 
-    expect(outcome.ok).toBe(false);
-    expect(outcome.resultSummary).toContain('Ismeretlen tool');
+    const result = await askAgent('Milyen kategóriák vannak?', {
+      ...QUIET,
+      model,
+    });
+
+    expect(result.toolSteps[0]?.toolName).toBe(LIST_CATEGORIES_TOOL_NAME);
+    expect(result.toolSteps[0]?.ok).toBe(true);
+    expect(result.toolSteps[0]?.resultSummary).toContain('szobanövény');
   });
 });
 
@@ -105,19 +177,28 @@ describe('saját kiegészítés 5 — javított system prompt', () => {
 
 describe('beszélgetés-memória (03. alkalom, c00055a)', () => {
   it('a history a kérdés ELÉ fűződik, így a modell látja az előzményt', async () => {
-    const create = vi.fn().mockResolvedValue({
-      id: 'msg',
-      type: 'message',
-      role: 'assistant',
-      model: 'teszt',
-      content: [{ type: 'text', text: 'ok', citations: null }],
-      stop_reason: 'end_turn',
-      stop_sequence: null,
-      usage: { input_tokens: 1, output_tokens: 1 },
+    // A 04. alkalom framework-váltása után a szeam a `deps.model` (mock-modell),
+    // nem a `deps.client` (Anthropic-mock). Az ÁLLÍTÁS lényege változatlan:
+    // előzmény elöl, az új kérdés a végén.
+    let sentRoles: string[] = [];
+    const model = new MockLanguageModelV4({
+      doGenerate: (async (options: { prompt?: { role: string }[] }) => {
+        sentRoles = (options.prompt ?? []).map((m) => m.role);
+        return {
+          content: [{ type: 'text' as const, text: 'ok' }],
+          finishReason: { unified: 'stop' as const },
+          usage: {
+            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+            outputTokens: { total: 1, text: 1, reasoning: 0 },
+            totalTokens: 2,
+          },
+          warnings: [],
+        };
+      }) as never,
     });
 
-    await askAgent('És olcsóbbat?', {
-      client: { messages: { create } } as never,
+    const result = await askAgent('És olcsóbbat?', {
+      model,
       config: {
         anthropicApiKey: 'sk-ant-test',
         anthropicModel: 'teszt',
@@ -132,12 +213,12 @@ describe('beszélgetés-memória (03. alkalom, c00055a)', () => {
       ],
     });
 
-    const sent = create.mock.calls[0]?.[0] as {
-      messages: { role: string; content: unknown }[];
-    };
-    expect(sent.messages).toHaveLength(3);
-    expect(sent.messages[0]?.content).toBe('Ajánlj egy pozsgást.');
-    expect(sent.messages[2]?.content).toBe('És olcsóbbat?');
+    // MÉRT alak (AI SDK 7): a system prompt az üzenet-tömb ELSŐ eleme lesz,
+    // utána jön a 2 előzmény és az új kérdés.
+    expect(sentRoles).toEqual(['system', 'user', 'assistant', 'user']);
+    // A lényegi regressziós állítás: az előzmény elöl, az új kérdés a végén.
+    expect(result.messages[0]?.content).toBe('Ajánlj egy pozsgást.');
+    expect(result.messages[2]?.content).toBe('És olcsóbbat?');
   });
 });
 
@@ -164,5 +245,41 @@ describe('saját kiegészítés 6 — JSONL-logger token usage-dzsel', () => {
     // A token usage tényleg naplózva van — ez a HF3 költségbecslés alapja.
     expect(JSON.stringify(parsed)).toContain('11');
     expect(JSON.stringify(parsed)).toContain('22');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 04. alkalom — manifeszt-keményítés a framework-migráció ELŐTT.
+//
+// A következő három blokk azt a három drótot rögzíti, amit a Vercel AI SDK-ra
+// állás elvágna. SZÁNDÉKOSAN típus- és névszinten állítanak, NEM az askAgent
+// belső injektálási mechanizmusán (`deps.client`) — így a migráció után is
+// változtatás nélkül érvényesek maradnak.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('saját kiegészítés 7 — a --show-prompt adatforrása', () => {
+  it('az askAgent eredménye típusszinten hordozza a systemPrompt-ot', async () => {
+    // Fordítási idejű állítás: ha az AskResult-ból kiesik a systemPrompt, ez a
+    // sor NEM fordul le, és a typecheck bukik — nem csak a teszt.
+    type Result = Awaited<ReturnType<typeof askAgent>>;
+    const readSystemPrompt = (result: Result): string => result.systemPrompt;
+
+    expect(typeof readSystemPrompt).toBe('function');
+  });
+});
+
+describe('saját kiegészítés 6 — a JSONL-logger a csomag felületén marad', () => {
+  it('a logInteraction és a session-fájl útja exportált marad', () => {
+    expect(typeof logInteraction).toBe('function');
+    expect(typeof getSessionLogFilePath).toBe('function');
+    // A .jsonl kiterjesztés a Trace .json nyomától való elkülönülés garanciája:
+    // a kettő egymás MELLETT él, nem váltja ki egymást.
+    expect(getSessionLogFilePath()).toMatch(/\.jsonl$/);
+  });
+});
+
+describe('saját kiegészítés 1 — a listCategories neve nem tűnhet el', () => {
+  it('a tool neve exportált konstans, és pontosan "listCategories"', () => {
+    expect(LIST_CATEGORIES_TOOL_NAME).toBe('listCategories');
   });
 });

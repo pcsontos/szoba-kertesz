@@ -1,5 +1,6 @@
-import type Anthropic from '@anthropic-ai/sdk';
+import { tool, type Tool } from 'ai';
 import { z } from 'zod';
+import type { ToolOutcome, ToolReporter } from '../tool-outcome.js';
 
 /**
  * A `getClientPreferences` tool: ügyfélkód alapján adja vissza az ügyfél
@@ -7,7 +8,9 @@ import { z } from 'zod';
  * (mennyire gondozásigényes növényt szeret).
  *
  * Ez a lecke szerkezeti tanulsága: egy nem-SQL-es, második tool hozzáadása
- * NEM érinti az agent-loopot. Egy fájl + két sor a `tools/index.ts`-ben.
+ * NEM érinti az agent-loopot. A 04. alkalomtól egy új tool = egy új könyvtár
+ * itt (minden hozzávalójával) + egy sor annak az agentnek a `buildTools`-ában,
+ * amelyik használhatja — központi dispatch nincs többé.
  *
  * A `CLIENT_PREFERENCES` az EGYETLEN forrás — ebből származik a tool-séma
  * `enum`-ja ÉS a Zod-guard is, így a kettő nem csúszhat el.
@@ -41,7 +44,7 @@ export const CLIENT_CODES = Object.keys(CLIENT_PREFERENCES) as [
   ...ClientCode[],
 ];
 
-export const getClientPreferencesToolDefinition: Anthropic.Tool = {
+export const getClientPreferencesToolDefinition = {
   name: GET_CLIENT_PREFERENCES_TOOL_NAME,
   description:
     'Visszaadja egy adott ügyfél preferenciáit: a büdzsét forintban és a preferált növény ' +
@@ -103,3 +106,44 @@ export async function executeGetClientPreferencesTool(
     preference: CLIENT_PREFERENCES[parsed.data.clientCode],
   };
 }
+
+/**
+ * Az AI SDK felé eső tool-definíció.
+ *
+ * A modell-sémában SZÁNDÉKOSAN `z.string()` áll a `z.enum(CLIENT_CODES)` helyett:
+ * az érvényes kódok listája a `description`-ben van, a szigorú enum-ellenőrzés
+ * pedig az `executeGetClientPreferencesTool`-ban — így ismeretlen kódra a saját
+ * magyar hibaszövegünk megy vissza, amiből a modell javítani tud, nem az SDK
+ * séma-kivétele, ami megszakítaná a kört.
+ */
+export const getClientPreferencesTool = (
+  report?: ToolReporter,
+): Tool<{ clientCode: string }, string> =>
+  tool({
+    description: getClientPreferencesToolDefinition.description,
+    inputSchema: z.object({
+      clientCode: z
+        .string()
+        .describe('Az ügyfél kódja, amelyhez a preferenciákat kérjük.'),
+    }),
+    execute: async (input, { toolCallId }) => {
+      const result = await executeGetClientPreferencesTool(input);
+      const outcome: ToolOutcome = result.ok
+        ? {
+            content: JSON.stringify(result.preference),
+            isError: false,
+            summary: `${result.clientCode} · keret ${result.preference.budget} Ft · ${result.preference.careLevel}`,
+            sql: null,
+            rowCount: null,
+          }
+        : {
+            content: result.error,
+            isError: true,
+            summary: null,
+            sql: null,
+            rowCount: null,
+          };
+      report?.(toolCallId, GET_CLIENT_PREFERENCES_TOOL_NAME, input, outcome);
+      return outcome.content;
+    },
+  });

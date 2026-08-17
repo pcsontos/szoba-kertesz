@@ -1,0 +1,48 @@
+# CI — pnpm + Nx build-kapu minden pushra/PR-ra.
+# (Az Nx Cloud elosztott futtatás szándékosan nincs bekapcsolva — ehhez a projekthez felesleges.)
+#
+# MIÉRT NINCS `test` a target-listában?
+# A `core` több specje VALÓDI, futó, seedelt Postgresre támaszkodik
+# (db-readonly.spec.ts, db-readwrite.spec.ts, list-categories.spec.ts, és az
+# agent-loop runSql-t meghajtó esetei). A runneren nincs adatbázis, tehát a
+# teszt-lépés vagy elhasalna, vagy — ha kihagynánk a DB-s specjeket — zölden
+# hazudna. Zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés.
+# A `services: postgres` blokk + migráció + seed a 06. alkalom scope-ja; addig a
+# tesztek lokálisan futnak, a `docs/superpowers/plans/` kapui szerint.
+#
+# A `packages/db/generated` (Prisma-kliens) gitignorált, tehát a runneren nem
+# létezik. Ellenőrizve: a lint/typecheck/build enélkül is zöld, mert a `core`
+# sosem importálja a Prismát — csak a `prisma/seed.ts`, amit egyik target sem fordít.
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          filter: tree:0
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.12.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm nx run-many -t lint typecheck build

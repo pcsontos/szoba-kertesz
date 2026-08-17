@@ -5,7 +5,9 @@
   "scripts": {
     "cli": "tsx --conditions=@szoba-kertesz/source apps/cli/src/main.ts",
     "szobakertesz": "nx run cli:build && node apps/cli/dist/main.js",
-    "szobakertesz:debug": "nx run cli:build:development && node --inspect apps/cli/dist/main.js --show-prompt"
+    "szobakertesz:debug": "nx run cli:build:development && node --inspect apps/cli/dist/main.js --show-prompt",
+    "pr:review": "gh pr edit --add-label claude-review",
+    "pr:review:off": "gh pr edit --remove-label claude-review"
   },
   "private": true,
   "prisma": {
@@ -44,7 +46,6 @@
     "vitest": "~4.1.0"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.107.0",
     "@prisma/client": "6.19.3",
     "commander": "^15.0.0",
     "pg": "^8.22.0",

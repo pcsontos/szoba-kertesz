@@ -1,0 +1,63 @@
+# Claude code review PR-okra — a HIVATALOS claude-code-action, "gyári" konfigurációval.
+# Nincs saját skill, nincs saját agent: csak egy prompt. (L1 a felhőben — 4. alkalom.)
+#
+# ELŐFELTÉTEL: az ANTHROPIC_API_KEY repo-secret.
+#   gh secret set ANTHROPIC_API_KEY --repo pcsontos/szoba-kertesz
+#
+# MIÉRT VAN ITT A github_token?
+# Az actionnek KÉT, vagylagos útja van a GitHub felé írni (action.yml:
+# "github_token — ... optional if using GitHub App"):
+#   1. a Claude Code GitHub App telepítve a repóra → OIDC-token cseréje app-tokenre,
+#   2. VAGY egy átadott github_token.
+# Az (1) telepítés nélkül `401 Unauthorized — Claude Code is not installed on this
+# repository`-vel hasal el. A workflow beépített GITHUB_TOKEN-je viszont a lenti
+# `permissions` blokk jogaival pontosan elég a PR-kommenteléshez — így az app-
+# telepítés (és a hozzá vezető claude.ai szervezeti beállítás) megkerülhető.
+# Következmény: a kommentet a "github-actions[bot]" írja, nem a Claude app.
+name: Claude Review
+
+# IGÉNY SZERINT FUT, nem minden push-ra. Egy review ~11 perc valódi API-költség,
+# ezért nem indul automatikusan minden PR-frissítésnél. Kérése: tedd rá a
+# `claude-review` címkét a PR-re (a címke újbóli felrakása újra elindítja).
+#
+#   gh pr edit <PR> --add-label claude-review
+#
+# Miért nem `workflow_dispatch`? Ott nincs PR-kontextus, az actionnek nem lenne
+# mit review-znia. A `labeled` esemény viszont teljes PR-kontextust ad, és a
+# `track_progress` is támogatja.
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  claude-review:
+    if: github.event.label.name == 'claude-review'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          # Enélkül a job ZÖLDEN fut le, de NEM ír kommentet: prompt-módban az
+          # action alapból se követő, se sticky kommentet nem hoz létre
+          # (`track_progress: false`, `use_sticky_comment: false`), így a review
+          # eredménye csak a futás logjában marad. A `track_progress: true`
+          # pull_request eseményen "tag módot" kényszerít követő kommenttel.
+          track_progress: true
+          prompt: |
+            Review-old ezt a pull requestet magyarul. Fókusz: hibák, hiányzó
+            tesztek, a repo konvencióinak (docs/konvenciók.md) megsértése,
+            és a CLAUDE.md invariánsai: elkülönített jogosultsági szintű
+            DB-kapcsolatok, framework-agnosztikus core, read-only
+            query-tool-lánc, a JSONL-napló és a Trace egymás melletti léte.
+            Rövid, tételes összefoglalót írj PR-kommentbe: probléma → fájl:sor → javaslat.

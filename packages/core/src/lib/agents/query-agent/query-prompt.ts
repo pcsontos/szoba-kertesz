@@ -74,13 +74,21 @@ products (
 `;
 
 /**
- * A kurzus 03. alkalmának hívási alakja (`prompts.ts` → `buildSystemPrompt()`).
+ * A KÉRDÉS-VÁLASZ agent system promptja.
  *
  * Vékony wrapper szándékosan: a prompt forrása továbbra is a fenti
  * `SYSTEM_PROMPT` konstans, ami bájtra azonos a `docs/system-prompt.md`-vel.
- * Így a kurzus 04–06. alkalmának hívási alakja megvan anélkül, hogy a
- * bájtazonosság-invariáns sérülne.
+ * A 04. alkalomtól minden agentnek SAJÁT promptja van (query / ingest), ezért
+ * a név is agent-specifikus — a `buildSystemPrompt` már félrevezető lenne.
+ */
+export function buildQueryPrompt(): string {
+  return SYSTEM_PROMPT;
+}
+
+/**
+ * @deprecated A 03. alkalom hívási alakja. Használd a `buildQueryPrompt()`-ot —
+ * ez az alias csak azért él, hogy a régi hívási pont ne törjön némán.
  */
 export function buildSystemPrompt(): string {
-  return SYSTEM_PROMPT;
+  return buildQueryPrompt();
 }

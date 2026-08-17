@@ -2,23 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import type Anthropic from '@anthropic-ai/sdk';
 import { Trace, setWatchLog, traceLog } from './trace.js';
 
-const modelResponse = (text: string, stop: string): Anthropic.Message =>
-  ({
-    content: text ? [{ type: 'text', text }] : [],
-    stop_reason: stop,
-    usage: { input_tokens: 10, output_tokens: 5 },
-  }) as unknown as Anthropic.Message;
+// AI SDK 7 alakok: a Trace az `onStepEnd` lezárt köreit és a `prepareStep`
+// kimenő üzeneteit kapja, nem az Anthropic SDK válasz-objektumát.
+const modelStep = (text: string, finishReason: string) => ({
+  finishReason,
+  text,
+  toolCalls: [] as { toolName: string; input: unknown }[],
+  usage: { inputTokens: 10, outputTokens: 5 },
+});
 
-const toolUse = (query: string): Anthropic.ToolUseBlock =>
-  ({
-    id: 't1',
-    name: 'runSql',
-    input: { query },
-    type: 'tool_use',
-  }) as unknown as Anthropic.ToolUseBlock;
+const toolCall = (query: string) => ({ toolName: 'runSql', input: { query } });
 
 describe('Trace', () => {
   it('körről körre rögzíti a kontextus növekedését', () => {
@@ -31,31 +26,32 @@ describe('Trace', () => {
 
     t.request(1, {
       model: 'm',
-      max_tokens: 1024,
+      maxOutputTokens: 1024,
       system: 's',
-      tools: [],
+      toolNames: [],
       messages: [{ role: 'user', content: 'q' }],
     });
-    const turn1 = t.modelTurn(1, modelResponse('', 'tool_use'));
-    t.toolStep(turn1, toolUse('SELECT 1'), {
-      ok: true,
+    const turn1 = t.modelTurn(1, modelStep('', 'tool-calls'));
+    t.toolStep(turn1, toolCall('SELECT 1'), {
+      isError: false,
+      summary: 'SELECT 1 LIMIT 50',
       sql: 'SELECT 1 LIMIT 50',
       rowCount: 1,
-      resultSummary: '[{"x":1}]',
+      content: '[{"x":1}]',
     });
 
     t.request(2, {
       model: 'm',
-      max_tokens: 1024,
+      maxOutputTokens: 1024,
       system: 's',
-      tools: [],
+      toolNames: [],
       messages: [
         { role: 'user', content: 'q' },
         { role: 'assistant', content: [] },
         { role: 'user', content: [] },
       ],
     });
-    t.modelTurn(2, modelResponse('kész', 'end_turn'));
+    t.modelTurn(2, modelStep('kész', 'stop'));
 
     const data = t.toJSON('kész', { inputTokens: 20, outputTokens: 10 });
 
@@ -74,11 +70,14 @@ describe('Trace', () => {
       systemPrompt: 's',
       print: false,
     });
-    const turn = t.modelTurn(1, modelResponse('', 'tool_use'));
+    const turn = t.modelTurn(1, modelStep('', 'tool-calls'));
 
-    t.toolStep(turn, toolUse('DROP TABLE products'), {
-      ok: false,
-      resultSummary: 'Csak SELECT futtatható.',
+    t.toolStep(turn, toolCall('DROP TABLE products'), {
+      isError: true,
+      summary: null,
+      sql: null,
+      rowCount: null,
+      content: 'Csak SELECT futtatható.',
     });
 
     const data = t.toJSON('', { inputTokens: 1, outputTokens: 1 });
@@ -116,9 +115,9 @@ describe('Trace', () => {
       });
       t.request(1, {
         model: 'm',
-        max_tokens: 1024,
+        maxOutputTokens: 1024,
         system: 's',
-        tools: [],
+        toolNames: [],
         messages: [{ role: 'user', content: 'q' }],
       });
 

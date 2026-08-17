@@ -10,16 +10,17 @@
  * MEGLÉTET rögzíti, hogy egy refaktor ne tudja némán elvinni.
  */
 import { PassThrough } from 'node:stream';
-import type { AskAgentResult } from '@szoba-kertesz/core';
+import type { AskResult } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
 
-function makeResult(answer: string): AskAgentResult {
+function makeResult(answer: string): AskResult {
   return {
     answer,
     systemPrompt: '<role>teszt</role>',
     messages: [{ role: 'user', content: 'teszt kérdés' }],
     usage: { inputTokens: 1, outputTokens: 2 },
     toolSteps: [],
+    stopReason: 'stop',
   };
 }
 
@@ -49,10 +50,10 @@ describe('saját kiegészítés 4 — readline-guard a pufferelt sorokra', () =>
     let active = 0;
     let maxActive = 0;
     const resolvers: Array<() => void> = [];
-    const ask = vi.fn((question: string): Promise<AskAgentResult> => {
+    const ask = vi.fn((question: string): Promise<AskResult> => {
       active += 1;
       maxActive = Math.max(maxActive, active);
-      return new Promise<AskAgentResult>((resolve) => {
+      return new Promise<AskResult>((resolve) => {
         resolvers.push(() => {
           active -= 1;
           resolve(makeResult(`válasz: ${question}`));

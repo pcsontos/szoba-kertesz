@@ -2,12 +2,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import type { Pool } from 'pg';
 import { closeReadonlyPool } from './db-readonly.js';
-import { executeRunSqlTool, runSqlToolDefinition } from './run-sql.js';
+import { executeRunSqlTool, runSqlToolDefinition } from './run-sql-tool.js';
 
 // Lásd db-readonly.spec.ts — ugyanaz a minta: a repo gyökerén lévő .env
 // explicit betöltése, mert a vitest cwd-je `packages/core`.
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRootEnvPath = resolve(here, '../../../../.env');
+const repoRootEnvPath = resolve(here, '../../../../../../.env');
 try {
   process.loadEnvFile(repoRootEnvPath);
 } catch (error) {
