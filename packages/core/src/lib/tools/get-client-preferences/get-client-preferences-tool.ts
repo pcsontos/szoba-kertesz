@@ -133,12 +133,14 @@ export const getClientPreferencesTool = (
             content: JSON.stringify(result.preference),
             isError: false,
             summary: `${result.clientCode} · keret ${result.preference.budget} Ft · ${result.preference.careLevel}`,
+            sql: null,
             rowCount: null,
           }
         : {
             content: result.error,
             isError: true,
             summary: null,
+            sql: null,
             rowCount: null,
           };
       report?.(toolCallId, GET_CLIENT_PREFERENCES_TOOL_NAME, input, outcome);

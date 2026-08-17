@@ -30,7 +30,19 @@ export interface UpsertResult {
   readonly latinName: string;
 }
 
-/** Upsert latin név szerint (case-insensitive). Meglévőt frissít, újat beszúr — idempotens. */
+/**
+ * Upsert latin név szerint (case-insensitive). Meglévőt frissít, újat beszúr — idempotens.
+ *
+ * EGYETLEN, atomi lekérdezés. Korábban két lépés volt (SELECT id → UPDATE vagy INSERT), és
+ * a kettő közé befért egy másik írás: két egyidejű upsert ugyanarra a névre két sort hozott
+ * létre, mert mindkét SELECT üresen tért vissza. Az `ON CONFLICT` ezt a rést zárja be — a
+ * döntést (beszúrás vagy frissítés) a Postgres hozza meg, a `lower(latin_name)` unique index
+ * alapján (lásd a 20260817112400_products_latin_name_unique migrációt).
+ *
+ * A `xmax = 0` a szokásos postgres-fogás: frissen BESZÚRT sornál a rendszeroszlop 0, a
+ * konfliktus miatt FRISSÍTETT sornál a módosító tranzakció azonosítója — ebből tudjuk meg
+ * egy körben, melyik ág futott, külön lekérdezés nélkül.
+ */
 export async function upsertProduct(
   input: ProductInput,
   deps: DbReadWriteDeps = {},
@@ -38,36 +50,24 @@ export async function upsertProduct(
   // Az oszlopnevek a PRODUCT_COLUMNS fix, KÓDBAN rögzített listájából jönnek — soha nem a
   // modell inputjából; az értékek pedig kizárólag $n paraméterként. String-konkatenáció nincs.
   const values = PRODUCT_COLUMNS.map(([field]) => input[field]);
-
-  const found = await queryReadWrite<{ id: number }>(
-    'SELECT id FROM products WHERE lower(latin_name) = lower($1) LIMIT 1',
-    [input.latinName],
-    deps,
-  );
-
-  if (found.rows.length > 0) {
-    const id = found.rows[0].id;
-    const setClause = PRODUCT_COLUMNS.map(
-      ([, col], i) => `${col} = $${i + 1}`,
-    ).join(', ');
-    await queryReadWrite(
-      `UPDATE products SET ${setClause} WHERE id = $${PRODUCT_COLUMNS.length + 1}`,
-      [...values, id],
-      deps,
-    );
-    return { action: 'updated', id, latinName: input.latinName };
-  }
-
   const cols = PRODUCT_COLUMNS.map(([, col]) => col).join(', ');
   const placeholders = PRODUCT_COLUMNS.map((_, i) => `$${i + 1}`).join(', ');
-  const inserted = await queryReadWrite<{ id: number }>(
-    `INSERT INTO products (${cols}) VALUES (${placeholders}) RETURNING id`,
+  const setClause = PRODUCT_COLUMNS.map(
+    ([, col]) => `${col} = EXCLUDED.${col}`,
+  ).join(', ');
+
+  const result = await queryReadWrite<{ id: number; created: boolean }>(
+    `INSERT INTO products (${cols}) VALUES (${placeholders})
+     ON CONFLICT (lower(latin_name)) DO UPDATE SET ${setClause}
+     RETURNING id, (xmax = 0) AS created`,
     values,
     deps,
   );
+
+  const row = result.rows[0];
   return {
-    action: 'created',
-    id: inserted.rows[0].id,
+    action: row.created ? 'created' : 'updated',
+    id: row.id,
     latinName: input.latinName,
   };
 }
@@ -93,6 +93,7 @@ export async function executeUpsertProduct(
       content: `Érvénytelen termék — nem írtam DB-be: ${issues}`,
       isError: true,
       summary: null,
+      sql: null,
       rowCount: null,
     };
   }
@@ -110,6 +111,7 @@ export async function executeUpsertProduct(
       }),
       isError: false,
       summary: `UPSERT products (${result.action}) · ${result.latinName}`,
+      sql: null,
       rowCount: 1,
     };
   } catch (error: unknown) {
@@ -118,6 +120,7 @@ export async function executeUpsertProduct(
       content: `Adatbázis-hiba az upsert során: ${message}`,
       isError: true,
       summary: null,
+      sql: null,
       rowCount: null,
     };
   }

@@ -264,16 +264,16 @@ export class Trace {
       // marad nyers szöveg (pl. hibaüzenet)
     }
 
-    // SQL-es tool-e? A `summary` mező generikus (a getClientPreferences-nél pl.
-    // "ACME · keret 1000 Ft"), ezért a bemenet `query` mezőjéből döntjük el,
-    // hogy a guardolt SQL-t mutatjuk-e — csak az SQL-es toolnak van ilyenje.
-    const inputQuery = (call.input as { query?: string } | null)?.query;
-    const isSqlTool = typeof inputQuery === 'string' && inputQuery.length > 0;
+    // SQL-es tool-e? Ezt maga a tool mondja meg: az `outcome.sql` KIZÁRÓLAG a
+    // ténylegesen lefuttatott lekérdezést hordozza (lásd `tool-outcome.ts`).
+    // Régen a bemenet `query` mezőjéből szimatoltuk ki, mert a `summary`
+    // generikus volt — az a heurisztika ezzel megszűnt.
+    const isSqlTool = outcome.sql !== null;
 
     turn.toolCalls.push({
       name: call.toolName,
       input: call.input,
-      guardedSql: isSqlTool ? (outcome.summary ?? null) : null,
+      guardedSql: outcome.sql,
       rowCount: outcome.rowCount,
       isError: outcome.isError,
       result,

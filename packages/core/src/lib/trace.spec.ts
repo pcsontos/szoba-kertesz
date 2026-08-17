@@ -35,6 +35,7 @@ describe('Trace', () => {
     t.toolStep(turn1, toolCall('SELECT 1'), {
       isError: false,
       summary: 'SELECT 1 LIMIT 50',
+      sql: 'SELECT 1 LIMIT 50',
       rowCount: 1,
       content: '[{"x":1}]',
     });
@@ -74,6 +75,7 @@ describe('Trace', () => {
     t.toolStep(turn, toolCall('DROP TABLE products'), {
       isError: true,
       summary: null,
+      sql: null,
       rowCount: null,
       content: 'Csak SELECT futtatható.',
     });

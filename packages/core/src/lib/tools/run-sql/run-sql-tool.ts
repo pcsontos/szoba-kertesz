@@ -132,12 +132,16 @@ export const runSqlTool = (
             content: JSON.stringify(result.rows),
             isError: false,
             summary: result.sql,
+            // EZ az egyetlen tool, ami SQL-t futtat — csak itt van mit írni ide.
+            sql: result.sql,
             rowCount: result.rowCount,
           }
         : {
             content: result.error,
             isError: true,
             summary: result.sql ?? null,
+            // A guard által elutasított lekérdezésnél nincs lefuttatott SQL.
+            sql: result.sql ?? null,
             rowCount: null,
           };
       report?.(toolCallId, RUN_SQL_TOOL_NAME, input, outcome);

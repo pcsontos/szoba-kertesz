@@ -162,6 +162,13 @@ export async function runAgentLoop(
   // ilyen alakban, tehát mi gyűjtjük, körről körre.
   const toolSteps: ToolStep[] = [];
 
+  // Körönként összegzett token-fogyás. A `result.usage` CSAK sikeres futásnál
+  // létezik — egy megszakadt futás (rate limit, API-hiba, tool-kivétel) tokenjei
+  // viszont ugyanúgy elmentek, és a JSONL a költségbecslés bizonyítékbázisa.
+  // Ezért párhuzamosan mi is számoljuk, hogy a hibaágon legyen mit naplózni.
+  let spentInput = 0;
+  let spentOutput = 0;
+
   const result = await generateText({
     model:
       options.model ?? getProvider(config.anthropicApiKey)(config.anthropicModel),
@@ -200,6 +207,10 @@ export async function runAgentLoop(
           outputTokens: step.usage.outputTokens,
         },
       });
+      // Amint egy kör lezárult, a tokenjei már elmentek — ide könyveljük, hogy
+      // egy későbbi körben bekövetkező hiba után is tudjunk róluk számot adni.
+      spentInput += step.usage.inputTokens ?? 0;
+      spentOutput += step.usage.outputTokens ?? 0;
       for (const toolResult of step.toolResults) {
         const record = outcomes.get(toolResult.toolCallId);
         if (!record) {
@@ -214,13 +225,34 @@ export async function runAgentLoop(
         toolSteps.push({
           toolName: record.name,
           input: record.input,
-          sql: record.outcome.summary ?? undefined,
+          sql: record.outcome.sql ?? undefined,
           ok: !record.outcome.isError,
           rowCount: record.outcome.rowCount ?? undefined,
           resultSummary: record.outcome.content,
         });
       }
     },
+  }).catch(async (error: unknown) => {
+    // A futás megszakadt. A tokenek MÁR elmentek, tehát nyom nélkül hagyni a két
+    // naplót alulméréshez vezetne (saját kiegészítés #6) — ezért a részleges
+    // futást is kiírjuk, és csak UTÁNA dobjuk tovább az eredeti hibát.
+    const message = error instanceof Error ? error.message : String(error);
+    const interrupted = `[MEGSZAKADT] ${message}`;
+    const partial: UsageInfo = {
+      inputTokens: spentInput,
+      outputTokens: spentOutput,
+    };
+    // A naplózás saját hibáját ITT elnyeljük: az eredeti API-hibát nem
+    // maszkolhatja egy naplózási gond, és a Trace-nek is le kell zárulnia.
+    await log({
+      systemPrompt,
+      messages,
+      answer: interrupted,
+      usage: partial,
+      toolSteps,
+    }).catch(() => undefined);
+    trace.finish(interrupted, partial);
+    throw error;
   });
 
   const answer = result.text.trim() !== '' ? result.text.trim() : agent.emptyAnswer;
@@ -237,14 +269,19 @@ export async function runAgentLoop(
     outputTokens: result.usage.outputTokens ?? 0,
   };
 
-  await log({
-    systemPrompt,
-    messages: updatedMessages,
-    answer,
-    usage,
-    toolSteps,
-  });
-  trace.finish(answer, usage);
+  // A két nyom FÜGGETLEN: ha a JSONL-írás elhasal, a Trace-nek attól még le kell
+  // zárulnia (és fordítva) — egyik sem váltja ki a másikat.
+  try {
+    await log({
+      systemPrompt,
+      messages: updatedMessages,
+      answer,
+      usage,
+      toolSteps,
+    });
+  } finally {
+    trace.finish(answer, usage);
+  }
 
   return {
     answer,

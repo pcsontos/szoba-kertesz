@@ -98,12 +98,14 @@ export const listCategoriesTool = (
             content: JSON.stringify(result.categories),
             isError: false,
             summary: `${result.categories.length} kategória`,
+            sql: null,
             rowCount: result.categories.length,
           }
         : {
             content: result.error,
             isError: true,
             summary: null,
+            sql: null,
             rowCount: null,
           };
       report?.(toolCallId, LIST_CATEGORIES_TOOL_NAME, input, outcome);

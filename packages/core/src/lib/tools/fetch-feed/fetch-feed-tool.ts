@@ -26,6 +26,7 @@ export async function executeFetchFeed(
       content: `Hibás fetchFeed-bemenet: ${parsed.error.issues[0]?.message ?? 'ismeretlen'}`,
       isError: true,
       summary: null,
+      sql: null,
       rowCount: null,
     };
   }
@@ -40,6 +41,7 @@ export async function executeFetchFeed(
       content: JSON.stringify(result),
       isError: false,
       summary: `FETCH ${result.source} (${result.matched}/${result.totalPlants} találat)`,
+      sql: null,
       rowCount: result.candidates.length,
     };
   } catch (error: unknown) {
@@ -48,6 +50,7 @@ export async function executeFetchFeed(
       content: `Feed-hiba: ${message}`,
       isError: true,
       summary: null,
+      sql: null,
       rowCount: null,
     };
   }

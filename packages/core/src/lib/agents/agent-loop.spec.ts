@@ -164,6 +164,26 @@ describe('askAgent — AI SDK 7 loop', () => {
     expect(result.toolSteps[0]?.resultSummary).toContain('szobanövény');
   });
 
+  it('a nem-SQL tool lépésébe NEM kerül SQL a naplóba', async () => {
+    const { model } = mockModel(
+      toolStep('call_cat', 'listCategories', {}),
+      textStep('A katalógusban több kategória is van.'),
+    );
+
+    const result = await askAgent('Milyen kategóriák vannak?', {
+      ...baseDeps,
+      model,
+      log: async () => undefined,
+    });
+
+    // A ToolStep.sql szerződése: "a ténylegesen lefuttatott (LIMIT-tel
+    // kiegészített) SQL". A listCategories nem a modell inputjából épít SQL-t,
+    // tehát a mezőnek ÜRESEN kell maradnia — nem a Trace-nek szánt humán
+    // összegzésnek ("8 kategória"). A JSONL a költségbecslés bizonyítékbázisa,
+    // ott az "sql" mező nem jelenthet két különböző dolgot.
+    expect(result.toolSteps[0]?.sql).toBeUndefined();
+  });
+
   it('a guard elutasít egy írási kísérletet, és a modell javítani tud belőle', async () => {
     const { model } = mockModel(
       toolStep('call_evil', 'runSql', { query: 'DELETE FROM products' }),
@@ -251,6 +271,80 @@ describe('askAgent — AI SDK 7 loop', () => {
     await expect(
       askAgent('kérdés', { ...baseDeps, model, log: async () => undefined }),
     ).rejects.toThrow('API hiba');
+  });
+
+  it('elhasalt futásnál is naplóz, mielőtt továbbdobja a hibát', async () => {
+    const model = new MockLanguageModelV4({
+      doGenerate: (async () => {
+        throw new Error('API hiba');
+      }) as never,
+    });
+    const log = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      askAgent('kérdés', { ...baseDeps, model, log }),
+    ).rejects.toThrow('API hiba');
+
+    // Saját kiegészítés #6: a tokenek egy elhasalt futásnál is elmennek, tehát
+    // a futásnak nyoma KELL maradjon — különben a költségbecslés alulmér.
+    expect(log).toHaveBeenCalledTimes(1);
+  });
+
+  it('a hiba ELŐTT elköltött tokeneket és tool-lépéseket is naplózza', async () => {
+    let call = 0;
+    const model = new MockLanguageModelV4({
+      doGenerate: (async () => {
+        call += 1;
+        if (call === 1) {
+          return toolStep('call_1', 'runSql', {
+            query: 'SELECT id, name FROM products',
+          });
+        }
+        throw new Error('API hiba a második körben');
+      }) as never,
+    });
+    const log = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      askAgent('kérdés', { ...baseDeps, model, log }),
+    ).rejects.toThrow('API hiba a második körben');
+
+    const entry = log.mock.calls[0]?.[0];
+    // Az első kör usage-e (15/25) már elment — ennek a naplóban a helye.
+    expect(entry?.usage).toEqual({ inputTokens: 15, outputTokens: 25 });
+    // És a lefutott tool-lépés sem veszhet el.
+    expect(entry?.toolSteps).toHaveLength(1);
+  });
+
+  it('a napló hibája sem akadályozhatja meg a Trace lezárását', async () => {
+    const { model } = mockModel(textStep('Kész a válasz.'));
+    const writes: string[] = [];
+    const spy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation((chunk: unknown) => {
+        writes.push(String(chunk));
+        return true;
+      });
+
+    try {
+      await expect(
+        askAgent('kérdés', {
+          ...baseDeps,
+          print: true,
+          model,
+          log: async () => {
+            throw new Error('napló hiba');
+          },
+        }),
+      ).rejects.toThrow('napló hiba');
+    } finally {
+      spy.mockRestore();
+    }
+
+    // A két nyom FÜGGETLEN egymástól (CLAUDE.md: "két, egymást kiegészítő
+    // nyom, egyik sem váltja ki a másikat") — a JSONL bukása nem viheti
+    // magával a Trace lezárását.
+    expect(writes.join('')).toContain('VÁLASZ');
   });
 
   it('üres kérdést nem fogad el', async () => {
