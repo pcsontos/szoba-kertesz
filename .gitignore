@@ -16,3 +16,5 @@ docs/hf1-hianyossagok.md
 
 # macOS Finder-szemét. Kezdő perjel nélkül BÁRMELY mélységben illeszkedik.
 .DS_Store
+
+vite.config.*.timestamp*
