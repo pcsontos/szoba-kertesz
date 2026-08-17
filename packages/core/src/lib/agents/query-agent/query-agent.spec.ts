@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MockLanguageModelV4 } from 'ai/test';
+import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 import { askAgent } from './query-agent.js';
 
 /**
@@ -23,17 +23,27 @@ const usage = (input: number, output: number) => ({
   totalTokens: input + output,
 });
 
+/** Egyetlen szöveges kör STREAM-darabjai (a loop 05-től streamText-tel fut). */
+const textStepChunks = (text: string) => [
+  { type: 'stream-start', warnings: [] },
+  { type: 'text-start', id: 't1' },
+  { type: 'text-delta', id: 't1', delta: text },
+  { type: 'text-end', id: 't1' },
+  { type: 'finish', finishReason: { unified: 'stop' }, usage: usage(10, 20) },
+];
+
 /** Egy körben szöveggel válaszoló mock, ami elteszi a felkínált toolneveket. */
 function toolNameProbe() {
   const seen: string[] = [];
   const model = new MockLanguageModelV4({
-    doGenerate: (async (options: { tools?: { name: string }[] }) => {
+    doStream: (async (options: { tools?: { name: string }[] }) => {
       seen.push(...(options.tools ?? []).map((tool) => tool.name));
       return {
-        content: [{ type: 'text' as const, text: 'kész' }],
-        finishReason: { unified: 'stop' as const },
-        usage: usage(10, 20),
-        warnings: [],
+        stream: simulateReadableStream({
+          chunks: textStepChunks('kész') as never,
+          initialDelayInMs: 0,
+          chunkDelayInMs: 0,
+        }),
       };
     }) as never,
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MockLanguageModelV4 } from 'ai/test';
+import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 import { askAgent, MAX_TOOL_ITERATIONS } from './query-agent/query-agent.js';
 
 /**
@@ -13,10 +13,13 @@ import { askAgent, MAX_TOOL_ITERATIONS } from './query-agent/query-agent.js';
  * `specificationVersion`-je `'v4'`, ezért `MockLanguageModelV4` kell (a V3
  * is fut, de nem a valódi providert modellezi).
  *
- * FIGYELEM: a `doGenerate` PROVIDER-szintű alakot ad vissza, nem az
- * ai-szintűt — a `finishReason` objektum (`{ unified }`), a `usage` pedig
- * ágyazott. Lapos alakkal a token-számok és a finishReason NÉMÁN
- * `undefined`-ek lennének, és a tesztek hamis zöldet mutatnának.
+ * FIGYELEM: a 05. alkalomtól a loop `streamText`-tel fut, tehát a mock a
+ * `doStream` oldalt szolgálja ki (a `doGenerate` utódja). A darabok
+ * PROVIDER-szintűek, nem ai-szintűek — a `finishReason` objektum
+ * (`{ unified }`), a `usage` ágyazott, a szövegmező neve pedig `delta` (az
+ * ai-szintű `onChunk`-ban ugyanez `text`). Lapos alakkal a token-számok és a
+ * finishReason NÉMÁN `undefined`-ek lennének, és a tesztek hamis zöldet
+ * mutatnának.
  *
  * A `runSql`-t meghajtó esetek VALÓDI read-only adatbázist hívnak (a
  * tool-factory a produkciós utat köti be) — futó, seedelt DB kell hozzájuk,
@@ -35,38 +38,52 @@ const usage = (input: number, output: number) => ({
   totalTokens: input + output,
 });
 
-const textStep = (text: string) => ({
-  content: [{ type: 'text' as const, text }],
-  finishReason: { unified: 'stop' as const },
-  usage: usage(10, 20),
-  warnings: [],
-});
+/**
+ * A `doGenerate` utódja: a loop a 05. alkalomtól `streamText`-tel fut, tehát a
+ * mock a STREAM oldalt szolgálja ki. A darabok PROVIDER-szintűek: a szövegmező
+ * neve itt `delta`, az ai-szintű `onChunk`-ban ugyanez `text`.
+ */
+const streamOf = (chunks: readonly unknown[]) =>
+  simulateReadableStream({
+    chunks: chunks as never,
+    initialDelayInMs: 0,
+    chunkDelayInMs: 0,
+  });
 
-const toolStep = (toolCallId: string, toolName: string, input: unknown) => ({
-  content: [
-    {
-      type: 'tool-call' as const,
-      toolCallId,
-      toolName,
-      input: JSON.stringify(input),
-    },
-  ],
-  finishReason: { unified: 'tool-calls' as const },
-  usage: usage(15, 25),
-  warnings: [],
-});
+const textStepChunks = (text: string | readonly string[]) => {
+  const parts = typeof text === 'string' ? [text] : text;
+  return [
+    { type: 'stream-start', warnings: [] },
+    { type: 'text-start', id: 't1' },
+    ...parts.map((delta) => ({ type: 'text-delta', id: 't1', delta })),
+    { type: 'text-end', id: 't1' },
+    { type: 'finish', finishReason: { unified: 'stop' }, usage: usage(10, 20) },
+  ];
+};
+
+const toolStepChunks = (
+  toolCallId: string,
+  toolName: string,
+  input: unknown,
+) => [
+  { type: 'stream-start', warnings: [] },
+  { type: 'tool-call', toolCallId, toolName, input: JSON.stringify(input) },
+  {
+    type: 'finish',
+    finishReason: { unified: 'tool-calls' },
+    usage: usage(15, 25),
+  },
+];
 
 /** Egymás utáni köröket kiszolgáló mock. Az utolsó választ ismétli, ha elfogy. */
-function mockModel(...steps: readonly unknown[]) {
+function mockModel(...steps: readonly (readonly unknown[])[]) {
   let index = 0;
-  const doGenerate = vi.fn(
-    async () => steps[Math.min(index++, steps.length - 1)],
-  );
+  const doStream = vi.fn(async () => ({
+    stream: streamOf(steps[Math.min(index++, steps.length - 1)] ?? []),
+  }));
   return {
-    model: new MockLanguageModelV4({
-      doGenerate: doGenerate as never,
-    }),
-    doGenerate,
+    model: new MockLanguageModelV4({ doStream: doStream as never }),
+    doStream,
   };
 }
 
@@ -78,8 +95,8 @@ const baseDeps = {
 
 describe('askAgent — AI SDK 7 loop', () => {
   it('egy körben válaszol, ha a modell nem kér toolt', async () => {
-    const { model, doGenerate } = mockModel(
-      textStep('Egy szobanövény fényigénye az eredeti élőhelyétől függ.'),
+    const { model, doStream } = mockModel(
+      textStepChunks('Egy szobanövény fényigénye az eredeti élőhelyétől függ.'),
     );
     const log = vi.fn().mockResolvedValue(undefined);
 
@@ -89,7 +106,7 @@ describe('askAgent — AI SDK 7 loop', () => {
       log,
     });
 
-    expect(doGenerate).toHaveBeenCalledTimes(1);
+    expect(doStream).toHaveBeenCalledTimes(1);
     expect(result.answer).toContain('élőhelyétől');
     expect(result.systemPrompt).toMatch(/<role>/);
     expect(result.toolSteps).toEqual([]);
@@ -102,9 +119,9 @@ describe('askAgent — AI SDK 7 loop', () => {
   it('mindhárom toolt felkínálja a modellnek', async () => {
     let seenTools: string[] = [];
     const model = new MockLanguageModelV4({
-      doGenerate: (async (options: { tools?: { name: string }[] }) => {
+      doStream: (async (options: { tools?: { name: string }[] }) => {
         seenTools = (options.tools ?? []).map((tool) => tool.name);
-        return textStep('kész');
+        return { stream: streamOf(textStepChunks('kész')) };
       }) as never,
     });
 
@@ -124,11 +141,11 @@ describe('askAgent — AI SDK 7 loop', () => {
   });
 
   it('többkörös tool-váltás után ad végső választ, és naplózza a tool-lépést', async () => {
-    const { model, doGenerate } = mockModel(
-      toolStep('call_1', 'runSql', {
+    const { model, doStream } = mockModel(
+      toolStepChunks('call_1', 'runSql', {
         query: 'SELECT id, name FROM products WHERE pet_safe = true',
       }),
-      textStep('Íme néhány pet-safe növény.'),
+      textStepChunks('Íme néhány pet-safe növény.'),
     );
 
     const result = await askAgent('Mutass pet-safe növényeket', {
@@ -137,7 +154,7 @@ describe('askAgent — AI SDK 7 loop', () => {
       log: async () => undefined,
     });
 
-    expect(doGenerate).toHaveBeenCalledTimes(2);
+    expect(doStream).toHaveBeenCalledTimes(2);
     expect(result.toolSteps).toHaveLength(1);
     expect(result.toolSteps[0]?.toolName).toBe('runSql');
     expect(result.toolSteps[0]?.ok).toBe(true);
@@ -149,8 +166,8 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('a listCategories kör lefut és naplózódik', async () => {
     const { model } = mockModel(
-      toolStep('call_cat', 'listCategories', {}),
-      textStep('A katalógusban több kategória is van.'),
+      toolStepChunks('call_cat', 'listCategories', {}),
+      textStepChunks('A katalógusban több kategória is van.'),
     );
 
     const result = await askAgent('Milyen kategóriák vannak?', {
@@ -166,8 +183,8 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('a nem-SQL tool lépésébe NEM kerül SQL a naplóba', async () => {
     const { model } = mockModel(
-      toolStep('call_cat', 'listCategories', {}),
-      textStep('A katalógusban több kategória is van.'),
+      toolStepChunks('call_cat', 'listCategories', {}),
+      textStepChunks('A katalógusban több kategória is van.'),
     );
 
     const result = await askAgent('Milyen kategóriák vannak?', {
@@ -186,8 +203,8 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('a guard elutasít egy írási kísérletet, és a modell javítani tud belőle', async () => {
     const { model } = mockModel(
-      toolStep('call_evil', 'runSql', { query: 'DELETE FROM products' }),
-      textStep(
+      toolStepChunks('call_evil', 'runSql', { query: 'DELETE FROM products' }),
+      textStepChunks(
         'Sajnálom, nem törölhetek adatot — csak lekérdezésre van jogosultságom.',
       ),
     );
@@ -206,8 +223,8 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('ismeretlen tool nevére sem dob kivételt', async () => {
     const { model } = mockModel(
-      toolStep('call_x', 'deleteEverything', {}),
-      textStep('Ezt a toolt nem ismerem.'),
+      toolStepChunks('call_x', 'deleteEverything', {}),
+      textStepChunks('Ezt a toolt nem ismerem.'),
     );
 
     await expect(
@@ -221,8 +238,8 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('a beszélgetés-előzmény tartalmazza a TELJES tool-váltást', async () => {
     const { model } = mockModel(
-      toolStep('call_1', 'listCategories', {}),
-      textStep('Nyolc kategória van.'),
+      toolStepChunks('call_1', 'listCategories', {}),
+      textStepChunks('Nyolc kategória van.'),
     );
 
     const result = await askAgent('Milyen kategóriák vannak?', {
@@ -245,8 +262,8 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('a kör-limitet nem lépi túl, és nem hurkol örökké', async () => {
     // Minden kör toolt kér → a stopWhen állítja meg, nem a modell.
-    const { model, doGenerate } = mockModel(
-      toolStep('call_loop', 'runSql', { query: 'SELECT 1' }),
+    const { model, doStream } = mockModel(
+      toolStepChunks('call_loop', 'runSql', { query: 'SELECT 1' }),
     );
 
     const result = await askAgent('kérdés', {
@@ -255,7 +272,7 @@ describe('askAgent — AI SDK 7 loop', () => {
       log: async () => undefined,
     });
 
-    expect(doGenerate).toHaveBeenCalledTimes(MAX_TOOL_ITERATIONS);
+    expect(doStream).toHaveBeenCalledTimes(MAX_TOOL_ITERATIONS);
     // VISELKEDÉSVÁLTOZÁS a kézi loophoz képest: nem dob, hanem magyarázó
     // szöveget ad vissza (az AI SDK a limitnél csendben megáll).
     expect(result.answer).toMatch(/megengedett lépésszámon belül/);
@@ -263,7 +280,7 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('az SDK hibáját nem nyeli el', async () => {
     const model = new MockLanguageModelV4({
-      doGenerate: (async () => {
+      doStream: (async () => {
         throw new Error('API hiba');
       }) as never,
     });
@@ -275,7 +292,7 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('elhasalt futásnál is naplóz, mielőtt továbbdobja a hibát', async () => {
     const model = new MockLanguageModelV4({
-      doGenerate: (async () => {
+      doStream: (async () => {
         throw new Error('API hiba');
       }) as never,
     });
@@ -293,12 +310,16 @@ describe('askAgent — AI SDK 7 loop', () => {
   it('a hiba ELŐTT elköltött tokeneket és tool-lépéseket is naplózza', async () => {
     let call = 0;
     const model = new MockLanguageModelV4({
-      doGenerate: (async () => {
+      doStream: (async () => {
         call += 1;
         if (call === 1) {
-          return toolStep('call_1', 'runSql', {
-            query: 'SELECT id, name FROM products',
-          });
+          return {
+            stream: streamOf(
+              toolStepChunks('call_1', 'runSql', {
+                query: 'SELECT id, name FROM products',
+              }),
+            ),
+          };
         }
         throw new Error('API hiba a második körben');
       }) as never,
@@ -317,7 +338,7 @@ describe('askAgent — AI SDK 7 loop', () => {
   });
 
   it('a napló hibája sem akadályozhatja meg a Trace lezárását', async () => {
-    const { model } = mockModel(textStep('Kész a válasz.'));
+    const { model } = mockModel(textStepChunks('Kész a válasz.'));
     const writes: string[] = [];
     const spy = vi
       .spyOn(process.stdout, 'write')
@@ -349,5 +370,67 @@ describe('askAgent — AI SDK 7 loop', () => {
 
   it('üres kérdést nem fogad el', async () => {
     await expect(askAgent('   ', baseDeps)).rejects.toThrow(/Üres kérdés/);
+  });
+
+  it('a szöveget darabonként adja tovább az onTextDelta-nak', async () => {
+    const { model } = mockModel(
+      textStepChunks(['Nyolc ', 'kategória ', 'van.']),
+    );
+    const deltas: string[] = [];
+
+    const result = await askAgent('Milyen kategóriák vannak?', {
+      ...baseDeps,
+      model,
+      log: async () => undefined,
+      onTextDelta: (delta) => deltas.push(delta),
+    });
+
+    // A streamelés lényege: a darabok MENET KÖZBEN érkeznek, és a végén
+    // ugyanaz az egész válasz áll össze, mint korábban.
+    expect(deltas).toEqual(['Nyolc ', 'kategória ', 'van.']);
+    expect(result.answer).toBe('Nyolc kategória van.');
+  });
+
+  it('az EREDETI hibaüzenetet dobja, nem az SDK becsomagolt üzenetét', async () => {
+    const model = new MockLanguageModelV4({
+      doStream: (async () => {
+        throw new Error('API hiba');
+      }) as never,
+    });
+
+    // ⚠️ MÉRT VISELKEDÉS: a streamText `result.text`-je itt a
+    // "No output generated. Check the stream for errors." üzenettel rejectelne,
+    // és az eredeti ok elveszne. A loop az onError-ból dobja tovább az igazit.
+    await expect(
+      askAgent('kérdés', { ...baseDeps, model, log: async () => undefined }),
+    ).rejects.toThrow('API hiba');
+  });
+
+  it('MÁSODIK körben elhasalt streamnél is naplóz és dob', async () => {
+    let call = 0;
+    const model = new MockLanguageModelV4({
+      doStream: (async () => {
+        call += 1;
+        if (call === 1) {
+          return {
+            stream: streamOf(toolStepChunks('call_1', 'listCategories', {})),
+          };
+        }
+        throw new Error('API hiba a második körben');
+      }) as never,
+    });
+    const log = vi.fn().mockResolvedValue(undefined);
+
+    // ⚠️ MÉRT CSAPDA: itt a `result.text` NEM rejectel — kezeletlenül a futás
+    // sikeresnek látszana, üres válasszal, és a [MEGSZAKADT] naplósor
+    // NÉMÁN eltűnne. A költségbecslés alulmérne (saját kiegészítés #6).
+    await expect(
+      askAgent('kérdés', { ...baseDeps, model, log }),
+    ).rejects.toThrow('API hiba a második körben');
+
+    const entry = log.mock.calls[0]?.[0];
+    expect(entry?.answer).toMatch(/^\[MEGSZAKADT\]/);
+    expect(entry?.usage).toEqual({ inputTokens: 15, outputTokens: 25 });
+    expect(entry?.toolSteps).toHaveLength(1);
   });
 });

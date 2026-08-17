@@ -10,7 +10,7 @@
  * megállás és jelzés, nem felülírás.
  */
 import { describe, expect, it } from 'vitest';
-import { MockLanguageModelV4 } from 'ai/test';
+import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,19 +41,58 @@ const QUIET = {
 } as const;
 
 /**
- * PROVIDER-szintű (v4) válasz-alak. A `finishReason` objektum, a `usage`
- * ágyazott — lapos alakkal mindkettő NÉMÁN `undefined` lenne, és a tesztek
+ * PROVIDER-szintű (v4) válasz-alak — a 05. alkalomtól STREAM-darabokként, mert
+ * a loop `streamText`-tel fut (a mock `doStream`-et szolgál ki, nem
+ * `doGenerate`-et). A `finishReason` objektum, a `usage` ágyazott, a szövegmező
+ * neve `delta` — lapos alakkal mindhárom NÉMÁN `undefined` lenne, és a tesztek
  * hamis zöldet mutatnának.
+ *
+ * A hívási pontok ÁLLÍTÁSAI változatlanok: ez a segéd ugyanazt a kört írja le,
+ * csak a stream nyelvén.
  */
+const streamOf = (chunks: readonly unknown[]) =>
+  simulateReadableStream({
+    chunks: chunks as never,
+    initialDelayInMs: 0,
+    chunkDelayInMs: 0,
+  });
+
 const modelStep = (content: unknown[], finish: 'stop' | 'tool-calls') => ({
-  content,
-  finishReason: { unified: finish },
-  usage: {
-    inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-    outputTokens: { total: 1, text: 1, reasoning: 0 },
-    totalTokens: 2,
-  },
-  warnings: [],
+  stream: streamOf([
+    { type: 'stream-start', warnings: [] },
+    ...content.flatMap((part): unknown[] => {
+      const piece = part as {
+        type: string;
+        text?: string;
+        toolCallId?: string;
+        toolName?: string;
+        input?: string;
+      };
+      return piece.type === 'text'
+        ? [
+            { type: 'text-start', id: 't1' },
+            { type: 'text-delta', id: 't1', delta: piece.text },
+            { type: 'text-end', id: 't1' },
+          ]
+        : [
+            {
+              type: 'tool-call',
+              toolCallId: piece.toolCallId,
+              toolName: piece.toolName,
+              input: piece.input,
+            },
+          ];
+    }),
+    {
+      type: 'finish',
+      finishReason: { unified: finish },
+      usage: {
+        inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+        outputTokens: { total: 1, text: 1, reasoning: 0 },
+        totalTokens: 2,
+      },
+    },
+  ]),
 });
 
 describe('saját kiegészítés 1 — listCategories tool', () => {
@@ -78,7 +117,7 @@ describe('saját kiegészítés 1 — listCategories tool', () => {
     // elveszne a saját kiegészítésünk, a suite meg zöld maradna.
     let offered: string[] = [];
     const model = new MockLanguageModelV4({
-      doGenerate: (async (options: { tools?: { name: string }[] }) => {
+      doStream: (async (options: { tools?: { name: string }[] }) => {
         offered = (options.tools ?? []).map((tool) => tool.name);
         return modelStep([{ type: 'text', text: 'kész' }], 'stop');
       }) as never,
@@ -94,7 +133,7 @@ describe('saját kiegészítés 1 — listCategories tool', () => {
     // lefuttatja a toolt, és az eredménye megjelenik a napló tool-lépésében.
     let round = 0;
     const model = new MockLanguageModelV4({
-      doGenerate: (async () =>
+      doStream: (async () =>
         round++ === 0
           ? modelStep(
               [
@@ -182,18 +221,9 @@ describe('beszélgetés-memória (03. alkalom, c00055a)', () => {
     // előzmény elöl, az új kérdés a végén.
     let sentRoles: string[] = [];
     const model = new MockLanguageModelV4({
-      doGenerate: (async (options: { prompt?: { role: string }[] }) => {
+      doStream: (async (options: { prompt?: { role: string }[] }) => {
         sentRoles = (options.prompt ?? []).map((m) => m.role);
-        return {
-          content: [{ type: 'text' as const, text: 'ok' }],
-          finishReason: { unified: 'stop' as const },
-          usage: {
-            inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-            outputTokens: { total: 1, text: 1, reasoning: 0 },
-            totalTokens: 2,
-          },
-          warnings: [],
-        };
+        return modelStep([{ type: 'text', text: 'ok' }], 'stop');
       }) as never,
     });
 
