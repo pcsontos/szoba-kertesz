@@ -2304,6 +2304,27 @@ pnpm nx run core:typecheck && pnpm nx run cli:typecheck && pnpm nx test core && 
 
 Expected: zöld; a `query-prompt.spec.ts` 10 tesztje fut; a diff üres.
 
+> **Végrehajtva 2026-08-17:** mind az öt lépés. A Step 4 diffje az ÚJ útvonalon üres — és nem egy
+> kézzel írt változatot futtattunk, hanem a `CLAUDE.md`-ben dokumentált parancsot, miután az
+> útvonala `prompts.ts` → `agents/query-agent/query-prompt.ts`-re frissült. A `docs/system-prompt.md`
+> tartalmához NEM nyúltunk (a Step 4 csak ellenőrzés). Ellenőrizve az is, hogy a doksikban újonnan
+> megnevezett minden fájl és migráció létezik. core 114/18, cli 9/3, `query-prompt.spec.ts` 10 teszt.
+>
+> **A négy előírt CLAUDE.md-ponton felül két sor tényszerűen hamis lett volna, ezért javítottuk:**
+> a „Tech stack" sora (`Anthropic SDK + hand-rolled tool-use loop` → AI SDK 7), és az „Agent behavior
+> contract" „SELECT only, ever" állítása, ami az ingest-agent megjelenésével a **query-agentre**
+> szűkült (az ingest a tudatos kivétel — saját prompt, saját szerep, és ott is csak `upsertProduct`).
+>
+> **`docs/architektura.md`:** a Step 3 a `packages/core` bontását kérte; emellett a döntés-lista 2.
+> pontja (két kapcsolat) háromra bővült, és bejött három új döntés (egy agent = prompt + toolok +
+> loop · az AI SDK-váltás indoklása · egyetlen írási út). A framework-agnosztikus core invariáns
+> szándékosan VÁLTOZATLAN. Javítva két törött hivatkozás is: `stack.md` → `tech-stack.md`,
+> `konvenciok.md` → `konvenciók.md`.
+>
+> **Szándékosan KIMARADT (nem elavulás, hanem átnevezés-kérdés):** a `docs/architektura.md` címe még
+> „Plantbase — architektúra", és a `docs/konvenciók.md` prompt-példája is „plantbase" márkanevet
+> használ — a kurzus eredeti anyagából. Ez külön döntés és külön menet, nem a Task 10 hatóköre.
+
 ---
 
 ### Task 11: Záró élő ellenőrzés
