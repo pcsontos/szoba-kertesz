@@ -6,6 +6,7 @@
     "cli": "tsx --conditions=@szoba-kertesz/source apps/cli/src/main.ts",
     "szobakertesz": "nx run cli:build && node apps/cli/dist/main.js",
     "szobakertesz:debug": "nx run cli:build:development && node --inspect apps/cli/dist/main.js --show-prompt",
+    "serve:api": "nx serve server",
     "pr:review": "gh pr edit --add-label claude-review",
     "pr:review:off": "gh pr edit --remove-label claude-review"
   },
@@ -27,6 +28,8 @@
     "@swc-node/register": "1.11.1",
     "@swc/core": "1.15.8",
     "@swc/helpers": "0.5.18",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
     "@types/node": "20.19.9",
     "@types/pg": "^8.20.0",
     "@vitest/coverage-v8": "~4.1.0",
@@ -48,6 +51,8 @@
   "dependencies": {
     "@prisma/client": "6.19.3",
     "commander": "^15.0.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "pg": "^8.22.0",
     "zod": "^4.4.3"
   }
