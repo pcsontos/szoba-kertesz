@@ -1,3 +1,9 @@
+import {
+  CURRENT_ROLE,
+  isAdmin,
+  type UserRole,
+} from '../../user-role/user-role.js';
+
 /**
  * A Szobakertész asszisztens végleges, tool-os system promptja (B3.4) —
  * szó szerint a `docs/system-prompt.md`-ből, mert `askAgent` sémakontextusa
@@ -74,15 +80,43 @@ products (
 `;
 
 /**
- * A KÉRDÉS-VÁLASZ agent system promptja.
+ * Az admin-szerep PLUSZ képessége, a system prompt VÉGÉRE fűzve.
+ *
+ * Külön konstans, nem a SYSTEM_PROMPT-ba írva: a CLAUDE.md invariánsa szerint a
+ * SYSTEM_PROMPT bájtra azonos a docs/system-prompt.md xml blokkjával. Amit a
+ * szerep ad hozzá, az hozzáfűződik — így az invariáns ellenőrizhető marad.
+ */
+export const ADMIN_PROMPT_BLOCK = `
+<admin-capabilities>
+Belső munkatárssal (admin) beszélsz. Egy további tool áll rendelkezésedre:
+
+- delegateToIngest: katalógus-módosítás átadása a katalóguskezelő agentnek.
+
+Szabályok:
+- Katalógus-MÓDOSÍTÁSI kérésnél (új termék felvétele, ár vagy adat javítása, feed alapján
+  frissítés) hívd a delegateToIngest toolt. Az instruction legyen teljes, önmagában
+  értelmezhető magyar mondat: a másik agent NEM látja ezt a beszélgetést.
+- Te magad SOSEM írsz az adatbázisba. A runSql továbbra is kizárólag SELECT.
+- Ha a kérés kétértelmű (melyik termék, milyen érték, mennyi), előbb kérdezz vissza,
+  és csak pontosítás után delegálj.
+- A tool válaszát foglald össze a felhasználónak — ne másold be szó szerint.
+</admin-capabilities>`;
+
+/**
+ * A KÉRDÉS-VÁLASZ agent system promptja, a hívó SZEREPE szerint.
  *
  * Vékony wrapper szándékosan: a prompt forrása továbbra is a fenti
  * `SYSTEM_PROMPT` konstans, ami bájtra azonos a `docs/system-prompt.md`-vel.
  * A 04. alkalomtól minden agentnek SAJÁT promptja van (query / ingest), ezért
  * a név is agent-specifikus — a `buildSystemPrompt` már félrevezető lenne.
+ *
+ * Adminnak az `ADMIN_PROMPT_BLOCK` HOZZÁFŰZŐDIK: a konstans maga érintetlen
+ * marad, így a bájtra-azonosság ellenőrizhető. A prompt viszont csak KÍSÉRŐ
+ * szöveg — a valódi képesség-kapcsolás a toolkészletben történik
+ * (query-agent.ts), mert amit nem kínálunk fel, azt nem lehet meghívni.
  */
-export function buildQueryPrompt(): string {
-  return SYSTEM_PROMPT;
+export function buildQueryPrompt(role: UserRole = CURRENT_ROLE): string {
+  return isAdmin(role) ? `${SYSTEM_PROMPT}${ADMIN_PROMPT_BLOCK}` : SYSTEM_PROMPT;
 }
 
 /**
