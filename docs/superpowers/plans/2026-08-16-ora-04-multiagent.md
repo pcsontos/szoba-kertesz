@@ -2401,6 +2401,68 @@ Használd a `superpowers:verification-before-completion` skillt a spec négy ké
 
 **Commit nincs**, hacsak a felhasználó nem kéri — kivéve a Task 4-ben már jóváhagyott CI-commitot.
 
+> **Végrehajtva 2026-08-17:** mind az öt lépés, **8 élő agent-futással**. A részletes eredmény külön
+> doksiba került: **`docs/ora-04-zaro-ellenorzes.md`** (felhasználói kérésre commitolva és pusholva:
+> `71bc34e`) — ez a jegyzet csak a terv szempontjából lényeges leleteket rögzíti.
+>
+> **Step 1 (kapu):** `nx reset` után, majd a lezáráshoz még egyszer `--skip-nx-cache`-sel: core
+> **114/18**, cli **9/3**, mindkét typecheck zöld. A padló a terv szerint 96 + 16 = **112** — felette
+> vagyunk (a Task 8 a tervezett +2 helyett +3-at hozott). A manifeszt 14 + 3 tesztje zöld, és
+> tételesen ellenőrizve, hogy **mind a hét** kiegészítést névre szólóan lefedi (1/2/3/5/6/7 a
+> core-ban, 4 és 7 a CLI-ben).
+>
+> **Step 2:** a trace ritmusa változatlan a framework-váltás után (`1 → 3 → 5 → 7` üzenet,
+> `getClientPreferences → runSql → runSql → válasz`). Az írás megtörtént: `stock 7 → 9`, `id 31`
+> (UPDATE, nem INSERT), a katalógus 30 termék maradt, és a 19 oszlopból **a másik 18 bitre a
+> seed-értéken** — vagyis sem a `PRODUCT_COLUMNS` térkép nem csúszott el, sem a modell nem vesztett
+> adatot a teljes-soros upsertnél.
+>
+> **Eltérés a tervtől (T4, tervezési pontatlanság) — a Step 2 írás-ellenőrzése így nem bizonyított
+> volna semmit.** A terv `„állítsd a Kentia pálma készletét 7-re"`-t ír elő, de **a seed már 7-re
+> állítja** (`packages/db/prisma/plants.ts:28`), és a `products` táblában **nincs `updated_at`
+> oszlop** — a sor bitre ugyanaz maradt volna. Megálltunk és jeleztünk; felhasználói jóváhagyással
+> **9**-re módosítva, így az írás megfigyelhető lett. A készlet **9-en maradt** (felhasználói
+> döntés); `pnpm exec prisma db seed` visszaállítja. Ha a tervet valaki újrafuttatja, ezt a lépést
+> a *pillanatnyi* DB-értéktől eltérő számra kell állítani.
+>
+> **Eltérés a tervtől (eszköz):** a `pnpm exec prisma studio` böngészős GUI, nem termel idézhető
+> kimenetet — helyette közvetlen SQL-lekérdezés a `products`-ra, ami a **teljes sort** mutatja.
+> Erősebb bizonyíték, nem gyengébb.
+>
+> **Pontosítás a terv szövegéhez:** a Step 2 szerint „a két lista NEM fedi egymást" — valójában a
+> `runSql` **mindkét** agentnél ott van (az ingest is olvas írás előtt, a promptja elő is írja).
+> Ami tényleg nem keveredik: az `upsertProduct`/`fetchFeed` soha nem kerül a query-agenthez, a
+> `listCategories`/`getClientPreferences` soha az ingesthez. Ez nem megfigyelés, hanem szerkezet —
+> agentenként egy `buildTools` a forrás (`query-agent.ts:43`, `ingest-agent.ts:41`), központi
+> registry nincs, amiből átszivároghatna egy tool.
+>
+> **Step 3 — a `responseMessages`-döntés élőben validálva.** A második interaktív forduló
+> `HÍVÁS #1 · **5** üzenet`-tel indult, benne az előző kör **tool-call + tool-result** párjával, és a
+> modell **új `runSql` nélkül**, pusztán a kontextusból válaszolt. `response.messages`-szel a
+> történet `[assistant]`-re zsugorodott volna — a tesztek nagy része ettől még zöld maradna, tehát
+> ez a hibaosztály csak élő futáson látszik.
+>
+> **Lelet (nem hiba, de félrevezető): 8 futás → 7 JSONL-fájl.** Az interaktív munkamenet **mindkét
+> fordulóját egyetlen session-fájlba, két sorba** írja (`2026-08-17T08-28-05-310Z.jsonl`) — ez a
+> JSON Lines formátum értelme. A trace ezzel szemben fordulónként külön `json`-t kap (8 db). Aki a
+> fájlokat számolja, ne induljon el hiányzó logot keresni.
+>
+> **Step 4:** a törlési kísérletet az agent megtagadta és alternatívát ajánlott (`stock = 0`); a DB
+> utána `kaktusz 2 · összes 30`, változatlan. A védelem négy rétege szétszálazva a doksiban — a
+> prompt-szabály a negyedik, és **nem** ez a védelem, hanem a jó magyarázat.
+>
+> **Token-mérleg (a 6. kiegészítés haszna, HF3-hoz):** a 8 futás **54 922 input / 3 362 output**
+> tokent fogyasztott, 9 tool-lépéssel. Az ACME-futás körre bontva `2819 → 2923 → 3153 → 3431` input
+> — a fix teher (system prompt + 3 tool-séma) a negyedik körre négyszer fizetődik ki. Forint-becslés
+> szándékosan nincs: az árazás külön, ellenőrzött forrásból való munka.
+>
+> **Nyitva maradt:** (1) a kódvezetés-doksi „Végállapot ellenőrzése" blokkját a terv a **2. pontjától**
+> idézi; az eredeti vault-doksi a gépen nem található, így az **1. pont tartalma nincs ellenőrizve** —
+> feltételezés, hogy azt a Step 1 automata kapuja fedi. (2) A **Task 8 nyitott pontja változatlanul
+> él**: a feed 307 termékéből 31-nek üres a `product_type`-ja. A Task 11 egyetlen ingest-futása sem
+> érintette a feedet (a Kentia-módosítás `runSql` + `upsertProduct` úton ment), tehát ez **továbbra
+> sem eldöntött kérdés**.
+
 ---
 
 ## Ami NEM ebbe az alkalomba tartozik
