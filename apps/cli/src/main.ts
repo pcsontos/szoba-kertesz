@@ -6,9 +6,11 @@ import {
   closeReadonlyPool,
   closeReadWritePool,
   setWatchLog,
+  USER_ROLES,
 } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
 import { printPrompt } from './lib/print-prompt.js';
+import { parseRole } from './lib/parse-role.js';
 
 // .env betöltése a belépési pontban (a core sosem tölt fájlt, lásd
 // packages/core/src/lib/config.ts) — hiányzó .env esetén toleráljuk, mert
@@ -49,14 +51,19 @@ program
     '--quiet',
     'az élő, színes Trace elnémítása — csak a végső válasz jelenik meg (a watch-log és a JSONL ettől függetlenül ír)',
   )
+  .option(
+    '--role <szerep>',
+    `a hívó szerepe (${USER_ROLES.join(' | ')}) — adminként elérhető a delegateToIngest tool`,
+  )
   .action(
     async (
       question: string,
-      options: { showPrompt?: boolean; quiet?: boolean },
+      options: { showPrompt?: boolean; quiet?: boolean; role?: string },
     ) => {
       try {
         const print = !options.quiet;
-        const result = await askAgent(question, { print });
+        const role = options.role ? parseRole(options.role) : undefined;
+        const result = await askAgent(question, { print, role });
         if (options.showPrompt) {
           printPrompt(result.systemPrompt, result.messages);
         }
@@ -126,7 +133,20 @@ const STANDALONE_FLAGS = ['--show-prompt', '--quiet'];
 const cliArgs = process.argv.slice(2);
 const showPromptFlag = cliArgs.includes('--show-prompt');
 const quietFlag = cliArgs.includes('--quiet');
-const nonFlagArgs = cliArgs.filter((arg) => !STANDALONE_FLAGS.includes(arg));
+
+// A `--role <érték>` KÉT argv-elemet foglal, ezért a szűrése is kettőt visz:
+// a STANDALONE_FLAGS-lista önmagában nem elég, mert az érték ("admin")
+// nem-flag argumentumnak látszana, és a `pnpm cli --role admin` a
+// commanderhez menne interaktív mód helyett.
+// A `roleIndex === -1` ágat KI KELL írni: enélkül a `roleIndex + 1` nullára
+// esne, és `--role` nélküli hívásnál a szűrő a 0. argv-elemet dobná el — a
+// `szobakertesz foo` interaktív módba lépne a commander hibajelzése helyett.
+const roleIndex = cliArgs.indexOf('--role');
+const nonFlagArgs = cliArgs.filter(
+  (arg, index) =>
+    !STANDALONE_FLAGS.includes(arg) &&
+    (roleIndex === -1 || (index !== roleIndex && index !== roleIndex + 1)),
+);
 
 // Folyamatos watch-log ("control room"): a `--quiet`-tól FÜGGETLENÜL ír, így
 // egy másik terminálban `tail -f logs/agent.log`-gal végig követhető a futás.
@@ -138,9 +158,19 @@ function handleFatalError(error: unknown): void {
 }
 
 if (nonFlagArgs.length === 0) {
-  runInteractive({ showPrompt: showPromptFlag, print: !quietFlag }).catch(
-    handleFatalError,
-  );
+  try {
+    const roleFlag =
+      roleIndex === -1 ? undefined : parseRole(cliArgs[roleIndex + 1]);
+    runInteractive({
+      showPrompt: showPromptFlag,
+      print: !quietFlag,
+      role: roleFlag,
+    }).catch(handleFatalError);
+  } catch (error: unknown) {
+    // Hibás `--role` érték: ugyanaz a rövid, magyar hibaüzenet, mint máshol —
+    // nem stack trace, és el sem indul az interaktív munkamenet.
+    handleFatalError(error);
+  }
 } else {
   program.parseAsync(process.argv).catch(handleFatalError);
 }
