@@ -1,6 +1,6 @@
 import {
-  generateText,
   isStepCount,
+  streamText,
   type LanguageModel,
   type ModelMessage,
   type StepResult,
@@ -25,7 +25,7 @@ import {
 // A 2–3. órán KÉZZEL írtuk meg ugyanezt (prompt → hívás → stop_reason → tool →
 // tool_result → vissza) a nyers Anthropic SDK fölött — ezért pontosan tudjuk, mit
 // csinál helyettünk a framework:
-//   - a loopot a `generateText` pörgeti, amíg a modell toolt kér (finishReason: 'tool-calls'),
+//   - a loopot a `streamText` pörgeti, amíg a modell toolt kér (finishReason: 'tool-calls'),
 //   - a kör-limitünk a `stopWhen: isStepCount(n)` (régen: MAX_TOOL_ITERATIONS for-ciklus),
 //   - a tool-dispatch a tool-definíciók `execute`-ja (régen: executeTool switch),
 //   - a kontextus-görgetést (üzenetek hozzáfűzése körről körre) az SDK végzi.
@@ -37,6 +37,17 @@ import {
 //   response.messages → responseMessages
 //   (a v7-ben a `response.messages` CSAK az utolsó kört tartalmazza — a teljes
 //    beszélgetés a `responseMessages`; az interaktív memória ezen áll vagy bukik.)
+//
+// A 05. alkalomtól `streamText` fut `generateText` helyett, EGY úton: ha nincs
+// `onTextDelta`, akkor is elfogyasztjuk a streamet. A váltásnak van egy MÉRT
+// csapdája (ai@7.0.66): a `streamText` NEM dobja tovább a hibát — sem szinkron,
+// sem a stream fogyasztásakor. Első köri hibánál az `await result.text` az SDK
+// becsomagolt üzenetével rejectel ("No output generated…"), és az eredeti ok
+// elveszik; MÁSODIK köri hibánál pedig egyáltalán nem rejectel, tehát a futás
+// sikeresnek LÁTSZANA, üres válasszal — és a `[MEGSZAKADT]` naplósor (saját
+// kiegészítés #6) némán eltűnne. Az egyetlen hely, ahol az eredeti hiba
+// látszik, az `onError`; ezért ott kapjuk el, és a stream lefutása után magunk
+// döntünk. Ezt három teszt is rögzíti (`agent-loop.spec.ts`).
 
 export type Message = ModelMessage;
 
@@ -85,6 +96,13 @@ export interface AskOptions {
    * be, a DB-injektálást a tool-szintű specek fedik (`run-sql-tool.spec.ts` stb.).
    */
   readonly model?: LanguageModel;
+  /**
+   * Tokenenkénti kimenet: minden szöveg-darabot AZONNAL megkap, ahogy a modelltől
+   * megérkezik. A szerver ezt írja ki `res.write()`-tal, a böngésző így látja
+   * szavanként épülni a választ. Megadása nélkül a viselkedés változatlan
+   * (a stream akkor is lefut, csak nem jelentünk róla).
+   */
+  readonly onTextDelta?: (delta: string) => void;
 }
 
 export interface AskResult {
@@ -169,81 +187,17 @@ export async function runAgentLoop(
   let spentInput = 0;
   let spentOutput = 0;
 
-  const result = await generateText({
-    model:
-      options.model ?? getProvider(config.anthropicApiKey)(config.anthropicModel),
-    maxOutputTokens: agent.maxOutputTokens,
-    system: systemPrompt,
-    messages,
-    tools,
-    // Régen: for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) — most deklaratívan
-    // mondjuk meg, meddig mehet a loop. A limit is az AGENTÉ.
-    stopWhen: isStepCount(agent.maxSteps),
-
-    // HÍVÁS ELŐTT: ezt küldjük ki — a teljes, körről körre növekvő kontextus.
-    // A stepNumber 0-alapú, ezért +1 megy a Trace-nek.
-    prepareStep: ({ stepNumber, messages: outgoing }) => {
-      trace.request(stepNumber + 1, {
-        model: config.anthropicModel,
-        maxOutputTokens: agent.maxOutputTokens,
-        system: systemPrompt,
-        toolNames,
-        messages: outgoing,
-      });
-      return {};
-    },
-
-    // HÍVÁS UTÁN: mi történt a körben — a modell szövege, tool-kérései, tool-eredményei.
-    onStepEnd: (step: StepResult<ToolSet>) => {
-      const turn = trace.modelTurn(trace.turnCount + 1, {
-        finishReason: step.finishReason,
-        text: step.text,
-        toolCalls: step.toolCalls.map((call) => ({
-          toolName: call.toolName,
-          input: call.input,
-        })),
-        usage: {
-          inputTokens: step.usage.inputTokens,
-          outputTokens: step.usage.outputTokens,
-        },
-      });
-      // Amint egy kör lezárult, a tokenjei már elmentek — ide könyveljük, hogy
-      // egy későbbi körben bekövetkező hiba után is tudjunk róluk számot adni.
-      spentInput += step.usage.inputTokens ?? 0;
-      spentOutput += step.usage.outputTokens ?? 0;
-      for (const toolResult of step.toolResults) {
-        const record = outcomes.get(toolResult.toolCallId);
-        if (!record) {
-          continue;
-        }
-        trace.toolStep(
-          turn,
-          { toolName: record.name, input: record.input },
-          record.outcome,
-        );
-        // Ugyanaz az adat a JSONL-napló ToolStep alakjában (saját kiegészítés #6).
-        toolSteps.push({
-          toolName: record.name,
-          input: record.input,
-          sql: record.outcome.sql ?? undefined,
-          ok: !record.outcome.isError,
-          rowCount: record.outcome.rowCount ?? undefined,
-          resultSummary: record.outcome.content,
-        });
-      }
-    },
-  }).catch(async (error: unknown) => {
-    // A futás megszakadt. A tokenek MÁR elmentek, tehát nyom nélkül hagyni a két
-    // naplót alulméréshez vezetne (saját kiegészítés #6) — ezért a részleges
-    // futást is kiírjuk, és csak UTÁNA dobjuk tovább az eredeti hibát.
+  // A megszakadt futás közös lezárása: napló + Trace, majd az EREDETI hiba tovább.
+  // (Saját kiegészítés #6: az elköltött tokeneknek nyoma kell maradjon.)
+  const finishInterrupted = async (error: unknown): Promise<never> => {
     const message = error instanceof Error ? error.message : String(error);
     const interrupted = `[MEGSZAKADT] ${message}`;
     const partial: UsageInfo = {
       inputTokens: spentInput,
       outputTokens: spentOutput,
     };
-    // A naplózás saját hibáját ITT elnyeljük: az eredeti API-hibát nem
-    // maszkolhatja egy naplózási gond, és a Trace-nek is le kell zárulnia.
+    // A naplózás saját hibáját ITT elnyeljük: az eredeti hibát nem maszkolhatja
+    // egy naplózási gond, és a Trace-nek is le kell zárulnia.
     await log({
       systemPrompt,
       messages,
@@ -253,20 +207,121 @@ export async function runAgentLoop(
     }).catch(() => undefined);
     trace.finish(interrupted, partial);
     throw error;
-  });
+  };
 
-  const answer = result.text.trim() !== '' ? result.text.trim() : agent.emptyAnswer;
+  // ⚠️ MÉRT TÉNY (ai@7.0.66): a streamText NEM dobja tovább a hibát — sem
+  // szinkron, sem a stream fogyasztásakor. Az EGYETLEN hely, ahol az eredeti
+  // hiba látszik, az onError. Ezért itt elkapjuk, és a stream lefutása után
+  // MAGUNK döntünk. Enélkül egy második körben elhasalt futás sikeresnek
+  // látszana, üres válasszal — és a [MEGSZAKADT] naplósor némán eltűnne.
+  let streamError: unknown = null;
+
+  let result: ReturnType<typeof streamText>;
+  try {
+    result = streamText({
+      model:
+        options.model ??
+        getProvider(config.anthropicApiKey)(config.anthropicModel),
+      maxOutputTokens: agent.maxOutputTokens,
+      system: systemPrompt,
+      messages,
+      tools,
+      // Régen: for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) — most deklaratívan
+      // mondjuk meg, meddig mehet a loop. A limit is az AGENTÉ.
+      stopWhen: isStepCount(agent.maxSteps),
+
+      // HÍVÁS ELŐTT: ezt küldjük ki — a teljes, körről körre növekvő kontextus.
+      // A stepNumber 0-alapú, ezért +1 megy a Trace-nek.
+      prepareStep: ({ stepNumber, messages: outgoing }) => {
+        trace.request(stepNumber + 1, {
+          model: config.anthropicModel,
+          maxOutputTokens: agent.maxOutputTokens,
+          system: systemPrompt,
+          toolNames,
+          messages: outgoing,
+        });
+        return {};
+      },
+
+      // HÍVÁS UTÁN: mi történt a körben — a modell szövege, tool-kérései, tool-eredményei.
+      // A step alakja ugyanaz streamText alatt: lapos finishReason, lapos usage-számok.
+      onStepEnd: (step: StepResult<ToolSet>) => {
+        const turn = trace.modelTurn(trace.turnCount + 1, {
+          finishReason: step.finishReason,
+          text: step.text,
+          toolCalls: step.toolCalls.map((call) => ({
+            toolName: call.toolName,
+            input: call.input,
+          })),
+          usage: {
+            inputTokens: step.usage.inputTokens,
+            outputTokens: step.usage.outputTokens,
+          },
+        });
+        // Amint egy kör lezárult, a tokenjei már elmentek — ide könyveljük, hogy
+        // egy későbbi körben bekövetkező hiba után is tudjunk róluk számot adni.
+        spentInput += step.usage.inputTokens ?? 0;
+        spentOutput += step.usage.outputTokens ?? 0;
+        for (const toolResult of step.toolResults) {
+          const record = outcomes.get(toolResult.toolCallId);
+          if (!record) {
+            continue;
+          }
+          trace.toolStep(
+            turn,
+            { toolName: record.name, input: record.input },
+            record.outcome,
+          );
+          // Ugyanaz az adat a JSONL-napló ToolStep alakjában (saját kiegészítés #6).
+          toolSteps.push({
+            toolName: record.name,
+            input: record.input,
+            sql: record.outcome.sql ?? undefined,
+            ok: !record.outcome.isError,
+            rowCount: record.outcome.rowCount ?? undefined,
+            resultSummary: record.outcome.content,
+          });
+        }
+      },
+
+      // A tokenenkénti kimenet. A chunk mezője itt `text` — provider-szinten
+      // ugyanez `delta` (ezért néz ki másképp a mock és a hook).
+      onChunk: ({ chunk }) => {
+        if (chunk.type === 'text-delta') {
+          options.onTextDelta?.(chunk.text);
+        }
+      },
+
+      onError: ({ error }) => {
+        streamError ??= error;
+      },
+    });
+
+    // A streamet EL KELL fogyasztani — ez pörgeti a loopot körről körre.
+    await result.consumeStream();
+  } catch (error: unknown) {
+    return finishInterrupted(error);
+  }
+
+  if (streamError !== null) {
+    return finishInterrupted(streamError);
+  }
+
+  const text = await result.text;
+  const answer = text.trim() !== '' ? text.trim() : agent.emptyAnswer;
 
   // ⚠️ AI SDK 7: a `result.response.messages` CSAK az utolsó kört tartalmazza.
-  // A teljes beszélgetés (assistant + tool üzenetek együtt) a `responseMessages`.
+  // A teljes beszélgetés (assistant + tool üzenetek együtt) a `responseMessages`
+  // — streamText alatt PromiseLike, ezért az await nem elhagyható.
   const updatedMessages: readonly Message[] = [
     ...messages,
-    ...result.responseMessages,
+    ...(await result.responseMessages),
   ];
 
+  const totals = await result.usage;
   const usage: UsageInfo = {
-    inputTokens: result.usage.inputTokens ?? 0,
-    outputTokens: result.usage.outputTokens ?? 0,
+    inputTokens: totals.inputTokens ?? 0,
+    outputTokens: totals.outputTokens ?? 0,
   };
 
   // A két nyom FÜGGETLEN: ha a JSONL-írás elhasal, a Trace-nek attól még le kell
@@ -289,6 +344,6 @@ export async function runAgentLoop(
     messages: updatedMessages,
     usage,
     toolSteps,
-    stopReason: result.finishReason,
+    stopReason: await result.finishReason,
   };
 }

@@ -4,6 +4,7 @@ import {
   closeReadonlyPool,
   type AskResult,
   type Message,
+  type UserRole,
 } from '@szoba-kertesz/core';
 import { printPrompt } from './lib/print-prompt.js';
 
@@ -15,6 +16,8 @@ export interface RunInteractiveOptions {
    * (✓ VÁLASZ blokk), `false` esetén ez a modul — sosem mindkettő.
    */
   readonly print?: boolean;
+  /** A hívó szerepe; a query-agent ez alapján kapja meg a toolkészletét. */
+  readonly role?: UserRole;
   // Teszteléshez injektálható függőségek (interactive.spec.ts) — alapból a
   // valódi stdin/stdout és a valódi askAgent. Injektálás nélkül a viselkedés
   // változatlan.
@@ -67,7 +70,8 @@ export function runInteractive(
   let history: readonly Message[] = [];
   const ask =
     options.ask ??
-    ((question: string) => askAgent(question, { print, history }));
+    ((question: string) =>
+      askAgent(question, { print, history, role: options.role }));
 
   return new Promise((resolve) => {
     const rl = createInterface({

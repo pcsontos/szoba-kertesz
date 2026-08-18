@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT } from './query-prompt.js';
+import { buildQueryPrompt, SYSTEM_PROMPT } from './query-prompt.js';
 
 describe('SYSTEM_PROMPT', () => {
   it('is XML-tagged with <role>, <task>, <schema>, <rules>, <behavior> and <tools> sections', () => {
@@ -113,5 +113,27 @@ describe('SYSTEM_PROMPT', () => {
     expect(examplesText).toMatch(/SELECT/);
     expect(examplesText).toMatch(/ORDER BY/);
     expect(examplesText).toMatch(/listCategories\(\)/);
+  });
+});
+
+describe('buildQueryPrompt — szerep szerint', () => {
+  it('vásárlónak PONTOSAN a SYSTEM_PROMPT megy ki, bájtra', () => {
+    // A CLAUDE.md invariánsa: a konstans bájtra azonos a docs/system-prompt.md
+    // xml blokkjával. Az admin-blokk HOZZÁFŰZŐDIK, nem beleíródik.
+    expect(buildQueryPrompt('customer')).toBe(SYSTEM_PROMPT);
+    expect(buildQueryPrompt()).toBe(SYSTEM_PROMPT);
+  });
+
+  it('adminnak a SYSTEM_PROMPT + a delegálási blokk megy ki', () => {
+    const prompt = buildQueryPrompt('admin');
+    expect(prompt.startsWith(SYSTEM_PROMPT)).toBe(true);
+    expect(prompt).toContain('<admin-capabilities>');
+    expect(prompt).toContain('delegateToIngest');
+  });
+
+  it('az admin-blokk kimondja, hogy a query-agent maga sosem ír', () => {
+    const prompt = buildQueryPrompt('admin');
+    expect(prompt).toMatch(/SELECT/);
+    expect(prompt).toMatch(/kérdezz vissza|pontosíts/i);
   });
 });

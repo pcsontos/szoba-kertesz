@@ -9,6 +9,8 @@
 // A regressziós manifeszt (own-additions.spec.ts) EZEN a felületen dolgozik:
 // ha egy export kimarad, hangosan törik, nem némán.
 
+export * from './lib/user-role/user-role.js';
+
 export * from './lib/agents/agent-loop.js';
 export * from './lib/agents/query-agent/query-agent.js';
 export * from './lib/agents/query-agent/query-prompt.js';
@@ -26,6 +28,7 @@ export * from './lib/tools/upsert-product/product-schema.js';
 export * from './lib/tools/upsert-product/db-readwrite.js';
 export * from './lib/tools/fetch-feed/fetch-feed-tool.js';
 export * from './lib/tools/fetch-feed/shopify-feed.js';
+export * from './lib/tools/delegate-to-ingest/delegate-to-ingest-tool.js';
 
 export * from './lib/trace.js';
 export * from './lib/logger.js';

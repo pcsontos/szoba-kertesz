@@ -1,21 +1,44 @@
 # szoba-kertesz
 
-CLI AI agent szobanövény-tanácsadáshoz — magyar nyelvű kérdéseket válaszol meg egy szobanövény-katalógusról, természetes nyelven.
-
-> Kurzus-projekt, korai fázisban. A teljes tervezett architektúrát és a domain-modellt lásd a [`docs/`](docs/) alatt — ez a README a jelenlegi, ténylegesen futó állapotot dokumentálja.
+Magyar nyelvű AI-ágens szobanövény-katalógushoz: természetes nyelvű kérdésekre a valódi katalógusadatból válaszol — böngészőből és parancssorból egyaránt. A katalógust egy külön, írási jogú ágens tartja karban.
 
 ## Jelenlegi státusz
 
-- ✅ Nx monorepo, `packages/core` + `packages/db` + `apps/cli` felépítve
-- ✅ Postgres + Prisma séma + seed adat (~30 növény) betöltve
-- ✅ CLI: `ask <kérdés>` és interaktív mód, valódi Anthropic LLM-hívással
-- ✅ **Adatbázis-hozzáférés élesben bekötve (`runSql` tool)** — az agent valós SQL-t ír és futtat a `products` katalógustáblán, és a tényleges adatokra (készlet, ár, szűrés stb.) alapozva válaszol, nem talál ki adatot. Kétrétegű, egymástól független SELECT-only védelem: alkalmazás-szintű guard (csak SELECT engedélyezett, minden lekérdezés LIMIT-tel korlátozva) ÉS a `DATABASE_URL_READONLY` mögötti Postgres role is csak SELECT-jogosultsággal rendelkezik — bármelyik réteg önmagában is megállítana egy módosítási kísérletet.
+### Felület — streamelő chat (`apps/web`)
 
-A teljes fázisterv: [`docs/implementacios-terv.md`](docs/implementacios-terv.md).
+React 19 + a Vercel AI SDK `useChat` hookja (`TextStreamChatTransport`). A válasz **tokenenként** érkezik, markdownként renderelve; „Állj" gombbal megszakítható a futó válasz, és az auto-scroll nem rántja vissza a felhasználót, ha közben felfelé olvas. Tailwind 4, shadcn-stílusú komponensréteg (Radix Slot + `cva` + `tailwind-merge`).
+
+### Egy mag, több belépési pont
+
+A `packages/core` **framework-független** — nem tud sem a CLI-ről, sem a HTTP-ről. Az `apps/server` (Express 5, Zod-validálás a kérés határán) vékony réteg fölötte: a böngészőből érkező kérdés pontosan ugyanazt az `askAgent`-et hívja, mint az `apps/cli`. A beszélgetés-előzményt a szerver alakítja át a közös loop `history` opciójává.
+
+### Multi-agent, szétválasztott adatbázis-jogosultsággal
+
+- **`query-agent`** — olvas. Csak a `szoba-kertesz_ro` (SELECT-only) role-t látja.
+- **`ingest-agent`** — ír. Saját system prompt, saját toolkészlet, `szoba-kertesz_rw` role.
+- **`delegateToIngest`** — a query-agent **tool-hívásként** adja át a katalógus-módosítást. Belül teljes második loop fut, saját trace-szel és saját költségméréssel: egy ágens is lehet egy másik ágens toolja. Az olvasó ágens maga sosem ír.
+
+### Kétrétegű, egymástól független írásvédelem
+
+Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű guard** (csak `SELECT`, `SELECT INTO` tiltva, minden lekérdezés subquery-be csomagolt `LIMIT`-tel korlátozva) **és** a `DATABASE_URL_READONLY` mögötti Postgres role, amely maga is csak SELECT-jogosultsággal rendelkezik. Bármelyik réteg önmagában is megállítana egy módosítási kísérletet.
+
+### Toolok
+
+`runSql` · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `getClientPreferences`
+
+### Minőségi kapuk
+
+162 teszteset 30 spec fájlban (Vitest): `core` 140, `cli` 12, `server` 4, `web` 6. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
+
+---
+
+Architektúra és domain-modell: [`docs/architektura.md`](docs/architektura.md) · teljes fázisterv: [`docs/implementacios-terv.md`](docs/implementacios-terv.md) · konvenciók: [`docs/konvenciók.md`](docs/konvenciók.md)
+
+A projekt egy AI-ágensfejlesztés kurzus keretében készül: a mérföldköveket a tananyag adja, a tervezési és megvalósítási döntések a `docs/` alatt dokumentáltak.
 
 ## Előfeltételek
 
-- Node LTS (fejlesztés alatt: v25.x), [pnpm](https://pnpm.io/) 10.x
+- Node LTS (fejlesztés alatt: v25.x), [pnpm](https://pnpm.io/) 11.x
 - Docker (helyi Postgres-hez, pl. OrbStack)
 - Anthropic API kulcs
 
@@ -38,8 +61,11 @@ Töltsd ki a `.env`-ben:
 | `ANTHROPIC_API_KEY` | az agens LLM-hívásaihoz |
 | `ANTHROPIC_MODEL` | pl. `claude-sonnet-4-6` |
 | `DATABASE_URL` | admin/RW kapcsolat (Prisma: séma, migráció, seed) |
-| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt (és kizárólag ezt) használja az agent `runSql` toolja |
-| `POSTGRES_*` | a docker-compose konténer admin hitelesítő adatai |
+| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt (és kizárólag ezt) használja a query-agent `runSql` / `listCategories` toolja |
+| `DATABASE_URL_READWRITE` | RW kapcsolat a `szoba-kertesz_rw` role-lal — kizárólag az ingest-agent `upsertProduct` útja. **Opcionális:** nélküle a kérdés-válasz oldal teljesen működik, csak az `ingest` bukik el, érthető magyar üzenettel |
+| `POSTGRES_DB`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` | a docker-compose konténer admin hitelesítő adatai |
+
+A webes felület a `VITE_API_URL` változóból veszi a szerver címét (alapértelmezés: `http://localhost:3000`); helyi fejlesztéshez nem kell beállítani.
 
 `.env`-et soha ne commitolj — gitignore-olva van.
 
@@ -47,10 +73,10 @@ Töltsd ki a `.env`-ben:
 
 ```bash
 docker compose up -d
-docker compose ps   # szoba-kertesz-postgres-1 legyen "healthy"
+docker compose ps   # szoba-kertesz-adatbazis legyen "healthy"
 ```
 
-Az `init.sql` a konténer első indításakor létrehozza a `szoba-kertesz_ro` (SELECT-only) role-t.
+Az `init.sql` a konténer **első** indításakor létrehozza a két agent-role-t (`szoba-kertesz_ro`, `szoba-kertesz_rw`). A jogosultságok **elsődleges forrása** azonban a `<ts>_db_roles` migráció, nem az `init.sql`: az utóbbi csak új konténernél fut le, így egy `prisma migrate reset` után a role-ok megmaradnának, a grantjeik viszont nem. Ezért friss adatbázishoz is elég a `migrate deploy`.
 
 Séma migrálása és a seed-katalógus (~30 növény) betöltése:
 
@@ -60,6 +86,27 @@ pnpm exec prisma db seed
 ```
 
 ## Build és futtatás
+
+### Webes felület
+
+Két folyamat kell, két terminálban:
+
+```bash
+pnpm serve:api    # Express — http://localhost:3000/api/chat
+pnpm serve:web    # Vite    — http://localhost:4200
+```
+
+Nyisd meg a `http://localhost:4200` címet. A szerver konzolján közben ugyanaz a színes, körről körre növekvő ágens-trace fut, mint a CLI-ben — a böngésző csak a választ kapja.
+
+### CLI
+
+A `pnpm cli` script **build nélkül**, `tsx`-szel futtat közvetlenül a forrásból — ez a leggyorsabb kör:
+
+```bash
+pnpm cli --help
+```
+
+A buildelt út is működik:
 
 ```bash
 pnpm exec nx run cli:build
@@ -81,54 +128,82 @@ Szobakertész CLI — szobanövény-katalógushoz kapcsolódó, magyar nyelvű k
 megválaszoló asszisztens.
 
 Options:
-  -V, --version             a CLI verziószámának kiírása
-  -h, --help                display help for command
+  -V, --version                   a CLI verziószámának kiírása
+  -h, --help                      display help for command
 
 Commands:
-  ask [options] <question>  Kérdés feltevése a szobakertész agensnek természetes
-                            nyelven.
-  help [command]            display help for command
+  ask [options] <question>        Kérdés feltevése a szobakertész agensnek
+                                  természetes nyelven.
+  ingest [options] <instruction>  Katalógus-kezelő agent: természetes nyelvű
+                                  utasításból vesz fel vagy frissít terméket.
+                                  FIGYELEM: ez a parancs ÍR az adatbázisba.
+  help [command]                  display help for command
 ```
 
 ### Egyszeri kérdés
 
 ```bash
-node apps/cli/dist/main.js ask "mitől függ egy növény fényigénye?"
+pnpm cli ask "mitől függ egy növény fényigénye?"
 ```
 
 ### Interaktív mód
 
-Argumentum nélkül indítva a CLI egy folyamatos kérdés-válasz munkamenetet nyit; a `exit` beírásával lépsz ki:
+Argumentum nélkül indítva a CLI egy folyamatos kérdés-válasz munkamenetet nyit (a query-agenttel, előzménnyel); az `exit` beírásával lépsz ki:
 
 ```bash
-node apps/cli/dist/main.js
+pnpm cli
 ```
 
-### `--show-prompt`
-
-A `ask` parancshoz és az interaktív módhoz is hozzáadható; a válasz kiírása előtt megjeleníti a modellnek ténylegesen elküldött teljes system promptot és üzenet-tömböt — hasznos, ha azt akarod látni, mi megy ki az LLM-nek:
+### Szerep — `--role`
 
 ```bash
-node apps/cli/dist/main.js ask "szia" --show-prompt
-node apps/cli/dist/main.js --show-prompt   # interaktív mód, minden kérdésnél kiírja
+pnpm cli ask --role admin "Vedd fel a katalógusba a Kentia pálmát: ár 15900 Ft, készlet 5 …"
+```
+
+Két érték van: `customer` (alapértelmezés) és `admin`. A szerep **képességet kapcsol, nem prompt-tiltást**: adminként a toolkészletbe bekerül a `delegateToIngest`, vásárlóként a modell **nem is tudja, hogy létezik**. A különbség a trace `tools:` sorában azonnal látszik. Az alapértelmezést a `user-role.ts` `CURRENT_ROLE` konstansa adja — a flag egyszeri futtatásokhoz való. Érvénytelen érték rövid magyar hibaüzenettel bukik el, még az API-hívás előtt.
+
+### Katalógus-kezelés — `ingest` (ÍR az adatbázisba)
+
+```bash
+pnpm cli ingest "Frissítsd a Kentia pálma készletét 9-re"
+```
+
+Az ingest-agent saját prompttal, saját toolkészlettel (`runSql` + `fetchFeed` + `upsertProduct`) és saját DB-jogosultsággal fut. Szándékosan **egylövetű**, nincs interaktív módja. A `DATABASE_URL_READWRITE` beállítása kell hozzá.
+
+### `--show-prompt` és `--quiet`
+
+Az `ask` parancshoz és az interaktív módhoz is hozzáadható. A `--show-prompt` a válasz kiírása előtt megjeleníti a modellnek ténylegesen elküldött teljes system promptot és üzenet-tömböt; a `--quiet` elnémítja az élő, színes Trace-t — a naplózás ettől függetlenül fut:
+
+```bash
+pnpm cli ask "szia" --show-prompt
+pnpm cli --show-prompt          # interaktív mód, minden kérdésnél kiírja
+pnpm cli ask "szia" --quiet     # csak a végső válasz
 ```
 
 ### Naplózás
 
-Minden `ask`-hívás és interaktív munkamenet JSONL-be naplózódik a `logs/` alá (`logs/<timestamp>.jsonl`) — system prompt, üzenetek, válasz, token-felhasználás.
+Minden futás **két, egymástól független nyomot** hagy — egyik sem helyettesíti a másikat:
+
+- `logs/<timestamp>.jsonl` — a gépi bizonyítékbázis: system prompt, üzenetek, a ténylegesen lefuttatott SQL, eredmény, válasz, token-felhasználás. A **megszakadt** futás is naplózódik (`[MEGSZAKADT] …`), az addig elköltött tokenekkel — enélkül egy elhasalt futás nyom nélkül égetne el tokent, és a költségbecslés alulmérne.
+- `logs/<timestamp>.json` + `logs/agent.log` — az élő, színes Trace körökre bontott nyoma, illetve a folyamatos watch-log (`tail -f`-hez).
+
+Egy **admin-delegálás két bejegyzést** ír ugyanabba a `.jsonl` fájlba, két soron: egyet a külső query-futásról, egyet a beágyazott ingest-futásról. Ez szándékos — az a futás valóban elköltött tokeneket.
 
 ## Fejlesztés
 
 ```bash
-pnpm nx test core          # packages/core unit tesztek (Vitest)
-pnpm nx test cli           # apps/cli unit tesztek
-pnpm nx run cli:typecheck  # tsc, csak típusellenőrzés
-pnpm nx run cli:lint       # ESLint
+pnpm nx test core          # packages/core (több spec valódi, seedelt DB-t hív)
+pnpm nx test cli           # apps/cli
+pnpm nx test server        # apps/server — se DB, se API-kulcs nem kell
+pnpm nx test web           # apps/web — jsdom
+pnpm nx run-many -t typecheck lint build   # amit a CI is futtat
 ```
+
+> **Ismert flake, nem regresszió:** a `db-readonly.spec.ts` „row count is unchanged" állítása versenyzik az `upsert-product-db.spec.ts` valós beszúrásaival egy párhuzamos workerben. Ha egyedül ez a teszt bukik sorszám-eltérésen, futtasd újra, mielőtt nyomozni kezdesz.
 
 ## Debugolás VS Code-ban
 
-A `.vscode/launch.json` öt indítási (launch) és egy csatlakozási (attach) konfigurációt tartalmaz. A négy `dist`-alapú launch-config automatikusan lebuildeli a CLI-t (`development` konfigurációval, hogy a sourcemapek megmaradjanak) egy `preLaunchTask`-on keresztül, mielőtt elindítja; az ötödik (`tsx`) build nélkül, közvetlenül a TypeScript forrásból fut.
+A `.vscode/launch.json` hat indítási (launch) és egy csatlakozási (attach) konfigurációt tartalmaz. A négy `dist`-alapú CLI launch-config automatikusan lebuildeli a CLI-t (`development` konfigurációval, hogy a sourcemapek megmaradjanak) egy `preLaunchTask`-on keresztül, mielőtt elindítja; az ötödik (`tsx`) build nélkül, közvetlenül a TypeScript forrásból fut.
 
 Nyisd meg a Run and Debug panelt (⇧⌘D), válaszd ki az egyiket, majd F5:
 
@@ -139,6 +214,7 @@ Nyisd meg a Run and Debug panelt (⇧⌘D), válaszd ki az egyiket, majd F5:
 | **Debug @szoba-kertesz/cli (ask)** | felugró mezőben bekéri a kérdést, egyszeri `ask` lefutás |
 | **Debug @szoba-kertesz/cli (ask --show-prompt)** | mint fent, plusz kiírja a promptot |
 | **Debug from source (tsx, ask)** | build nélkül, `tsx`-szel futtatja az `apps/cli/src/main.ts`-t — a leggyorsabb kör |
+| **Debug server with Nx** | az Express szervert indítja debuggerrel (`apps/server`) |
 | **Attach to @szoba-kertesz/cli (terminal)** | lásd alább |
 
 Bármelyiket választod, tehetsz breakpointot közvetlenül a TypeScript forrásban (`apps/cli/src/`, `packages/core/src/`) — a debugger a valódi `.ts` sorokon áll meg, nem a lebuildelt `.js`-ben.
