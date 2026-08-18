@@ -6,7 +6,7 @@ import {
   type ModelMessage,
   type UIMessage,
 } from 'ai';
-import { askAgent, type AskResult } from '@szoba-kertesz/core';
+import { askAgent, type AskResult, type UserRole } from '@szoba-kertesz/core';
 
 // app.ts — VÉKONY HTTP-réteg a core agent fölött. A böngészőből érkező kérdés PONTOSAN
 // ugyanazon az úton megy, mint a CLI-ben: askAgent → a közös agent-loop. A @szoba-kertesz/core
@@ -31,6 +31,7 @@ export type AskFn = (
   question: string,
   options: {
     print: boolean;
+    role?: UserRole;
     history?: readonly ModelMessage[];
     onTextDelta?: (delta: string) => void;
   },
@@ -40,18 +41,42 @@ export interface CreateAppOptions {
   readonly ask?: AskFn;
 }
 
-/** A kérés HATÁRA — Zod-validálás, ahogy minden külvilágból jövő adatnál. */
-const ChatRequestSchema = z.object({
-  messages: z.array(z.unknown()).min(1),
+// A kérés HATÁRA — Zod-validálás, ahogy minden külvilágból jövő adatnál.
+//
+// A séma korábban csak annyit mondott, hogy `messages` egy nem-üres tömb
+// (`z.array(z.unknown())`), utána `as UIMessage[]` cast következett. Egy `parts`
+// nélküli üzenet így NEM a validálásban bukott el, hanem lejjebb, az
+// extractText-ben, TypeError-ral — amiből az Express alapértelmezett
+// hibakezelője 500-at csinált, HTML stack trace-szel a kliensnek. A séma ezért
+// az üzenet ALAKJÁT is leírja, és a típus a sémából származik, nem castból.
+//
+// `looseObject`: a UIMessage-nek több mezője van, mint amennyi nekünk kell (és
+// verzióról verzióra bővülhet) — az ismeretlen kulcsokat átengedjük, csak azt
+// kötjük meg, amire ténylegesen támaszkodunk.
+const MessagePartSchema = z.looseObject({
+  type: z.string(),
+  text: z.string().optional(),
 });
 
-/** A UIMessage szöveges részeinek összefűzése — a nem-szöveges részek kimaradnak. */
-function extractText(message: UIMessage): string {
+const UiMessageSchema = z.looseObject({
+  // A UIMessage három szerepet ismer — ismeretlen érték itt bukjon el, a
+  // validálásban, ne lejjebb.
+  role: z.enum(['system', 'user', 'assistant']),
+  parts: z.array(MessagePartSchema),
+});
+
+const ChatRequestSchema = z.object({
+  messages: z.array(UiMessageSchema).min(1),
+});
+
+/** A validált üzenet alakja — a sémából LEVEZETVE, nem kézzel újraírva. */
+type ValidatedMessage = z.infer<typeof UiMessageSchema>;
+
+/** A szöveges részek összefűzése — a nem-szöveges részek kimaradnak. */
+function extractText(message: ValidatedMessage): string {
   return message.parts
-    .filter(
-      (part): part is { type: 'text'; text: string } => part.type === 'text',
-    )
-    .map((part) => part.text)
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text ?? '')
     .join('');
 }
 
@@ -66,13 +91,14 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.post('/api/chat', async (req: Request, res: Response) => {
     const parsed = ChatRequestSchema.safeParse(req.body);
     if (!parsed.success) {
-      res
-        .status(400)
-        .json({ error: 'A kérés törzsében kötelező a "messages" tömb.' });
+      res.status(400).json({
+        error:
+          'A kérés törzsében kötelező a "messages" tömb, benne `role` és `parts` mezővel rendelkező üzenetekkel.',
+      });
       return;
     }
 
-    const uiMessages = parsed.data.messages as UIMessage[];
+    const uiMessages = parsed.data.messages;
     const lastMessage = uiMessages[uiMessages.length - 1];
     const question =
       lastMessage?.role === 'user' ? extractText(lastMessage).trim() : '';
@@ -87,10 +113,33 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
     try {
       // A korábbi körök (a useChat mindig a teljes előzményt küldi) → history.
-      const history = await convertToModelMessages(uiMessages.slice(0, -1));
+      // A validált üzenetek átadása az SDK-nak. A `unknown`-on át vezetett cast
+      // itt SZÁNDÉKOS és a lehető legszűkebb: a UIMessage `parts` mezője
+      // diszkriminált unió (minden résztípusnak saját kötelező mezői vannak),
+      // amivel egy szándékosan laza séma sosem fog strukturálisan egyezni.
+      //
+      // Amit a séma GARANTÁL, mielőtt idáig eljutunk: `messages` nem üres, minden
+      // elemnek van érvényes `role`-ja és `parts` TÖMBJE, a text-részeknek pedig
+      // string `text`-je. Ez pontosan az, amire a kód támaszkodik.
+      // Amit NEM garantál: hogy egy ismeretlen résztípust az SDK fel tud
+      // dolgozni — ez a hívás ezért a try-blokkon BELÜL van, így egy ilyen
+      // bemenet magyar 500-at ad, nem HTML stack trace-t.
+      // Az `await` NEM elhagyható: a convertToModelMessages ebben az
+      // SDK-verzióban Promise-t ad vissza (mérve — enélkül a `history` egy
+      // Promise objektum lenne, és a spec `toHaveLength(2)` állítása bukik).
+      const history = await convertToModelMessages(
+        uiMessages.slice(0, -1) as unknown as UIMessage[],
+      );
 
       await ask(question, {
         print: true,
+        // A SZEREP PINNELVE, nem örökölt. Enélkül a modul-szintű CURRENT_ROLE
+        // dönt — miközben a user-role.ts fejkommentje épp azt ajánlja demóhoz,
+        // hogy azt a konstanst írd át `admin`-ra. Nyitott cors() mellett a
+        // hitelesítés nélküli végpont így admin-képessé válna (delegateToIngest
+        // → írás a szoba-kertesz_rw szerepen). A szerver SOSEM vesz szerepet a
+        // kérésből, és nem is örököl: itt mondjuk ki.
+        role: 'customer',
         history,
         onTextDelta: (delta: string) => {
           res.write(delta);

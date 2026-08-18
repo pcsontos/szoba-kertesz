@@ -124,3 +124,86 @@ describe('POST /api/chat — streamelve', () => {
     expect(await response.text()).toContain('Elkezdem…');
   });
 });
+
+describe('POST /api/chat — a kérés HATÁRA (PR #4 review, 4. tétel)', () => {
+  /**
+   * A séma korábban csak annyit mondott, hogy `messages` egy nem-üres tömb,
+   * utána `as UIMessage[]` cast következett. A hiányzó `parts` így nem a
+   * validálásban bukott el, hanem az extractText-ben, TypeError-ral — amiből
+   * az Express alapértelmezett hibakezelője 500-at csinált, HTML stack
+   * trace-szel. Külső inputot nem cast-olunk: a típus a sémából jön.
+   */
+  it('hiányzó `parts` esetén 400 magyar üzenettel — NEM 500 stack trace-szel', async () => {
+    const ask = vi.fn();
+    const url = await start(ask as unknown as AskFn);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [{ id: 'm1', role: 'user' }] }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toMatch(/üzenet/i);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('ismeretlen `role` esetén is 400, nem 500', async () => {
+    const ask = vi.fn();
+    const url = await start(ask as unknown as AskFn);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        messages: [{ id: 'm1', role: 'root', parts: [] }],
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(ask).not.toHaveBeenCalled();
+  });
+
+  it('a hibás alak SEMMILYEN esetben nem szivárogtat stack trace-t', async () => {
+    const ask = vi.fn();
+    const url = await start(ask as unknown as AskFn);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [{ id: 'm1', role: 'user' }] }),
+    });
+
+    const text = await response.text();
+    expect(text).not.toContain('TypeError');
+    expect(text).not.toContain('at ');
+  });
+});
+
+describe('POST /api/chat — a szerep PINNELVE (PR #4 review, 1. tétel)', () => {
+  /**
+   * A végpont korábban `role` nélkül hívta az askAgent-et, tehát a modul-szintű
+   * CURRENT_ROLE-t örökölte — miközben a user-role.ts fejkommentje épp azt
+   * ajánlja demóhoz, hogy azt a konstanst írd át `admin`-ra. Nyitott cors()
+   * mellett a hitelesítés nélküli végpont így admin-képessé válna
+   * (delegateToIngest → írás a szoba-kertesz_rw szerepen). A szerep itt
+   * EXPLICIT, nem örökölt.
+   */
+  it('mindig `customer` szereppel hívja az agentet', async () => {
+    const ask = vi.fn().mockImplementation(async (_question, options) => {
+      options.onTextDelta?.('Kész.');
+      return answer('Kész.');
+    });
+    const url = await start(ask as unknown as AskFn);
+
+    await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [uiMessage('user', 'kérdés')] }),
+    });
+
+    expect(ask.mock.calls[0]?.[1]?.role).toBe('customer');
+  });
+});
