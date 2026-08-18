@@ -109,7 +109,18 @@ export function createApp(options: CreateAppOptions = {}): Express {
       return;
     }
 
-    res.type('text/plain');
+    // A tartalomtípust SZÁNDÉKOSAN csak az első tényleges kiírás előtt állítjuk
+    // be. Korábban itt, a try előtt futott le — az Express `res.json()` viszont
+    // csak akkor állít típust, ha még nincs, így a hibaág 500-as JSON törzse
+    // `text/plain` fejléccel ment ki.
+    let streamed = false;
+    const writeChunk = (chunk: string): void => {
+      if (!streamed) {
+        res.type('text/plain');
+        streamed = true;
+      }
+      res.write(chunk);
+    };
 
     try {
       // A korábbi körök (a useChat mindig a teljes előzményt küldi) → history.
@@ -131,7 +142,7 @@ export function createApp(options: CreateAppOptions = {}): Express {
         uiMessages.slice(0, -1) as unknown as UIMessage[],
       );
 
-      await ask(question, {
+      const result = await ask(question, {
         print: true,
         // A SZEREP PINNELVE, nem örökölt. Enélkül a modul-szintű CURRENT_ROLE
         // dönt — miközben a user-role.ts fejkommentje épp azt ajánlja demóhoz,
@@ -142,9 +153,17 @@ export function createApp(options: CreateAppOptions = {}): Express {
         role: 'customer',
         history,
         onTextDelta: (delta: string) => {
-          res.write(delta);
+          writeChunk(delta);
         },
       });
+
+      // Ha a loop szöveg nélkül állt meg (pl. kimerült a lépéskeret), delta sem
+      // keletkezett — ilyenkor a végső `answer` megy ki, ami az agent
+      // `emptyAnswer`-e. Enélkül a böngésző ÜRES buborékot kapna 200-zal,
+      // miközben a CLI ugyanebben a helyzetben látható választ ad.
+      if (!streamed) {
+        writeChunk(result.answer);
+      }
       res.end();
     } catch (error: unknown) {
       // BUKTATÓ: ha már ment ki darab, a státusz és a fejlécek NEM módosíthatók

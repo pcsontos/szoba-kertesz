@@ -207,3 +207,53 @@ describe('POST /api/chat — a szerep PINNELVE (PR #4 review, 1. tétel)', () =>
     expect(ask.mock.calls[0]?.[1]?.role).toBe('customer');
   });
 });
+
+describe('POST /api/chat — a végső válasz és a hiba-fejléc (PR #4 review, 2. és 5. tétel)', () => {
+  /**
+   * 2. tétel: a végpont korábban CSAK a deltákat írta ki, a result.answer-t
+   * eldobta. Ha a loop a lépéslimit miatt szöveg nélkül állt meg, az answer az
+   * agent emptyAnswer-e lett — de delta nem keletkezett, tehát a böngésző ÜRES
+   * buborékot kapott 200-zal. A CLI-ben ugyanez látható választ ad.
+   */
+  it('ha egyetlen delta sem ment ki, a végső answer megy ki (nem üres 200)', async () => {
+    const fallback =
+      'Nem sikerült végső választ adni a megengedett lépésszámon belül (6 kör). Pontosítsd a kérdést.';
+    // Szándékosan NEM hív onTextDelta-t — ez a lépéslimit esete.
+    const ask = vi.fn().mockImplementation(async () => answer(fallback));
+    const url = await start(ask as unknown as AskFn);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [uiMessage('user', 'kérdés')] }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe(fallback);
+  });
+
+  /**
+   * 5. tétel: a res.type('text/plain') a try ELŐTT futott le, az Express
+   * res.json() pedig csak akkor állít tartalomtípust, ha még nincs — így az
+   * 500-as JSON törzs text/plain fejléccel ment ki. A típust ezért csak az
+   * ELSŐ tényleges kiírás előtt állítjuk be.
+   */
+  it('stream ELŐTTI hibánál a válasz application/json, nem text/plain', async () => {
+    const ask = vi.fn().mockImplementation(async () => {
+      // Dob, mielőtt egyetlen delta is kiment volna.
+      throw new Error('API hiba az első körben');
+    });
+    const url = await start(ask as unknown as AskFn);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [uiMessage('user', 'kérdés')] }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get('content-type')).toContain('application/json');
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toContain('API hiba az első körben');
+  });
+});
