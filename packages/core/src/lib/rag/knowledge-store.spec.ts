@@ -87,15 +87,31 @@ describe('knowledge-store', () => {
   });
 
   it('az azonos irányú vektor távolsága gyakorlatilag nulla, a merőlegesé 1', async () => {
-    const hits = await searchChunks(oneHot(0), 100);
-    const own = new Map(
-      hits
-        .filter((hit) => hit.source === TEST_SOURCE)
-        .map((hit) => [hit.chunkIndex, hit.distance] as const),
-    );
+    // A távolságot KÖZVETLENÜL kérdezzük vissza, nem a searchChunks top-K-ján át.
+    // Miért: a betöltött korpusz mellett a szándékosan MERŐLEGES sor (távolság 1.0) a
+    // legtávolabbiak közé esik — a 2041 chunkból 1724 közelebb van nála —, a source-szűrés
+    // pedig az SQL LIMIT UTÁN, JS-ben fut, tehát a sor semmilyen ésszerű K-ba nem férne be.
+    // Így a `<=>` szemantikáját a korpusz méretétől függetlenül mérjük; a searchChunks
+    // rendezését a fenti teszt bizonyítja.
+    const pool = new Pool({ connectionString: process.env['DATABASE_URL'] });
+    try {
+      const result = await pool.query<{ chunk_index: number; distance: string }>(
+        `SELECT chunk_index, embedding <=> $1 AS distance
+           FROM knowledge_chunks
+          WHERE source = $2`,
+        [`[${oneHot(0).join(',')}]`, TEST_SOURCE],
+      );
+      const own = new Map(
+        result.rows.map(
+          (row) => [row.chunk_index, Number(row.distance)] as const,
+        ),
+      );
 
-    expect(own.get(0) ?? 1).toBeLessThan(0.001);
-    expect(own.get(1) ?? 0).toBeCloseTo(1, 3);
+      expect(own.get(0) ?? 1).toBeLessThan(0.001);
+      expect(own.get(1) ?? 0).toBeCloseTo(1, 3);
+    } finally {
+      await pool.end();
+    }
   });
 
   it('a listSources a dokumentumot a darabszámával adja vissza', async () => {

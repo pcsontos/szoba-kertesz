@@ -4,6 +4,7 @@
   "license": "MIT",
   "scripts": {
     "cli": "tsx --conditions=@szoba-kertesz/source apps/cli/src/main.ts",
+    "knowledge:ingest": "tsx --conditions=@szoba-kertesz/source apps/cli/src/ingest-knowledge.ts",
     "szobakertesz": "nx run cli:build && node apps/cli/dist/main.js",
     "szobakertesz:debug": "nx run cli:build:development && node --inspect apps/cli/dist/main.js --show-prompt",
     "serve:api": "nx serve server",
