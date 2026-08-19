@@ -102,6 +102,83 @@ describe('/debug/knowledge', () => {
     expect(retrieve).not.toHaveBeenCalled();
   });
 
+  /**
+   * A `topK` a külvilágból jön, tehát a HATÁRON validálandó (docs/konvenciók.md).
+   * Validálás nélkül `Number('abc')` = NaN, és a `&pipeline=full` úton ez azt
+   * jelentette, hogy a végpont KIFIZET egy HyDE- és egy rerank-hívást, majd a
+   * `slice(0, NaN)` miatt ÜRES listát ad 200-cal. A #6 PR review 3. tétele.
+   */
+  it('érvénytelen topK-ra 400-at ad, és NEM indít fizetős hívást', async () => {
+    const retrieve = vi.fn();
+    const embed = vi.fn();
+    const url = await start({
+      retrieve: retrieve as never,
+      embed: embed as never,
+    });
+
+    const response = await fetch(
+      `${url}/debug/knowledge/chunks?search=monstera&topK=abc&pipeline=full`,
+    );
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(400);
+    expect(body.error).toMatch(/topK/);
+    expect(retrieve).not.toHaveBeenCalled();
+    expect(embed).not.toHaveBeenCalled();
+  });
+
+  it('a 20-as felső korlát fölé menő topK-t sem nyeli le csendben', async () => {
+    const retrieve = vi.fn();
+    const url = await start({ retrieve: retrieve as never });
+
+    const response = await fetch(
+      `${url}/debug/knowledge/chunks?search=monstera&topK=50&pipeline=full`,
+    );
+    const body = (await response.json()) as { error?: string };
+
+    // Korábban 20-ra csonkult (retrieve.ts WIDE_NET), és erről semmi nem szólt.
+    expect(response.status).toBe(400);
+    expect(body.error).toMatch(/1 és 20/);
+    expect(retrieve).not.toHaveBeenCalled();
+  });
+
+  it('érvényes topK-t továbbad a keresésnek', async () => {
+    // A mock a VALÓDI 3-paraméteres... pontosabban 2-paraméteres szignatúrát veszi
+    // fel: enélkül a mock.calls[0] típusa üres tuple, és a [1] indexelés nem fordul
+    // (TS2493) — a Vitest ettől még zölden futna, a typecheck buktatja ki.
+    const search = vi.fn(
+      async (_queryEmbedding: number[], _topK: number) => [],
+    );
+    const url = await start({
+      embed: async () => Array.from({ length: 1536 }, () => 0.1),
+      search: search as never,
+    });
+
+    await fetch(`${url}/debug/knowledge/chunks?search=monstera&topK=3`);
+
+    expect(search.mock.calls[0]?.[1]).toBe(3);
+  });
+
+  it('belső hibából MAGYAR üzenet lesz, nem nyers String(error)', async () => {
+    const url = await start({
+      listSources: async () => {
+        throw new Error('kapcsolat megszakadt');
+      },
+    });
+
+    const response = await fetch(`${url}/debug/knowledge/sources`);
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(500);
+    expect(body.error).toMatch(/Nem sikerült/);
+    expect(body.error).toContain('kapcsolat megszakadt');
+    // Stack trace NEM szivároghat. A puszta 'at ' rossz próba magyar szövegen
+    // ("dokumentumokat listázni" is tartalmazza) — valódi keret-mintát nézünk:
+    // sortörés + behúzás + "at ", illetve forrásfájl-hivatkozás.
+    expect(body.error).not.toMatch(/\n\s+at /);
+    expect(body.error).not.toMatch(/\.(ts|js):\d+/);
+  });
+
   it('a pipeline=full a TELJES retrievalt futtatja, és a hipotetikus választ is megmutatja', async () => {
     const url = await start({
       retrieve: async () => ({

@@ -1,5 +1,7 @@
 import { Router, type Router as ExpressRouter } from 'express';
+import { z } from 'zod';
 import {
+  WIDE_NET,
   embedText,
   listChunks,
   listSources,
@@ -30,6 +32,20 @@ import {
 
 const DEFAULT_CHUNK_LIMIT = 1000;
 const DEFAULT_TOP_K = 5;
+
+// A `topK` a külvilágból jön → a HATÁRON validáljuk (docs/konvenciók.md).
+// Validálás nélkül `Number('abc')` = NaN volt, és a `&pipeline=full` úton ez azt
+// jelentette, hogy a végpont KIFIZET egy HyDE- és egy rerank-hívást, majd a
+// `slice(0, NaN)` miatt ÜRES listát ad 200-cal. A felső korlát a WIDE_NET: a
+// retrieve.ts úgyis ennyit hoz be a vektorkeresésből, tehát a fölötte kért érték
+// korábban CSENDBEN csonkult — most inkább megmondjuk.
+const TopKSchema = z.coerce.number().int().min(1).max(WIDE_NET);
+
+/** A hibából MAGYAR mondat lesz, nem nyers String(error) — stack trace nélkül. */
+function failure(action: string, error: unknown): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  return `Nem sikerült ${action}: ${detail}`;
+}
 
 export interface DebugKnowledgeDeps {
   readonly listSources?: () => Promise<KnowledgeSource[]>;
@@ -86,7 +102,9 @@ export function createDebugKnowledgeRouter(
         })),
       });
     } catch (error: unknown) {
-      res.status(500).json({ error: String(error) });
+      res
+        .status(500)
+        .json({ error: failure('a dokumentumokat listázni', error) });
     }
   });
 
@@ -120,7 +138,9 @@ export function createDebugKnowledgeRouter(
         })),
       });
     } catch (error: unknown) {
-      res.status(500).json({ error: String(error) });
+      res
+        .status(500)
+        .json({ error: failure('a dokumentumot beolvasni', error) });
     }
   });
 
@@ -128,7 +148,16 @@ export function createDebugKnowledgeRouter(
     const query =
       typeof req.query['search'] === 'string' ? req.query['search'] : '';
     const full = req.query['pipeline'] === 'full';
-    const topK = Number(req.query['topK'] ?? DEFAULT_TOP_K);
+
+    // A validálás a FIZETŐS ág ELŐTT fut: rossz topK-ra egyetlen hívás sem indul.
+    const parsedTopK = TopKSchema.safeParse(req.query['topK'] ?? DEFAULT_TOP_K);
+    if (!parsedTopK.success) {
+      res.status(400).json({
+        error: `A topK egész szám kell legyen 1 és ${WIDE_NET} között (kapott: ${String(req.query['topK'])}).`,
+      });
+      return;
+    }
+    const topK = parsedTopK.data;
 
     try {
       // Keresés nélkül: minden chunk kiöntése (limit 1000).
@@ -181,7 +210,7 @@ export function createDebugKnowledgeRouter(
         })),
       });
     } catch (error: unknown) {
-      res.status(500).json({ error: String(error) });
+      res.status(500).json({ error: failure('a keresést lefuttatni', error) });
     }
   });
 
