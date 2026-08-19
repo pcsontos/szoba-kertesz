@@ -94,6 +94,49 @@ describe('rerankHits', () => {
     expect(reranked.every((entry) => entry.score === -1)).toBe(true);
   });
 
+  /**
+   * RÉSZLEGES PONTOZÁS (a #6 PR review 6. tétele). Ha a modell nem pontoz minden
+   * indexet, a nem pontozott találat korábban `?? 0`-t kapott — vagyis a kód azt
+   * SZÍNLELTE, hogy a modell 0-ra értékelte. A kettő nem ugyanaz: a „nem pontozott"
+   * ismeretlen, nem elutasított. Mostantól -1 (ugyanaz a jel, amit a reranker-hiba
+   * ága használ, és amit a Trace „nincs pontszám"-ként kezel), és a vektorsorrend
+   * mögöttük megmarad.
+   */
+  it('a NEM pontozott találat -1-et kap, nem hamis 0-t', async () => {
+    const hits = [
+      hit(0, 'Első', 0.2),
+      hit(1, 'Második', 0.3),
+      hit(2, 'Harmadik', 0.4),
+    ];
+    // A modell CSAK a 2-es indexet pontozza.
+    const model = scoringModel([{ index: 2, score: 7 }]);
+
+    const result = await rerankHits('kérdés', hits, 5, { model });
+
+    expect(result[0]?.title).toBe('Harmadik');
+    expect(result[0]?.score).toBe(7);
+    // A pontozatlanok NEM 0-t kapnak — a Trace így nem ír rájuk hamis "0/10"-et.
+    expect(result[1]?.score).toBe(-1);
+    expect(result[2]?.score).toBe(-1);
+  });
+
+  it('a pontozatlanok között a VEKTORSORREND marad', async () => {
+    const hits = [
+      hit(0, 'Közelebbi', 0.2),
+      hit(1, 'Távolabbi', 0.5),
+      hit(2, 'Pontozott', 0.9),
+    ];
+    const model = scoringModel([{ index: 2, score: 3 }]);
+
+    const result = await rerankHits('kérdés', hits, 5, { model });
+
+    expect(result.map((entry) => entry.title)).toEqual([
+      'Pontozott',
+      'Közelebbi',
+      'Távolabbi',
+    ]);
+  });
+
   it('üres találatlistánál meg sem hívja a modellt', async () => {
     const doGenerate = vi.fn();
     const model = new MockLanguageModelV4({ doGenerate: doGenerate as never });

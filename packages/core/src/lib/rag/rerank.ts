@@ -104,9 +104,26 @@ export async function rerankHits(
       object.scores.map((entry) => [entry.index, entry.score] as const),
     );
 
+    // A NEM pontozott találat -1-et kap, nem 0-t: a „nem pontozott" ISMERETLEN,
+    // nem elutasított — a `?? 0` azt színlelte, hogy a modell 0-ra értékelte.
+    // A -1 ugyanaz a jel, amit a reranker-hiba ága használ, és amit a Trace
+    // „nincs pontszám"-ként kezel (retrieve.ts logHits: score >= 0).
+    // A rendezés a pontozottakat előre viszi; a pontozatlanok között a VEKTORSORREND
+    // marad, mert az Array.sort stabil (ES2019 óta garantált).
     return hits
-      .map((hit, index) => ({ ...hit, score: scoreByIndex.get(index) ?? 0 }))
-      .sort((left, right) => right.score - left.score)
+      .map((hit, index) => ({ ...hit, score: scoreByIndex.get(index) ?? -1 }))
+      .sort((left, right) => {
+        if (left.score < 0 && right.score < 0) {
+          return 0;
+        }
+        if (left.score < 0) {
+          return 1;
+        }
+        if (right.score < 0) {
+          return -1;
+        }
+        return right.score - left.score;
+      })
       .slice(0, keepTop);
   } catch {
     // A reranker kiesett (hálózat, kvóta) — a vektorsorrend így is használható.
