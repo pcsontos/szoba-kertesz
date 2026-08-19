@@ -65,6 +65,48 @@ afterAll(async () => {
   await closeKnowledgePool();
 });
 
+/**
+ * A KÉT POOL SZÉTVÁLASZTÁSA (a #6 PR review 2. tétele). Az olvasás a read-only
+ * szerepen megy, mert azt a VÁSÁRLÓT kiszolgáló, cors()-szal nyitott szerver hívja
+ * minden gondozási kérdésnél; az admin kapcsolatot csak a betöltő szkript igényli.
+ *
+ * A bizonyítás a KÖRNYEZETI VÁLTOZÓ ELVÉTELE: ha az olvasás a readonly URL-hez van
+ * kötve, akkor nélküle PONTOSAN ezzel a magyar üzenettel kell elszállnia — és nem
+ * szabad csendben az admin kapcsolatra visszaesnie. A pool-ok modul-szintű
+ * singletonok, ezért a closeKnowledgePool() nullázza őket a mérés előtt.
+ */
+describe('knowledge-store — melyik kapcsolaton megy az olvasás és az írás', () => {
+  it('a KERESÉS a read-only kapcsolatot igényli, nem esik vissza adminra', async () => {
+    await closeKnowledgePool();
+    const original = process.env['DATABASE_URL_READONLY'];
+    delete process.env['DATABASE_URL_READONLY'];
+    try {
+      await expect(searchChunks(oneHot(0), 1)).rejects.toThrow(
+        /Hiányzó DATABASE_URL_READONLY/,
+      );
+    } finally {
+      process.env['DATABASE_URL_READONLY'] = original;
+      await closeKnowledgePool();
+    }
+  });
+
+  it('a BETÖLTÉS admin kapcsolatot igényel — a read-only URL nem elég hozzá', async () => {
+    await closeKnowledgePool();
+    const original = process.env['DATABASE_URL'];
+    delete process.env['DATABASE_URL'];
+    try {
+      // Üres tömb: a getWritePool() az env hiánya miatt MÁR ELŐBB dob, mint hogy
+      // bármit írna. A clearKnowledge()-ot itt sem hívjuk — az TRUNCATE-elne.
+      await expect(
+        insertChunks([chunk(0, 'nem jut el a DB-ig', oneHot(0))]),
+      ).rejects.toThrow(/Hiányzó DATABASE_URL/);
+    } finally {
+      process.env['DATABASE_URL'] = original;
+      await closeKnowledgePool();
+    }
+  });
+});
+
 describe('knowledge-store', () => {
   it('rossz dimenziójú kérdés-vektorra ÉRTHETŐ hibát dob, nem SQL-hibát', async () => {
     await expect(searchChunks([0.1, 0.2, 0.3], 5)).rejects.toThrow(

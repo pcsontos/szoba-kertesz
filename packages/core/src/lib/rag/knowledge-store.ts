@@ -18,35 +18,75 @@ import { EMBEDDING_DIMENSIONS } from './embed.js';
 // INDEX: kis korpusznál (nálunk ~2000 chunk) a Postgres végigméri az összeset, és ez gyors.
 // Nagy korpusznál kell közelítő index (IVFFlat / HNSW): cserébe a pontosságból enged egy kicsit.
 //
-// KAPCSOLAT: ez a modul az ADMIN kapcsolaton (DATABASE_URL) dolgozik, keresésre és írásra
-// egyaránt — a katalógus (products) szerep-szétválasztása (szoba-kertesz_ro / _rw) a
-// tudásbázisra NEM terjed ki. Tudatos döntés (lásd a plan „Tervezési időben feloldott
-// döntések" 2. pontját). A `loadConfig()`-ot SZÁNDÉKOSAN nem használjuk: az a függvény a
-// DATABASE_URL-t nem ismeri, és ez így is marad.
+// KAPCSOLAT — KÉT POOL, KÉT JOG. A katalógus szerep-szétválasztása (szoba-kertesz_ro / _rw)
+// a tudásbázisra IS érvényes:
+//
+//   OLVASÁS (searchChunks, listSources, listChunks) → DATABASE_URL_READONLY, szoba-kertesz_ro
+//   ÍRÁS    (clearKnowledge, insertChunks)          → DATABASE_URL, admin
+//
+// MIÉRT SZÁMÍT: a keresést a VÁSÁRLÓT kiszolgáló, cors()-szal nyitott szerver hívja minden
+// gondozási kérdésnél — ha az admin poolon menne, a nyilvános végpont admin-jogú kapcsolatot
+// nyitna, ugyanabból a modulból, ahonnan a clearKnowledge() (TRUNCATE) is exportálva van.
+// Az írás így KIZÁRÓLAG a betöltő szkript útja marad (apps/cli/src/ingest-knowledge.ts),
+// és az admin kapcsolatot csak az igényli.
+//
+// A `_ro` szerep azért látja a táblát, mert a <ts>_db_roles migráció
+// `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON TABLES` sora minden később létrehozott táblára
+// érvényes — mérve: SELECT megy, DELETE „permission denied for table knowledge_chunks".
+//
+// A `loadConfig()`-ot SZÁNDÉKOSAN nem használjuk: az a függvény a DATABASE_URL-t nem ismeri,
+// és ez így is marad.
 
 const { Pool } = pg;
 const STATEMENT_TIMEOUT_MS = 10_000;
 
-const EnvSchema = z.object({ DATABASE_URL: z.string().min(1) });
+const ReadEnvSchema = z.object({ DATABASE_URL_READONLY: z.string().min(1) });
+const WriteEnvSchema = z.object({ DATABASE_URL: z.string().min(1) });
 
-let pool: pg.Pool | null = null;
+let readPool: pg.Pool | null = null;
+let writePool: pg.Pool | null = null;
 
-function getPool(): pg.Pool {
-  if (!pool) {
-    const parsed = EnvSchema.safeParse(process.env);
+function createPool(connectionString: string, name: string): pg.Pool {
+  return new Pool({
+    connectionString,
+    statement_timeout: STATEMENT_TIMEOUT_MS,
+    application_name: name,
+    max: 4,
+  });
+}
+
+/** A KERESÉS útja: read-only szerep. Ezt hívja a vásárlót kiszolgáló szerver is. */
+function getReadPool(): pg.Pool {
+  if (!readPool) {
+    const parsed = ReadEnvSchema.safeParse(process.env);
     if (!parsed.success) {
       throw new Error(
-        'Hiányzó DATABASE_URL — a tudásbázis (knowledge_chunks) ezen a kapcsolaton érhető el.',
+        'Hiányzó DATABASE_URL_READONLY — a tudásbázis KERESÉSE ezen a read-only kapcsolaton megy.',
       );
     }
-    pool = new Pool({
-      connectionString: parsed.data.DATABASE_URL,
-      statement_timeout: STATEMENT_TIMEOUT_MS,
-      application_name: 'szoba-kertesz-knowledge',
-      max: 4,
-    });
+    readPool = createPool(
+      parsed.data.DATABASE_URL_READONLY,
+      'szoba-kertesz-knowledge-ro',
+    );
   }
-  return pool;
+  return readPool;
+}
+
+/** A BETÖLTÉS útja: admin. Csak az ingest-knowledge.ts jut el ide. */
+function getWritePool(): pg.Pool {
+  if (!writePool) {
+    const parsed = WriteEnvSchema.safeParse(process.env);
+    if (!parsed.success) {
+      throw new Error(
+        'Hiányzó DATABASE_URL — a tudásbázis BETÖLTÉSE (TRUNCATE + INSERT) admin kapcsolatot igényel.',
+      );
+    }
+    writePool = createPool(
+      parsed.data.DATABASE_URL,
+      'szoba-kertesz-knowledge-rw',
+    );
+  }
+  return writePool;
 }
 
 export interface KnowledgeChunkInput {
@@ -79,7 +119,7 @@ function toVectorLiteral(embedding: number[]): string {
  * FIGYELEM: TRUNCATE. Csak a betöltő szkript hívja (apps/cli/src/ingest-knowledge.ts).
  */
 export async function clearKnowledge(): Promise<void> {
-  await getPool().query('TRUNCATE knowledge_chunks RESTART IDENTITY');
+  await getWritePool().query('TRUNCATE knowledge_chunks RESTART IDENTITY');
 }
 
 /** Chunkok beírása (kötegelten, egyetlen INSERT-tel). */
@@ -104,7 +144,7 @@ export async function insertChunks(
     return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6})`;
   });
 
-  const result = await getPool().query(
+  const result = await getWritePool().query(
     `INSERT INTO knowledge_chunks (source, title, category, chunk_index, content, embedding)
      VALUES ${rows.join(', ')}`,
     values,
@@ -127,7 +167,7 @@ export async function searchChunks(
     );
   }
 
-  const result = await getPool().query(
+  const result = await getReadPool().query(
     `SELECT id, source, title, category, chunk_index, content,
             embedding <=> $1 AS distance
        FROM knowledge_chunks
@@ -157,7 +197,7 @@ export interface KnowledgeSource {
 
 /** Debug: milyen dokumentumok vannak a tudásbázisban, hány darabban. */
 export async function listSources(): Promise<KnowledgeSource[]> {
-  const result = await getPool().query(
+  const result = await getReadPool().query(
     `SELECT source, MIN(title) AS title, MIN(category) AS category,
             COUNT(*)::int AS chunk_count, SUM(LENGTH(content))::int AS total_chars
        FROM knowledge_chunks
@@ -192,7 +232,7 @@ export async function listChunks(
   const params = options.source ? [options.source, limit] : [limit];
   const limitPlaceholder = options.source ? '$2' : '$1';
 
-  const result = await getPool().query(
+  const result = await getReadPool().query(
     `SELECT id, source, title, category, chunk_index, content
        FROM knowledge_chunks
        ${where}
@@ -214,9 +254,10 @@ export async function listChunks(
 
 /** A pool lezárása — a CLI-szkriptek és a tesztek végén, hogy a folyamat ne lógjon. */
 export async function closeKnowledgePool(): Promise<void> {
-  if (pool) {
-    const closing = pool;
-    pool = null;
-    await closing.end();
-  }
+  const closing = [readPool, writePool].filter(
+    (candidate): candidate is pg.Pool => candidate !== null,
+  );
+  readPool = null;
+  writePool = null;
+  await Promise.all(closing.map((candidate) => candidate.end()));
 }
