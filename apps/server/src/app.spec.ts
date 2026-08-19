@@ -257,3 +257,17 @@ describe('POST /api/chat — a végső válasz és a hiba-fejléc (PR #4 review,
     expect(body.error).toContain('API hiba az első körben');
   });
 });
+
+describe('a debug-felület éles környezetben nincs mountolva', () => {
+  it('NODE_ENV=production mellett a /debug/knowledge/sources 404', async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const url = await start(vi.fn() as unknown as AskFn);
+      const response = await fetch(`${url}/debug/knowledge/sources`);
+      expect(response.status).toBe(404);
+    } finally {
+      process.env.NODE_ENV = previous;
+    }
+  });
+});

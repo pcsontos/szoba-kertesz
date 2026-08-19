@@ -7,6 +7,7 @@ import {
   type UIMessage,
 } from 'ai';
 import { askAgent, type AskResult, type UserRole } from '@szoba-kertesz/core';
+import { createDebugKnowledgeRouter } from './debug-knowledge.js';
 
 // app.ts — VÉKONY HTTP-réteg a core agent fölött. A böngészőből érkező kérdés PONTOSAN
 // ugyanazon az úton megy, mint a CLI-ben: askAgent → a közös agent-loop. A @szoba-kertesz/core
@@ -87,6 +88,13 @@ export function createApp(options: CreateAppOptions = {}): Express {
   const app = express();
   app.use(cors());
   app.use(express.json());
+
+  // A RAG debug-felülete. ÉLESBEN NINCS MOUNTOLVA: a `?pipeline=full` kérésenként
+  // egy HyDE- és egy rerank-hívást indít, tehát hitelesítés nélkül fizetős végpont
+  // lenne a nyitott cors() mögött. Ugyanaz a gondolkodás, mint a szerep pinnelésénél.
+  if (process.env.NODE_ENV !== 'production') {
+    app.use('/debug/knowledge', createDebugKnowledgeRouter());
+  }
 
   app.post('/api/chat', async (req: Request, res: Response) => {
     const parsed = ChatRequestSchema.safeParse(req.body);
