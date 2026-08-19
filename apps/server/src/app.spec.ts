@@ -1,7 +1,8 @@
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { streamText } from 'ai';
+import { streamText, tool } from 'ai';
+import { z } from 'zod';
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 import { createApp, type AskFn } from './app.js';
 
@@ -98,6 +99,68 @@ const streamingAsk =
     return answer(parts.join(''));
   };
 
+/**
+ * Fake `ask`, ami TOOL-HÍVÁST is stream-el: első kör tool-call, második kör szöveg.
+ * Ez a PR fő állításának bizonyítéka — hogy a tool-rész ÁTMEGY a HTTP-n, nem csak
+ * a válasz betűi. Mock modellel megy, valódi API-hívás nélkül.
+ */
+const streamingAskWithTool = (): AskFn => async (_question, options) => {
+  let round = 0;
+  const result = streamText({
+    model: new MockLanguageModelV4({
+      doStream: (async () => ({
+        stream: simulateReadableStream({
+          chunks: (round++ === 0
+            ? [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call',
+                  toolCallId: 'c1',
+                  toolName: 'searchKnowledge',
+                  input: JSON.stringify({ question: 'miért sárgul?' }),
+                },
+                {
+                  type: 'finish',
+                  finishReason: { unified: 'tool-calls' },
+                  usage: usage(15, 25),
+                },
+              ]
+            : [
+                { type: 'stream-start', warnings: [] },
+                { type: 'text-start', id: 't1' },
+                { type: 'text-delta', id: 't1', delta: 'A túlöntözés miatt.' },
+                { type: 'text-end', id: 't1' },
+                {
+                  type: 'finish',
+                  finishReason: { unified: 'stop' },
+                  usage: usage(10, 20),
+                },
+              ]) as never,
+          initialDelayInMs: 0,
+          chunkDelayInMs: 0,
+        }),
+      })) as never,
+    }),
+    prompt: 'teszt',
+    tools: {
+      searchKnowledge: tool({
+        description: 'tudásbázis',
+        inputSchema: z.object({ question: z.string() }),
+        execute: async () => '{"results":[{"title":"Yellow Leaves"}]}',
+      }),
+    },
+    stopWhen: () => false,
+  });
+
+  // A cast a TESZT-SZEAMEN van: a streamText itt KONKRÉT toolkészlettel van
+  // paraméterezve, az AskFn.onStream viszont a loop általános
+  // ReturnType<typeof streamText> alakját várja. Produkciós úton ez nem fordul elő.
+  options.onStream?.(result as never);
+  options.onTextDelta?.('A túlöntözés miatt.');
+  await result.finishReason;
+  return answer('A túlöntözés miatt.');
+};
+
 describe('POST /api/chat — streamelve', () => {
   it('az utolsó user-üzenet a kérdés, a többi az előzmény', async () => {
     const ask = vi.fn(streamingAsk('Kész.'));
@@ -138,6 +201,31 @@ describe('POST /api/chat — streamelve', () => {
     // A szöveg DARABONKÉNT megy ki: két külön text-delta rész, nem egy tömb.
     expect(body).toContain('Nyolc ');
     expect(body).toContain('kategória.');
+  });
+
+  /**
+   * EZ A PR FŐ ÁLLÍTÁSA: az üzenet-stream nemcsak a válasz betűit viszi, hanem a
+   * TOOL-HÍVÁST és a TOOL-EREDMÉNYT is — ebből rajzol kártyát a böngésző. Amíg
+   * csak `text-delta`-t ellenőriztünk, ez a garancia teszteletlen volt.
+   */
+  it('a TOOL-részek is átmennek a HTTP-n, nemcsak a szöveg', async () => {
+    const url = await start(streamingAskWithTool());
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [uiMessage('user', 'Miért sárgul?')] }),
+    });
+
+    const body = await response.text();
+
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    // A tool NEVE és mindkét állapota (bemenet kész / eredmény kész) a dróton van.
+    expect(body).toContain('searchKnowledge');
+    expect(body).toContain('tool-input-available');
+    expect(body).toContain('tool-output-available');
+    // És a szöveg is, ugyanabban a streamben.
+    expect(body).toContain('A túlöntözés miatt.');
   });
 
   it('üres vagy user nélküli kérésre 400, az agent hívása nélkül', async () => {
