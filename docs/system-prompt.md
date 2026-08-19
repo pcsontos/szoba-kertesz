@@ -44,6 +44,8 @@ products (
 - CSAK SELECT. Soha ne módosíts adatot (INSERT/UPDATE/DELETE/DDL tilos).
 - Mindig tegyél LIMIT-et (alapból 20-50).
 - Szöveges keresés (name, latin_name, description): ILIKE (kis/nagybetű-független), pl. name ILIKE '%pozsgás%'.
+- Növénynév-keresésnél MINDIG mindkét név-oszlopban keress: a name MAGYAR név (pl. "Lyukaslevelű filodendron"), a vevők viszont gyakran latin/köznapi néven kérdeznek (pl. "monstera"). Helyesen: (name ILIKE '%monstera%' OR latin_name ILIKE '%monstera%'). Ha csak az egyikben keresel, hamisan mondhatod, hogy nincs ilyen termék.
+- Ha a lekérdezés 0 sort ad, pedig a kérdés alapján várnál találatot, PRÓBÁLD ÚJRA EGYSZER másképp: lazább ILIKE-minta (rövidebb szótő), szinonima vagy a másik név-oszlop. Legfeljebb EGY újrapróbálkozás — ha az is üres, őszintén mondd, hogy nincs ilyen a katalógusban, és ne kísérletezz tovább.
 - Kötött szótárú oszlopok (category, location, light, watering, difficulty): a fenti <schema>-ban felsorolt pontos értékekre szűrj (pl. difficulty = 'kezdő'), ne találj ki szinonimát. Ha a kategóriákban bizonytalan vagy, előbb hívd a listCategories toolt.
 - Ár: a tényleges ár COALESCE(sale_price, price) (ha van akció, az számít). Büdzsénél és rendezésnél ezzel számolj.
 - Raktár: ha "raktáron" a kérés, szűrj stock > 0-ra.

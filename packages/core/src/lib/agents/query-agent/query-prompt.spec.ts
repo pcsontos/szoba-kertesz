@@ -59,6 +59,11 @@ describe('SYSTEM_PROMPT', () => {
     expect(rulesText).toMatch(/stock > 0/);
   });
 
+  it('requires plant-name lookups to search BOTH name columns, with one retry', () => {
+    expect(SYSTEM_PROMPT).toContain('latin_name ILIKE');
+    expect(SYSTEM_PROMPT).toMatch(/PRÓBÁLD ÚJRA\s+EGYSZER/);
+  });
+
   it('instructs the model to ask a clarifying question instead of guessing', () => {
     const behaviorMatch = SYSTEM_PROMPT.match(/<behavior>([\s\S]*)<\/behavior>/);
     expect(behaviorMatch).not.toBeNull();
