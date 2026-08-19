@@ -19,7 +19,7 @@ A `packages/core` **framework-független** — nem tud sem a CLI-ről, sem a HTT
 Az ágens **kétféle kérdésre** felel, és tudja, melyikre melyikkel:
 
 - **„Mit árultok?"** → SQL a `products` táblán (`runSql`, `listCategories`).
-- **„Hogyan gondozzam?"** → **tudásbázis-keresés** (`searchKnowledge`): 202 letöltött növénygondozási cikk, alcím-határon darabolva, `pgvector`-ral vektorizálva — 2041 chunk × 1536 dimenzió a `knowledge_chunks` táblában.
+- **„Hogyan gondozzam?"** → **tudásbázis-keresés** (`searchKnowledge`): 202 letöltött növénygondozási cikk a repo gyökerében (`seed/knowledge/`), alcím-határon darabolva, `pgvector`-ral vektorizálva — 2041 chunk × 1536 dimenzió a `knowledge_chunks` táblában. A keresés a **read-only** szerepen megy, a betöltés adminon.
 
 A keresés nem kulcsszó-egyezés, hanem **jelentés-távolság**, és négy lépésből áll: **HyDE** (a modell kitalál egy hipotetikus választ, és azt keressük a kérdés helyett — így a kérdés és a dokumentumok ugyanazon a nyelven „beszélnek"), **embedding** (OpenAI `text-embedding-3-small`), **pgvector top-20** (`<=>` koszinusz-távolság, egyetlen SQL-ben), majd **átrangsorolás** egy kisebb modellel (`claude-haiku-4-5`) — kézzelfogható modell-routing: a drága modell válaszol, az olcsó válogat.
 
@@ -41,7 +41,7 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Minőségi kapuk
 
-217 teszteset 40 spec fájlban (Vitest): `core` 178, `cli` 16, `server` 14, `web` 9. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
+232 teszteset 41 spec fájlban (Vitest): `core` 184, `cli` 16, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
 
 ---
 
@@ -74,8 +74,8 @@ Töltsd ki a `.env`-ben:
 |---|---|
 | `ANTHROPIC_API_KEY` | az agens LLM-hívásaihoz |
 | `ANTHROPIC_MODEL` | pl. `claude-sonnet-4-6` |
-| `DATABASE_URL` | admin/RW kapcsolat (Prisma: séma, migráció, seed) |
-| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt (és kizárólag ezt) használja a query-agent `runSql` / `listCategories` toolja |
+| `DATABASE_URL` | admin/RW kapcsolat (Prisma: séma, migráció, seed) **és a tudásbázis BETÖLTÉSE** (`pnpm knowledge:ingest` — TRUNCATE + INSERT). Futásidőben az ágensek egyike sem használja |
+| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt használja a query-agent `runSql` / `listCategories` toolja **és a tudásbázis KERESÉSE** (`searchKnowledge`). A vásárlót kiszolgáló szerver így sosem nyit admin kapcsolatot |
 | `DATABASE_URL_READWRITE` | RW kapcsolat a `szoba-kertesz_rw` role-lal — kizárólag az ingest-agent `upsertProduct` útja. **Opcionális:** nélküle a kérdés-válasz oldal teljesen működik, csak az `ingest` bukik el, érthető magyar üzenettel |
 | `OPENAI_API_KEY` | a tudásbázis embedding-modelljéhez (`text-embedding-3-small`) — **a projekt egyetlen nem-Anthropic hívása**, mert embedding-modellt az Anthropic nem ad. **Opcionális:** nélküle a katalógus-oldal (CLI, web, `runSql`, `listCategories`) teljesen működik, csak a `searchKnowledge` és a `knowledge:ingest` bukik el, érthető magyar üzenettel. A HyDE-t és az átrangsorolást NEM érinti: azok Claude Haikun futnak |
 | `POSTGRES_DB`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` | a docker-compose konténer admin hitelesítő adatai |

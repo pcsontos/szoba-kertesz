@@ -20,14 +20,20 @@ import { createDebugKnowledgeRouter } from './debug-knowledge.js';
 // DEBUG: az askAgent-et `print: true`-val hívjuk, ezért a SZERVER konzolján ugyanaz a színes,
 // körről körre növekvő trace fut le, mint a CLI-ben. A böngésző csak a választ kapja.
 //
-// KLIENS: a web app a Vercel AI SDK useChat hookját használja (TextStreamChatTransport),
+// KLIENS: a web app a Vercel AI SDK useChat hookját használja (DefaultChatTransport),
 // NEM sima fetch-et. A useChat minden hívásnál a TELJES üzenet-előzményt (UIMessage[])
 // elküldi — ebből vágjuk le az utolsó (új) user-üzenetet kérdésnek, a többit
 // convertToModelMessages-szel alakítjuk az askAgent `history` opciójává, így a
 // beszélgetés a szerveren is folytatódik körről körre.
 //
-// STREAMING: a válasz TOKENENKÉNT megy ki (streamText a core-ban, res.write() itt)
-// sima szövegként (text/plain) — a TextStreamChatTransport ezt olvassa darabonként.
+// STREAMING: a válasz AI SDK ÜZENET-STREAMKÉNT megy ki (text/event-stream), nem sima
+// szövegként. A 05. alkalomban még text/plain ment `res.write()`-tal — a váltás oka NEM
+// a sebesség: egy karakterfolyamba nem fér bele egy TOOL-HÍVÁS. Az üzenet-stream típusos
+// részeket visz (`text` ÉS `tool-runSql` ÉS `tool-searchKnowledge`, bemenettel és
+// eredménnyel együtt), ebből rajzol kártyát a böngésző.
+//
+// HIBA: futás közben keletkező hiba `error` RÉSZKÉNT megy ki, magyar szöveggel
+// (createUIMessageStream onError) — a kliens ezt a useChat `error`-jából jeleníti meg.
 //
 // Az `ask` injektálható: a specek valódi API-hívás nélkül futnak, a produkciós út mégis
 // alapértelmezés. (Ugyanaz a minta, mint az interactive.ts-ben.)
