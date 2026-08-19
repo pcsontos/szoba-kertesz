@@ -8,6 +8,7 @@ out-tsc
 .nx
 packages/db/generated
 logs/
+embed-demo.json
 /tmp/
 
 vitest.config.*.timestamp*

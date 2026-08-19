@@ -40,6 +40,23 @@ export default [
       '**/*.mjs',
     ],
     // Override or add rules here
-    rules: {},
+    rules: {
+      // A `_` prefix a repóban azt jelenti: "szándékosan használatlan"
+      // (`_id`, `_name`, `_input`, `_unused`). Eddig néma volt, de csak
+      // véletlenül: az `args: 'after-used'` alapbeállítás a NEM-utolsó
+      // paramétereket amúgy sem jelzi. Az első utolsó helyen álló ilyen param
+      // (`_keepTop`, retrieve.spec.ts) hozta elő a figyelmeztetést. Mostantól
+      // a prefix KIFEJEZETT kivétel, nem a szabály mellékhatása.
+      // 'error', nem 'warn': ha a `_` prefix kifejezett szerződés, akkor a
+      // megsértése bukjon el a CI lint-lépésén is — warn szinten némán átment.
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+    },
   },
 ];

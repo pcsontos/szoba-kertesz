@@ -1,6 +1,9 @@
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { streamText, tool } from 'ai';
+import { z } from 'zod';
+import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 import { createApp, type AskFn } from './app.js';
 
 /**
@@ -46,12 +49,121 @@ const uiMessage = (role: 'user' | 'assistant', text: string) => ({
   parts: [{ type: 'text', text }],
 });
 
+const usage = (input: number, output: number) => ({
+  inputTokens: { total: input, noCache: input, cacheRead: 0, cacheWrite: 0 },
+  outputTokens: { total: output, text: output, reasoning: 0 },
+  totalTokens: input + output,
+});
+
+/**
+ * Fake `ask`, ami VALÓDI streamText-eredményt ad az onStream-nek (mock modellel,
+ * API-hívás nélkül) — mert a szerver már nem szöveget ír ki, hanem az AI SDK
+ * üzenet-streamjét pipe-olja, és ezt csak igazi stream-alakon lehet bizonyítani.
+ */
+const streamingAsk =
+  (text: string | readonly string[]): AskFn =>
+  async (_question, options) => {
+    const parts = typeof text === 'string' ? [text] : text;
+    const result = streamText({
+      model: new MockLanguageModelV4({
+        doStream: (async () => ({
+          stream: simulateReadableStream({
+            chunks: [
+              { type: 'stream-start', warnings: [] },
+              { type: 'text-start', id: 't1' },
+              ...parts.map((delta) => ({
+                type: 'text-delta',
+                id: 't1',
+                delta,
+              })),
+              { type: 'text-end', id: 't1' },
+              {
+                type: 'finish',
+                finishReason: { unified: 'stop' },
+                usage: usage(10, 20),
+              },
+            ] as never,
+            initialDelayInMs: 0,
+            chunkDelayInMs: 0,
+          }),
+        })) as never,
+      }),
+      prompt: 'teszt',
+    });
+
+    options.onStream?.(result);
+    // A valódi loop az onChunk-ból hívja; a fake itt jelzi, hogy ment ki szöveg.
+    for (const part of parts) {
+      options.onTextDelta?.(part);
+    }
+    return answer(parts.join(''));
+  };
+
+/**
+ * Fake `ask`, ami TOOL-HÍVÁST is stream-el: első kör tool-call, második kör szöveg.
+ * Ez a PR fő állításának bizonyítéka — hogy a tool-rész ÁTMEGY a HTTP-n, nem csak
+ * a válasz betűi. Mock modellel megy, valódi API-hívás nélkül.
+ */
+const streamingAskWithTool = (): AskFn => async (_question, options) => {
+  let round = 0;
+  const result = streamText({
+    model: new MockLanguageModelV4({
+      doStream: (async () => ({
+        stream: simulateReadableStream({
+          chunks: (round++ === 0
+            ? [
+                { type: 'stream-start', warnings: [] },
+                {
+                  type: 'tool-call',
+                  toolCallId: 'c1',
+                  toolName: 'searchKnowledge',
+                  input: JSON.stringify({ question: 'miért sárgul?' }),
+                },
+                {
+                  type: 'finish',
+                  finishReason: { unified: 'tool-calls' },
+                  usage: usage(15, 25),
+                },
+              ]
+            : [
+                { type: 'stream-start', warnings: [] },
+                { type: 'text-start', id: 't1' },
+                { type: 'text-delta', id: 't1', delta: 'A túlöntözés miatt.' },
+                { type: 'text-end', id: 't1' },
+                {
+                  type: 'finish',
+                  finishReason: { unified: 'stop' },
+                  usage: usage(10, 20),
+                },
+              ]) as never,
+          initialDelayInMs: 0,
+          chunkDelayInMs: 0,
+        }),
+      })) as never,
+    }),
+    prompt: 'teszt',
+    tools: {
+      searchKnowledge: tool({
+        description: 'tudásbázis',
+        inputSchema: z.object({ question: z.string() }),
+        execute: async () => '{"results":[{"title":"Yellow Leaves"}]}',
+      }),
+    },
+    stopWhen: () => false,
+  });
+
+  // A cast a TESZT-SZEAMEN van: a streamText itt KONKRÉT toolkészlettel van
+  // paraméterezve, az AskFn.onStream viszont a loop általános
+  // ReturnType<typeof streamText> alakját várja. Produkciós úton ez nem fordul elő.
+  options.onStream?.(result as never);
+  options.onTextDelta?.('A túlöntözés miatt.');
+  await result.finishReason;
+  return answer('A túlöntözés miatt.');
+};
+
 describe('POST /api/chat — streamelve', () => {
   it('az utolsó user-üzenet a kérdés, a többi az előzmény', async () => {
-    const ask = vi.fn().mockImplementation(async (_question, options) => {
-      options.onTextDelta?.('Kész.');
-      return answer('Kész.');
-    });
+    const ask = vi.fn(streamingAsk('Kész.'));
     const url = await start(ask as unknown as AskFn);
 
     const response = await fetch(`${url}/api/chat`, {
@@ -66,20 +178,15 @@ describe('POST /api/chat — streamelve', () => {
       }),
     });
 
-    expect(await response.text()).toBe('Kész.');
+    expect(await response.text()).toContain('Kész.');
     expect(ask.mock.calls[0]?.[0]).toBe('És olcsóbbat?');
     // A korábbi körök az askAgent history-jává alakulnak — enélkül a
     // visszautaló kérdés ("és olcsóbbat?") értelmezhetetlen lenne.
     expect(ask.mock.calls[0]?.[1]?.history).toHaveLength(2);
   });
 
-  it('a válasz DARABONKÉNT megy ki, nem egyben', async () => {
-    const ask = vi.fn().mockImplementation(async (_question, options) => {
-      options.onTextDelta?.('Nyolc ');
-      options.onTextDelta?.('kategória.');
-      return answer('Nyolc kategória.');
-    });
-    const url = await start(ask as unknown as AskFn);
+  it('AI SDK ÜZENET-streamet küld, nem sima szöveget', async () => {
+    const url = await start(streamingAsk(['Nyolc ', 'kategória.']));
 
     const response = await fetch(`${url}/api/chat`, {
       method: 'POST',
@@ -87,8 +194,38 @@ describe('POST /api/chat — streamelve', () => {
       body: JSON.stringify({ messages: [uiMessage('user', 'Kategóriák?')] }),
     });
 
-    expect(response.headers.get('content-type')).toContain('text/plain');
-    expect(await response.text()).toBe('Nyolc kategória.');
+    // A protokoll az, ami a tool-részeket egyáltalán lehetővé teszi.
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    const body = await response.text();
+    expect(body).toContain('text-delta');
+    // A szöveg DARABONKÉNT megy ki: két külön text-delta rész, nem egy tömb.
+    expect(body).toContain('Nyolc ');
+    expect(body).toContain('kategória.');
+  });
+
+  /**
+   * EZ A PR FŐ ÁLLÍTÁSA: az üzenet-stream nemcsak a válasz betűit viszi, hanem a
+   * TOOL-HÍVÁST és a TOOL-EREDMÉNYT is — ebből rajzol kártyát a böngésző. Amíg
+   * csak `text-delta`-t ellenőriztünk, ez a garancia teszteletlen volt.
+   */
+  it('a TOOL-részek is átmennek a HTTP-n, nemcsak a szöveg', async () => {
+    const url = await start(streamingAskWithTool());
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ messages: [uiMessage('user', 'Miért sárgul?')] }),
+    });
+
+    const body = await response.text();
+
+    expect(response.headers.get('content-type')).toContain('text/event-stream');
+    // A tool NEVE és mindkét állapota (bemenet kész / eredmény kész) a dróton van.
+    expect(body).toContain('searchKnowledge');
+    expect(body).toContain('tool-input-available');
+    expect(body).toContain('tool-output-available');
+    // És a szöveg is, ugyanabban a streamben.
+    expect(body).toContain('A túlöntözés miatt.');
   });
 
   it('üres vagy user nélküli kérésre 400, az agent hívása nélkül', async () => {
@@ -105,12 +242,11 @@ describe('POST /api/chat — streamelve', () => {
     expect(ask).not.toHaveBeenCalled();
   });
 
-  it('ha MÁR streamelt, a hibát csak lezárni tudja — nem ír státuszt', async () => {
-    const ask = vi.fn().mockImplementation(async (_question, options) => {
-      options.onTextDelta?.('Elkezdem…');
+  it('futás közbeni hibából MAGYAR hibarész lesz a streamben, nem stack trace', async () => {
+    const failing: AskFn = async () => {
       throw new Error('API hiba a második körben');
-    });
-    const url = await start(ask as unknown as AskFn);
+    };
+    const url = await start(failing);
 
     const response = await fetch(`${url}/api/chat`, {
       method: 'POST',
@@ -118,10 +254,10 @@ describe('POST /api/chat — streamelve', () => {
       body: JSON.stringify({ messages: [uiMessage('user', 'kérdés')] }),
     });
 
-    // A státusz már 200, mert a fejlécek kimentek az első darabbal.
-    // Ez a "Cannot set headers after they are sent" buktató kezelése.
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain('Elkezdem…');
+    const body = await response.text();
+    expect(body).toContain('Az agent futása megszakadt');
+    expect(body).toContain('API hiba a második körben');
+    expect(body).not.toContain('at ');
   });
 });
 
@@ -192,23 +328,23 @@ describe('POST /api/chat — a szerep PINNELVE (PR #4 review, 1. tétel)', () =>
    * EXPLICIT, nem örökölt.
    */
   it('mindig `customer` szereppel hívja az agentet', async () => {
-    const ask = vi.fn().mockImplementation(async (_question, options) => {
-      options.onTextDelta?.('Kész.');
-      return answer('Kész.');
-    });
+    const ask = vi.fn(streamingAsk('Kész.'));
     const url = await start(ask as unknown as AskFn);
 
-    await fetch(`${url}/api/chat`, {
+    const response = await fetch(`${url}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ messages: [uiMessage('user', 'kérdés')] }),
     });
+    // A választ KI KELL olvasni: az üzenet-stream (text/event-stream) addig
+    // nyitva marad, és az afterEach server.close()-a a nyitott socketre várna.
+    await response.text();
 
     expect(ask.mock.calls[0]?.[1]?.role).toBe('customer');
   });
 });
 
-describe('POST /api/chat — a végső válasz és a hiba-fejléc (PR #4 review, 2. és 5. tétel)', () => {
+describe('POST /api/chat — a végső válasz (PR #4 review, 2. tétel)', () => {
   /**
    * 2. tétel: a végpont korábban CSAK a deltákat írta ki, a result.answer-t
    * eldobta. Ha a loop a lépéslimit miatt szöveg nélkül állt meg, az answer az
@@ -218,7 +354,7 @@ describe('POST /api/chat — a végső válasz és a hiba-fejléc (PR #4 review,
   it('ha egyetlen delta sem ment ki, a végső answer megy ki (nem üres 200)', async () => {
     const fallback =
       'Nem sikerült végső választ adni a megengedett lépésszámon belül (6 kör). Pontosítsd a kérdést.';
-    // Szándékosan NEM hív onTextDelta-t — ez a lépéslimit esete.
+    // Szándékosan NEM hív se onStream-et, se onTextDelta-t — ez a lépéslimit esete.
     const ask = vi.fn().mockImplementation(async () => answer(fallback));
     const url = await start(ask as unknown as AskFn);
 
@@ -229,31 +365,20 @@ describe('POST /api/chat — a végső válasz és a hiba-fejléc (PR #4 review,
     });
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toBe(fallback);
+    expect(await response.text()).toContain(fallback);
   });
+});
 
-  /**
-   * 5. tétel: a res.type('text/plain') a try ELŐTT futott le, az Express
-   * res.json() pedig csak akkor állít tartalomtípust, ha még nincs — így az
-   * 500-as JSON törzs text/plain fejléccel ment ki. A típust ezért csak az
-   * ELSŐ tényleges kiírás előtt állítjuk be.
-   */
-  it('stream ELŐTTI hibánál a válasz application/json, nem text/plain', async () => {
-    const ask = vi.fn().mockImplementation(async () => {
-      // Dob, mielőtt egyetlen delta is kiment volna.
-      throw new Error('API hiba az első körben');
-    });
-    const url = await start(ask as unknown as AskFn);
-
-    const response = await fetch(`${url}/api/chat`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ messages: [uiMessage('user', 'kérdés')] }),
-    });
-
-    expect(response.status).toBe(500);
-    expect(response.headers.get('content-type')).toContain('application/json');
-    const body = (await response.json()) as { error?: string };
-    expect(body.error).toContain('API hiba az első körben');
+describe('a debug-felület éles környezetben nincs mountolva', () => {
+  it('NODE_ENV=production mellett a /debug/knowledge/sources 404', async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const url = await start(vi.fn() as unknown as AskFn);
+      const response = await fetch(`${url}/debug/knowledge/sources`);
+      expect(response.status).toBe(404);
+    } finally {
+      process.env.NODE_ENV = previous;
+    }
   });
 });

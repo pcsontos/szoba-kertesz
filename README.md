@@ -6,11 +6,24 @@ Magyar nyelvű AI-ágens szobanövény-katalógushoz: természetes nyelvű kérd
 
 ### Felület — streamelő chat (`apps/web`)
 
-React 19 + a Vercel AI SDK `useChat` hookja (`TextStreamChatTransport`). A válasz **tokenenként** érkezik, markdownként renderelve; „Állj" gombbal megszakítható a futó válasz, és az auto-scroll nem rántja vissza a felhasználót, ha közben felfelé olvas. Tailwind 4, shadcn-stílusú komponensréteg (Radix Slot + `cva` + `tailwind-merge`).
+React 19 + a Vercel AI SDK `useChat` hookja (`DefaultChatTransport`). A válasz **tokenenként** érkezik, markdownként renderelve; „Állj" gombbal megszakítható a futó válasz, és az auto-scroll nem rántja vissza a felhasználót, ha közben felfelé olvas. Tailwind 4, shadcn-stílusú komponensréteg (Radix Slot + `cva` + `tailwind-merge`).
+
+A 06. alkalom óta a chat **azt is megmutatja, MIT csinált** az ágens: a tool-hívások kártyaként jelennek meg a válasz fölött — a tudásbázis-találatok címmel, kattintható forrás-linkkel és színkódolt vektortávolsággal, a katalógus-lekérdezés a ténylegesen lefuttatott SQL-lel. Ezt a korábbi szöveg-stream nem tudta, és nem sebesség kérdése volt: **egy karakterfolyamba nem fér bele egy tool-hívás**. A szerver ezért AI SDK **üzenet-streamet** küld (`text/event-stream`), típusos részekkel.
 
 ### Egy mag, több belépési pont
 
 A `packages/core` **framework-független** — nem tud sem a CLI-ről, sem a HTTP-ről. Az `apps/server` (Express 5, Zod-validálás a kérés határán) vékony réteg fölötte: a böngészőből érkező kérdés pontosan ugyanazt az `askAgent`-et hívja, mint az `apps/cli`. A beszélgetés-előzményt a szerver alakítja át a közös loop `history` opciójává.
+
+### Két tudásforrás — katalógus és tudásbázis (RAG)
+
+Az ágens **kétféle kérdésre** felel, és tudja, melyikre melyikkel:
+
+- **„Mit árultok?"** → SQL a `products` táblán (`runSql`, `listCategories`).
+- **„Hogyan gondozzam?"** → **tudásbázis-keresés** (`searchKnowledge`): 202 letöltött növénygondozási cikk a repo gyökerében (`seed/knowledge/`), alcím-határon darabolva, `pgvector`-ral vektorizálva — 2041 chunk × 1536 dimenzió a `knowledge_chunks` táblában. A keresés a **read-only** szerepen megy, a betöltés adminon.
+
+A keresés nem kulcsszó-egyezés, hanem **jelentés-távolság**, és négy lépésből áll: **HyDE** (a modell kitalál egy hipotetikus választ, és azt keressük a kérdés helyett — így a kérdés és a dokumentumok ugyanazon a nyelven „beszélnek"), **embedding** (OpenAI `text-embedding-3-small`), **pgvector top-20** (`<=>` koszinusz-távolság, egyetlen SQL-ben), majd **átrangsorolás** egy kisebb modellel (`claude-haiku-4-5`) — kézzelfogható modell-routing: a drága modell válaszol, az olcsó válogat.
+
+A system prompt `<grounding>` blokkja kimondja, hogy gondozási kérdésre a modell **nem a saját tudásából** válaszol, hanem a találatokból, forrás-hivatkozással. Ha nincs találat, azt mondja meg — nem talál ki gondozási tanácsot.
 
 ### Multi-agent, szétválasztott adatbázis-jogosultsággal
 
@@ -24,11 +37,11 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Toolok
 
-`runSql` · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `getClientPreferences`
+`runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `getClientPreferences` · `delegateToIngest` (csak adminnál)
 
 ### Minőségi kapuk
 
-162 teszteset 30 spec fájlban (Vitest): `core` 140, `cli` 12, `server` 4, `web` 6. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
+232 teszteset 41 spec fájlban (Vitest): `core` 184, `cli` 16, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
 
 ---
 
@@ -41,6 +54,7 @@ A projekt egy AI-ágensfejlesztés kurzus keretében készül: a mérföldkövek
 - Node LTS (fejlesztés alatt: v25.x), [pnpm](https://pnpm.io/) 11.x
 - Docker (helyi Postgres-hez, pl. OrbStack)
 - Anthropic API kulcs
+- OpenAI API kulcs — **opcionális**, csak a tudásbázishoz (embedding); nélküle a katalógus-oldal teljesen működik
 
 ## Telepítés
 
@@ -60,9 +74,10 @@ Töltsd ki a `.env`-ben:
 |---|---|
 | `ANTHROPIC_API_KEY` | az agens LLM-hívásaihoz |
 | `ANTHROPIC_MODEL` | pl. `claude-sonnet-4-6` |
-| `DATABASE_URL` | admin/RW kapcsolat (Prisma: séma, migráció, seed) |
-| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt (és kizárólag ezt) használja a query-agent `runSql` / `listCategories` toolja |
+| `DATABASE_URL` | admin/RW kapcsolat (Prisma: séma, migráció, seed) **és a tudásbázis BETÖLTÉSE** (`pnpm knowledge:ingest` — TRUNCATE + INSERT). Futásidőben az ágensek egyike sem használja |
+| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt használja a query-agent `runSql` / `listCategories` toolja **és a tudásbázis KERESÉSE** (`searchKnowledge`). A vásárlót kiszolgáló szerver így sosem nyit admin kapcsolatot |
 | `DATABASE_URL_READWRITE` | RW kapcsolat a `szoba-kertesz_rw` role-lal — kizárólag az ingest-agent `upsertProduct` útja. **Opcionális:** nélküle a kérdés-válasz oldal teljesen működik, csak az `ingest` bukik el, érthető magyar üzenettel |
+| `OPENAI_API_KEY` | a tudásbázis embedding-modelljéhez (`text-embedding-3-small`) — **a projekt egyetlen nem-Anthropic hívása**, mert embedding-modellt az Anthropic nem ad. **Opcionális:** nélküle a katalógus-oldal (CLI, web, `runSql`, `listCategories`) teljesen működik, csak a `searchKnowledge` és a `knowledge:ingest` bukik el, érthető magyar üzenettel. A HyDE-t és az átrangsorolást NEM érinti: azok Claude Haikun futnak |
 | `POSTGRES_DB`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` | a docker-compose konténer admin hitelesítő adatai |
 
 A webes felület a `VITE_API_URL` változóból veszi a szerver címét (alapértelmezés: `http://localhost:3000`); helyi fejlesztéshez nem kell beállítani.
@@ -85,6 +100,14 @@ pnpm exec prisma migrate deploy
 pnpm exec prisma db seed
 ```
 
+A **tudásbázis** (202 gondozási cikk → 2041 vektorizált chunk) külön lépés, mert valódi OpenAI-hívásokat indít:
+
+```bash
+pnpm knowledge:ingest
+```
+
+Teljes újraépítés (TRUNCATE + újratöltés), nem inkrementális — kis korpusznál ez a helyes stratégia. `OPENAI_API_KEY` kell hozzá; enélkül a katalógus-oldal ettől függetlenül működik.
+
 ## Build és futtatás
 
 ### Webes felület
@@ -96,7 +119,18 @@ pnpm serve:api    # Express — http://localhost:3000/api/chat
 pnpm serve:web    # Vite    — http://localhost:4200
 ```
 
-Nyisd meg a `http://localhost:4200` címet. A szerver konzolján közben ugyanaz a színes, körről körre növekvő ágens-trace fut, mint a CLI-ben — a böngésző csak a választ kapja.
+Nyisd meg a `http://localhost:4200` címet. A szerver konzolján közben ugyanaz a színes, körről körre növekvő ágens-trace fut, mint a CLI-ben; a böngésző a válasz mellé a **tool-lépéseket** is megkapja (üzenet-stream), és kártyaként jeleníti meg őket.
+
+A RAG-hoz **debug-végpontok** is tartoznak (élesben nincsenek mountolva):
+
+```bash
+curl -s localhost:3000/debug/knowledge/sources           # milyen dokumentumok, hány darabban — CSAK DB, ingyenes
+curl -s localhost:3000/debug/knowledge/sources/<id>      # egy dokumentum a chunkjaival és a teljes szöveggel
+curl -s "localhost:3000/debug/knowledge/chunks?search=sárgul"                 # nyers vektorkeresés (1 embedding-hívás)
+curl -s "localhost:3000/debug/knowledge/chunks?search=sárgul&pipeline=full"   # HyDE + rerank is (fizetős)
+```
+
+Ezek azért vannak, hogy a RAG két fele **külön legyen hibáztatható**: a RETRIEVAL (mit talált) és a GENERÁLÁS (mit mond). Ha rossz a válasz, előbb ide nézz — a RAG-hibák többsége retrieval-hiba.
 
 ### CLI
 
@@ -188,6 +222,14 @@ Minden futás **két, egymástól független nyomot** hagy — egyik sem helyett
 - `logs/<timestamp>.json` + `logs/agent.log` — az élő, színes Trace körökre bontott nyoma, illetve a folyamatos watch-log (`tail -f`-hez).
 
 Egy **admin-delegálás két bejegyzést** ír ugyanabba a `.jsonl` fájlba, két soron: egyet a külső query-futásról, egyet a beágyazott ingest-futásról. Ez szándékos — az a futás valóban elköltött tokeneket.
+
+### Embedding-szemléltető
+
+```bash
+pnpm embed:demo
+```
+
+14 mondat valódi embeddingje és a koszinusz-távolság-mátrixuk az `embed-demo.json`-be (gitignore-olt; semmilyen kód nem függ tőle). Ez teszi kézzelfoghatóvá, mit jelent a „jelentés-távolság": az angol szinonimapárok **0,21–0,23**-on állnak, a magyar–angol jelentéspárok **0,57–0,58**-on, a témában idegen bolti szöveg **0,88–0,91**-en. Vagyis a nyelv maga is erős jel a vektortérben — és pontosan ezt a szakadékot hidalja át a HyDE angol nyelvű hipotetikus válasza.
 
 ## Fejlesztés
 

@@ -3,10 +3,15 @@ import cors from 'cors';
 import { z } from 'zod';
 import {
   convertToModelMessages,
+  createUIMessageStream,
+  pipeUIMessageStreamToResponse,
+  streamText,
+  toUIMessageStream,
   type ModelMessage,
   type UIMessage,
 } from 'ai';
 import { askAgent, type AskResult, type UserRole } from '@szoba-kertesz/core';
+import { createDebugKnowledgeRouter } from './debug-knowledge.js';
 
 // app.ts — VÉKONY HTTP-réteg a core agent fölött. A böngészőből érkező kérdés PONTOSAN
 // ugyanazon az úton megy, mint a CLI-ben: askAgent → a közös agent-loop. A @szoba-kertesz/core
@@ -15,14 +20,20 @@ import { askAgent, type AskResult, type UserRole } from '@szoba-kertesz/core';
 // DEBUG: az askAgent-et `print: true`-val hívjuk, ezért a SZERVER konzolján ugyanaz a színes,
 // körről körre növekvő trace fut le, mint a CLI-ben. A böngésző csak a választ kapja.
 //
-// KLIENS: a web app a Vercel AI SDK useChat hookját használja (TextStreamChatTransport),
+// KLIENS: a web app a Vercel AI SDK useChat hookját használja (DefaultChatTransport),
 // NEM sima fetch-et. A useChat minden hívásnál a TELJES üzenet-előzményt (UIMessage[])
 // elküldi — ebből vágjuk le az utolsó (új) user-üzenetet kérdésnek, a többit
 // convertToModelMessages-szel alakítjuk az askAgent `history` opciójává, így a
 // beszélgetés a szerveren is folytatódik körről körre.
 //
-// STREAMING: a válasz TOKENENKÉNT megy ki (streamText a core-ban, res.write() itt)
-// sima szövegként (text/plain) — a TextStreamChatTransport ezt olvassa darabonként.
+// STREAMING: a válasz AI SDK ÜZENET-STREAMKÉNT megy ki (text/event-stream), nem sima
+// szövegként. A 05. alkalomban még text/plain ment `res.write()`-tal — a váltás oka NEM
+// a sebesség: egy karakterfolyamba nem fér bele egy TOOL-HÍVÁS. Az üzenet-stream típusos
+// részeket visz (`text` ÉS `tool-runSql` ÉS `tool-searchKnowledge`, bemenettel és
+// eredménnyel együtt), ebből rajzol kártyát a böngésző.
+//
+// HIBA: futás közben keletkező hiba `error` RÉSZKÉNT megy ki, magyar szöveggel
+// (createUIMessageStream onError) — a kliens ezt a useChat `error`-jából jeleníti meg.
 //
 // Az `ask` injektálható: a specek valódi API-hívás nélkül futnak, a produkciós út mégis
 // alapértelmezés. (Ugyanaz a minta, mint az interactive.ts-ben.)
@@ -34,6 +45,12 @@ export type AskFn = (
     role?: UserRole;
     history?: readonly ModelMessage[];
     onTextDelta?: (delta: string) => void;
+    // A típus a `streamText` visszatérési értékéből SZÁRMAZTATVA, nem kézzel
+    // kiírva: a `StreamTextResult` típusparamétereinek száma SDK-verzióval
+    // változik (ai@7.0.66-ban három van), a `ReturnType` viszont mindig az
+    // marad, amit a core loopja ténylegesen átad. Ugyanez az idióma áll az
+    // agent-loop.ts-ben is, a `result` változón.
+    onStream?: (result: ReturnType<typeof streamText>) => void;
   },
 ) => Promise<AskResult>;
 
@@ -88,6 +105,13 @@ export function createApp(options: CreateAppOptions = {}): Express {
   app.use(cors());
   app.use(express.json());
 
+  // A RAG debug-felülete. ÉLESBEN NINCS MOUNTOLVA: a `?pipeline=full` kérésenként
+  // egy HyDE- és egy rerank-hívást indít, tehát hitelesítés nélkül fizetős végpont
+  // lenne a nyitott cors() mögött. Ugyanaz a gondolkodás, mint a szerep pinnelésénél.
+  if (process.env.NODE_ENV !== 'production') {
+    app.use('/debug/knowledge', createDebugKnowledgeRouter());
+  }
+
   app.post('/api/chat', async (req: Request, res: Response) => {
     const parsed = ChatRequestSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -109,62 +133,67 @@ export function createApp(options: CreateAppOptions = {}): Express {
       return;
     }
 
-    // A tartalomtípust SZÁNDÉKOSAN csak az első tényleges kiírás előtt állítjuk
-    // be. Korábban itt, a try előtt futott le — az Express `res.json()` viszont
-    // csak akkor állít típust, ha még nincs, így a hibaág 500-as JSON törzse
-    // `text/plain` fejléccel ment ki.
-    let streamed = false;
-    const writeChunk = (chunk: string): void => {
-      if (!streamed) {
-        res.type('text/plain');
-        streamed = true;
-      }
-      res.write(chunk);
-    };
-
     try {
-      // A korábbi körök (a useChat mindig a teljes előzményt küldi) → history.
-      // A validált üzenetek átadása az SDK-nak. A `unknown`-on át vezetett cast
-      // itt SZÁNDÉKOS és a lehető legszűkebb: a UIMessage `parts` mezője
-      // diszkriminált unió (minden résztípusnak saját kötelező mezői vannak),
-      // amivel egy szándékosan laza séma sosem fog strukturálisan egyezni.
+      // ÜZENET-stream, nem szöveg-stream. A böngésző így nemcsak a válasz betűit kapja meg,
+      // hanem a TOOL-HÍVÁSOKAT és a TOOL-EREDMÉNYEKET is, típusos részekként
+      // (`tool-runSql`, `tool-searchKnowledge`) — ebből rajzol kártyát a kliens.
       //
-      // Amit a séma GARANTÁL, mielőtt idáig eljutunk: `messages` nem üres, minden
-      // elemnek van érvényes `role`-ja és `parts` TÖMBJE, a text-részeknek pedig
-      // string `text`-je. Ez pontosan az, amire a kód támaszkodik.
-      // Amit NEM garantál: hogy egy ismeretlen résztípust az SDK fel tud
-      // dolgozni — ez a hívás ezért a try-blokkon BELÜL van, így egy ilyen
-      // bemenet magyar 500-at ad, nem HTML stack trace-t.
-      // Az `await` NEM elhagyható: a convertToModelMessages ebben az
-      // SDK-verzióban Promise-t ad vissza (mérve — enélkül a `history` egy
-      // Promise objektum lenne, és a spec `toHaveLength(2)` állítása bukik).
-      const history = await convertToModelMessages(
-        uiMessages.slice(0, -1) as unknown as UIMessage[],
-      );
+      // Miért createUIMessageStream, és nem a rövidebb result.pipeUIMessageStreamToResponse?
+      // Mert a #4-es review 2. tétele (üres futás is válaszol) csak így marad meg: a writerrel
+      // a stream lezárása ELŐTT be tudjuk írni az agent emptyAnswer-ét. A rövidebb úton a
+      // válasz már lezárult volna, mire kiderül, hogy egy delta sem ment ki. (Az a metódus
+      // ráadásul deprecated is: az SDK maga a standalone helpereket ajánlja a result.stream-mel.)
+      let sawText = false;
 
-      const result = await ask(question, {
-        print: true,
-        // A SZEREP PINNELVE, nem örökölt. Enélkül a modul-szintű CURRENT_ROLE
-        // dönt — miközben a user-role.ts fejkommentje épp azt ajánlja demóhoz,
-        // hogy azt a konstanst írd át `admin`-ra. Nyitott cors() mellett a
-        // hitelesítés nélküli végpont így admin-képessé válna (delegateToIngest
-        // → írás a szoba-kertesz_rw szerepen). A szerver SOSEM vesz szerepet a
-        // kérésből, és nem is örököl: itt mondjuk ki.
-        role: 'customer',
-        history,
-        onTextDelta: (delta: string) => {
-          writeChunk(delta);
+      const stream = createUIMessageStream({
+        execute: async ({ writer }) => {
+          // A korábbi körök (a useChat mindig a teljes előzményt küldi) → history.
+          // A validált üzenetek átadása az SDK-nak. A `unknown`-on át vezetett cast
+          // itt SZÁNDÉKOS és a lehető legszűkebb: a UIMessage `parts` mezője
+          // diszkriminált unió, amivel egy szándékosan laza séma sosem fog
+          // strukturálisan egyezni.
+          // Az `await` NEM elhagyható: a convertToModelMessages ebben az
+          // SDK-verzióban Promise-t ad vissza.
+          const history = await convertToModelMessages(
+            uiMessages.slice(0, -1) as unknown as UIMessage[],
+          );
+
+          const result = await ask(question, {
+            print: true,
+            // A SZEREP PINNELVE, nem örökölt. Enélkül a modul-szintű CURRENT_ROLE
+            // dönt — miközben a user-role.ts fejkommentje épp azt ajánlja demóhoz,
+            // hogy azt a konstanst írd át `admin`-ra. Nyitott cors() mellett a
+            // hitelesítés nélküli végpont így admin-képessé válna (delegateToIngest
+            // → írás a szoba-kertesz_rw szerepen). A szerver SOSEM vesz szerepet a
+            // kérésből, és nem is örököl: itt mondjuk ki.
+            role: 'customer',
+            history,
+            // Csak JELZŐ: ment-e ki egyáltalán szöveg. A tokeneket az üzenet-stream viszi.
+            onTextDelta: () => {
+              sawText = true;
+            },
+            onStream: (streamResult) => {
+              writer.merge(toUIMessageStream({ stream: streamResult.stream }));
+            },
+          });
+
+          if (!sawText) {
+            // A loop szöveg nélkül állt meg (pl. kimerült a lépéskeret): a végső answer
+            // az agent emptyAnswer-e. Enélkül a böngésző ÜRES buborékot kapna 200-zal,
+            // miközben a CLI ugyanebben a helyzetben látható választ ad.
+            const id = 'fallback';
+            writer.write({ type: 'text-start', id });
+            writer.write({ type: 'text-delta', id, delta: result.answer });
+            writer.write({ type: 'text-end', id });
+          }
         },
+        // Az SDK alapértelmezése ELREJTI a hiba szövegét ("An error occurred."). Nekünk a
+        // magyar, beszédes üzenet kell — ugyanaz, ami eddig az 500-as JSON törzsében ment.
+        onError: (error: unknown) =>
+          `Az agent futása megszakadt: ${error instanceof Error ? error.message : String(error)}`,
       });
 
-      // Ha a loop szöveg nélkül állt meg (pl. kimerült a lépéskeret), delta sem
-      // keletkezett — ilyenkor a végső `answer` megy ki, ami az agent
-      // `emptyAnswer`-e. Enélkül a böngésző ÜRES buborékot kapna 200-zal,
-      // miközben a CLI ugyanebben a helyzetben látható választ ad.
-      if (!streamed) {
-        writeChunk(result.answer);
-      }
-      res.end();
+      await pipeUIMessageStreamToResponse({ response: res, stream });
     } catch (error: unknown) {
       // BUKTATÓ: ha már ment ki darab, a státusz és a fejlécek NEM módosíthatók
       // ("Cannot set headers after they are sent") — ilyenkor csak lezárni lehet.

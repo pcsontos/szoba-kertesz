@@ -9,7 +9,7 @@ import {
 import { createAnthropic, type AnthropicProvider } from '@ai-sdk/anthropic';
 import { loadConfig, type Config } from '../config.js';
 import type { ToolOutcome, ToolReporter } from '../tools/tool-outcome.js';
-import { Trace } from '../trace.js';
+import { setQuiet, Trace } from '../trace.js';
 import {
   logInteraction,
   type LogEntryInput,
@@ -103,6 +103,17 @@ export interface AskOptions {
    * (a stream akkor is lefut, csak nem jelentünk róla).
    */
   readonly onTextDelta?: (delta: string) => void;
+  /**
+   * ÜZENET-csatorna: a hívó megkapja a `streamText` eredményét, és abból az AI SDK
+   * üzenet-streamjét (text ÉS tool-részek) továbbíthatja — ettől tud a böngésző
+   * kártyát rajzolni a tool-eredményből (lásd apps/server/src/app.ts).
+   *
+   * Ha meg van adva, a stream FOGYASZTÁSA a hívó dolga: mi nem hívunk
+   * `consumeStream()`-et, csak megvárjuk a stream végét. A Trace és a JSONL-napló
+   * ettől függetlenül fut — a `prepareStep` / `onStepEnd` hookokat az SDK hívja,
+   * ahogy az `onChunk`-ot (és rajta az `onTextDelta`-t) is.
+   */
+  readonly onStream?: (result: ReturnType<typeof streamText>) => void;
 }
 
 export interface AskResult {
@@ -148,11 +159,17 @@ export async function runAgentLoop(
   const log = options.log ?? logInteraction;
   const systemPrompt = agent.systemPrompt;
 
+  const print = options.print ?? true;
+  // A `traceLog` MODUL-SZINTŰ (a Trace `print`-je csak per-példány), és a RAG-nyomot
+  // a retrieve.ts azon keresztül írja. `--quiet` alatt tehát a konzolra ömlött volna,
+  // pedig a `--quiet` szerződése a néma konzol. A watch-log ettől függetlenül megtelik.
+  setQuiet(!print);
+
   const trace = new Trace({
     question: trimmed,
     model: config.anthropicModel,
     systemPrompt,
-    print: options.print ?? true,
+    print,
     persist: options.persistTrace ?? true,
   });
 
@@ -297,10 +314,17 @@ export async function runAgentLoop(
       },
     });
 
-    // A streamet EL KELL fogyasztani — ez pörgeti a loopot körről körre.
-    await result.consumeStream();
+    if (options.onStream) {
+      // A hívó fogyasztja a streamet (ő továbbítja a böngészőnek). MEGVÁRJUK a végét:
+      // az onError-ban elkapott hiba és a körök usage-e csak azután van a helyén.
+      options.onStream(result);
+      await result.finishReason;
+    } else {
+      // A streamet EL KELL fogyasztani — ez pörgeti a loopot körről körre.
+      await result.consumeStream();
+    }
   } catch (error: unknown) {
-    return finishInterrupted(error);
+    return finishInterrupted(streamError ?? error);
   }
 
   if (streamError !== null) {

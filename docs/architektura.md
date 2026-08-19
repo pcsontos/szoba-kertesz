@@ -7,7 +7,7 @@
 ```
 szoba-kertesz/
 ├── packages/core   agent-logika — lásd a bontást lentebb
-├── packages/db     Prisma lib (séma, migráció, kliens, seed) — NEM a gyökérben
+├── packages/db     Prisma lib (séma, migráció, kliens, seed + a tudásbázis korpusza) — NEM a gyökérben
 ├── apps/cli        CLI (ask + ingest parancs + interaktív mód)
 ├── apps/server     Express-réteg a core fölött (POST /api/chat, streamelve)
 ├── apps/web        Vite + React chat (useChat, streamelve)
@@ -32,7 +32,15 @@ packages/core/src/lib/
 │   ├── get-client-preferences/  tool (nem SQL-alapú)
 │   ├── upsert-product/      Zod-séma + read-write kapcsolat + AZ EGYETLEN írási út
 │   ├── fetch-feed/          Shopify-feed motor + tool-héj
+│   ├── search-knowledge/    RAG-keresés a gondozási tudásbázisban
 │   └── delegate-to-ingest/  az ingest-agent TOOL-ként (csak adminnál)
+├── rag/                     A TUDÁSBÁZIS, a pipeline sorrendjében:
+│   ├── chunk.ts             markdown darabolása alcím-határon, átfedéssel
+│   ├── embed.ts             szöveg → 1536 szám (az EGYETLEN nem-Anthropic hívás)
+│   ├── knowledge-store.ts   a vektorkeresés EGY SQL-ben (pgvector, <=>)
+│   ├── hyde.ts              hipotetikus válasz ANGOLUL — ezt keressük a kérdés helyett
+│   ├── rerank.ts            a top-20 átrangsorolása kis modellel (Haiku)
+│   └── retrieve.ts          a pipeline összekötve, lépésenként láthatóan
 ├── user-role/               KI beszél az agenttel (customer | admin)
 ├── trace.ts / logger.ts     a két, egymást kiegészítő nyom
 └── config.ts                a környezet validálása (fail-fast)
@@ -46,6 +54,8 @@ Ami mappa, az egy példány (agent vagy tool); ami fájl a szinten, az a közös
 
 1. **Framework-agnostic core.** A `packages/core` nem ismeri a belépési pontokat (CLI/API/web). Új felület = új app, nem újraírás. Az 05. alkalom óta **három** belépési pont hajtja ugyanazt az egy loopot (CLI, HTTP, böngésző), és ez az invariáns BIZONYÍTÉKA: a `core`-ba egyetlen szerver-specifikus sor sem került, a `apps/server` csak lefordítja a HTTP-kérést `askAgent`-hívássá.
 2. **Három DB-kapcsolat, három jog** (04. alkalom óta; korábban kettő volt). A query-agent `runSql`-je READ-ONLY kapcsolaton fut (`DATABASE_URL_READONLY`, `szoba-kertesz_ro`), csak SELECT. Az ingest-agent írása SAJÁT, szűkített szerepen megy (`DATABASE_URL_READWRITE`, `szoba-kertesz_rw`): SELECT/INSERT/UPDATE a `products`-on, **DELETE és DDL nélkül**. A Prisma az admin kapcsolaton (`DATABASE_URL`) viszi a sémát, migrációt, seedet. Egyik agent sem Prismán kérdez, és a query-agent az író toolokat nem is látja.
+
+   **A 06. alkalomtól a tudásbázis is EBBE a rendbe illeszkedik** (`rag/knowledge-store.ts`, két pool egy fájlban): a **keresés** (`searchChunks` / `listSources` / `listChunks`) a `DATABASE_URL_READONLY`-n, a **betöltés** (`clearKnowledge` / `insertChunks`) a `DATABASE_URL`-en megy. Ez azért számít, mert a keresést a VÁSÁRLÓT kiszolgáló, `cors()`-szal nyitott szerver hívja minden gondozási kérdésnél — admin poolon minden kérés admin-jogú kapcsolatot nyitna, ráadásul ugyanabból a modulból, ahonnan a `clearKnowledge()` (TRUNCATE) is exportálva van. Admin kapcsolatot így már csak a betöltő szkript igényel. A `szoba-kertesz_ro` szerep azért látja a táblát, mert a `<ts>_db_roles` migráció `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON TABLES` sora minden később létrehozott táblára érvényes — mérve: SELECT megy, DELETE `permission denied`. Két spec rögzíti, melyik út melyik változóhoz kötődik.
 3. **Egy agent = prompt + toolok + loop.** A loop KÖZÖS (`agents/agent-loop.ts`), az agentek csak abban különböznek, hogy mit adnak be neki (system prompt, toolkészlet, kör-limit, token-keret). Új agent = új könyvtár az `agents/` alatt, nem új loop. Az 05. alkalomtól ehhez két dolog jött: (a) **a szerep képességet kapcsol** — adminnál a `delegateToIngest` bekerül a query-agent toolkészletébe, vásárlónál nincs ott, tehát a modell nem is tud róla; ez erősebb, mint egy promptban kimondott tiltás. A `role` szándékosan a query-agent saját opció-típusán él, nem az `AskOptions`-ön: a közös loop nem tudja, melyik agentet futtatja, tehát szerepekről sem tudhat. (b) **Egy agent lehet egy másik agent TOOLJA** — a `delegateToIngest` a külső loop szemszögéből ugyanolyan tool, mint a `runSql`, belül viszont egy teljes második loop fut saját prompttal, toolkészlettel és DB-joggal. Soha nem dob (a belső hibából a modellnek olvasható szöveg lesz), és **saját** JSONL-sort ír: egy admin-delegálásból két naplóbejegyzés lesz, szándékosan, mert az a futás valóban elköltött tokeneket.
 4. **A loop az AI SDK-n fut, de a mechanika látható marad** (04. alkalom, tudatos váltás). A 2–3. órán ugyanez KÉZZEL íródott a nyers Anthropic SDK fölé — ez adja a megértés alapját, és ettől olvasható a framework: a `for`-ciklus → `stopWhen: isStepCount(n)`, az `executeTool` switch → a toolok saját `execute`-ja, a kézi üzenet-fűzés → az SDK. A transzparencia a `prepareStep` / `onStepEnd` hookokon marad (ugyanaz a Trace, ugyanaz a JSONL). Az 05. alkalomtól `generateText` helyett **`streamText`**, EGY úton: ha nincs `onTextDelta`, akkor is elfogyasztjuk a streamet — két ág néma elcsúszást okozna. A tesztek mockjai ezért `doStream`-et szolgálnak ki, provider-szintű darabokkal.
 5. **Egyetlen írási út, és a kulcsot a DB őrzi.** A katalógust kizárólag az `upsertProduct` tool módosíthatja (szigorú Zod a határon, paraméterezett SQL, kódban rögzített oszlop-lista, latin névre kulcsolt upsert). Nyers write-SQL nincs a kódbázisban — a védelem **háromszintű**: tool-réteg, Postgres-szerepkör, és a `lower(latin_name)` unique index. Az upsert EGYETLEN atomi utasítás (`INSERT … ON CONFLICT … DO UPDATE`): amíg SELECT → INSERT/UPDATE volt, két egyidejű upsert ugyanarra a névre két sort hozott létre, mert mindkét SELECT üresen tért vissza. A „latin név a kulcs" invariáns azóta ott él, ahol a többi határ is: az adatbázisban, nem a promptban és nem a kódban.

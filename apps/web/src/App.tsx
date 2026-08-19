@@ -1,21 +1,31 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { TextStreamChatTransport } from 'ai';
+import { DefaultChatTransport } from 'ai';
 import Markdown from 'react-markdown';
+import { ToolCard } from './components/tool-card.js';
 import { Button } from './components/ui/button.js';
 import { Input } from './components/ui/input.js';
 import { isNearBottom } from './lib/scroll.js';
 
-// App.tsx — a chat MOST MÁR streamel. A useChat a TextStreamChatTransport-tal
-// nyers szöveg-folyamot olvas (text/plain), és minden darabbal újrarendereli az
-// utolsó üzenetet: a válasz szavanként épül fel, nem egyben ugrik be.
+// App.tsx — a chat streamel, és MOST MÁR a tool-lépéseket is mutatja.
 // A hook minden küldésnél a TELJES előzményt átküldi — a szerver ebből csinál
 // history-t, így a visszautaló kérdés ("és olcsóbbat?") is működik.
+//
+// KÉT PROTOKOLL — ezt érdemes megérteni:
+//
+//   TextStreamChatTransport (EDDIG): a szerver sima szöveget (text/plain) küld. Streamel, de a
+//     `message.parts`-ban CSAK `text` rész van. A tool-hívásokról a böngésző nem tud semmit —
+//     nem azért, mert lassú a stream, hanem mert egy karakterfolyamba nem fér bele egy tool-hívás.
+//
+//   DefaultChatTransport (MOST): a szerver az AI SDK ÜZENET-streamjét küldi. Ugyanúgy streamel,
+//     de TÍPUSOS részeket: `text` ÉS `tool-runSql` ÉS `tool-searchKnowledge` (input + output).
+//     Ezért tudunk kártyát rajzolni a tool-eredményből — lásd components/tool-card.tsx.
 //
 // Három UX quick win, mert streamelés közben mindhárom hiánya azonnal feltűnik:
 //   markdown       — az agent felsorolást ír; nyersen a "- " karakterek látszanának
 //   okos scroll    — stream közben csak akkor görgetünk, ha a felhasználó alul van
 //   Állj gomb      — egy hosszú válasz megszakítható
+//   hiba-sáv       — a szerver magyar hibaüzenete LÁTSZIK (a useChat `error`-ja)
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -29,8 +39,8 @@ const textOf = (message: {
 
 export function App() {
   const [input, setInput] = useState('');
-  const { messages, sendMessage, status, stop } = useChat({
-    transport: new TextStreamChatTransport({ api: `${API_URL}/api/chat` }),
+  const { messages, sendMessage, status, stop, error } = useChat({
+    transport: new DefaultChatTransport({ api: `${API_URL}/api/chat` }),
   });
 
   const streaming = status === 'streaming' || status === 'submitted';
@@ -89,8 +99,24 @@ export function App() {
             }
           >
             {message.role === 'assistant' ? (
-              <div className="prose-sm space-y-2 [&_li]:ml-4 [&_li]:list-disc">
-                <Markdown>{textOf(message)}</Markdown>
+              <div className="space-y-1">
+                {/* ELŐSZÖR a tool-lépések (mit csinált), UTÁNA a válasz (mit mond). */}
+                {message.parts
+                  .filter((part) => part.type.startsWith('tool-'))
+                  .map((part, index) => (
+                    <ToolCard
+                      key={`${message.id}-tool-${index}`}
+                      toolName={part.type.replace('tool-', '')}
+                      state={(part as { state: string }).state}
+                      input={(part as { input?: unknown }).input}
+                      output={(part as { output?: unknown }).output}
+                    />
+                  ))}
+                {textOf(message) !== '' && (
+                  <div className="prose-sm space-y-2 [&_li]:ml-4 [&_li]:list-disc">
+                    <Markdown>{textOf(message)}</Markdown>
+                  </div>
+                )}
               </div>
             ) : (
               textOf(message)
@@ -98,6 +124,19 @@ export function App() {
           </div>
         ))}
       </div>
+
+      {/* A HIBA LÁTHATÓ. A szerver a futásidejű hibát `error` RÉSZKÉNT küldi, magyar
+          szöveggel (app.ts onError) — a useChat ezt az `error`-ba teszi, nem üzenetbe.
+          Amíg ezt senki nem rendereltük, a felhasználó SEMMIT nem látott: ha a hiba az
+          első delta előtt jött, a status visszaállt `ready`-re, buborék nélkül. */}
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
+        >
+          {error.message}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="flex gap-2">
         <Input

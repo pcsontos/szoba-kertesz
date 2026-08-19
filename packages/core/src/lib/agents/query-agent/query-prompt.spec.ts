@@ -59,6 +59,11 @@ describe('SYSTEM_PROMPT', () => {
     expect(rulesText).toMatch(/stock > 0/);
   });
 
+  it('requires plant-name lookups to search BOTH name columns, with one retry', () => {
+    expect(SYSTEM_PROMPT).toContain('latin_name ILIKE');
+    expect(SYSTEM_PROMPT).toMatch(/PRÓBÁLD ÚJRA\s+EGYSZER/);
+  });
+
   it('instructs the model to ask a clarifying question instead of guessing', () => {
     const behaviorMatch = SYSTEM_PROMPT.match(/<behavior>([\s\S]*)<\/behavior>/);
     expect(behaviorMatch).not.toBeNull();
@@ -113,6 +118,18 @@ describe('SYSTEM_PROMPT', () => {
     expect(examplesText).toMatch(/SELECT/);
     expect(examplesText).toMatch(/ORDER BY/);
     expect(examplesText).toMatch(/listCategories\(\)/);
+  });
+
+  it('has a <grounding> section that forbids answering from the model own knowledge', () => {
+    expect(SYSTEM_PROMPT).toMatch(/<grounding>[\s\S]*<\/grounding>/);
+    expect(SYSTEM_PROMPT).toContain('nincs hozzáférésed');
+    expect(SYSTEM_PROMPT).toContain('Erről nincs információm a tudásbázisban.');
+  });
+
+  it('teaches WHICH tool to use for care questions vs catalog facts', () => {
+    const toolsMatch = SYSTEM_PROMPT.match(/<tools>([\s\S]*)<\/tools>/);
+    expect(toolsMatch?.[1]).toContain('searchKnowledge(question)');
+    expect(SYSTEM_PROMPT).toContain('SZÖVEGES TUDÁS');
   });
 });
 

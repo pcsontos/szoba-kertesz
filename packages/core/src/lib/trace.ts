@@ -67,11 +67,25 @@ function appendWatch(s: string): void {
   }
 }
 
+// ── Konzol-némítás (`--quiet`). ─────────────────────────────────────────────
+// A Trace `print` flagje PER-PÉLDÁNY, a `traceLog` viszont modul-szintű: a RAG-nyomot
+// (retrieve.ts) az utóbbi írja, ezért `--quiet` alatt is a konzolra ömlött — pedig a
+// `--quiet` szerződése épp az, hogy a konzol néma. A watch-log EZUTÁN IS megtelik:
+// `--quiet` szándékosan csak a konzol-felét némítja, a nyomot nem.
+let quiet = false;
+
+/** A konzolra írás némítása (`--quiet`). A watch-logot NEM érinti. */
+export function setQuiet(value: boolean): void {
+  quiet = value;
+}
+
 /** Saját log-sor a konzolba ÉS a watch-logba — bárhonnan hívható a kódból. A nyers
  *  console.log-gal szemben ez a `tail -f` control roomban is megjelenik. */
 export function traceLog(text: string): void {
   const line = c.magenta('● ') + c.white(text);
-  process.stdout.write(line + '\n');
+  if (!quiet) {
+    process.stdout.write(line + '\n');
+  }
   appendWatch(line);
 }
 

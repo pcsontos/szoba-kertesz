@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { Trace, setWatchLog, traceLog } from './trace.js';
+import { Trace, setQuiet, setWatchLog, traceLog } from './trace.js';
 
 // AI SDK 7 alakok: a Trace az `onStepEnd` lezárt köreit és a `prepareStep`
 // kimenő üzeneteit kapja, nem az Anthropic SDK válasz-objektumát.
@@ -143,6 +143,45 @@ describe('Trace', () => {
       setWatchLog(null);
       writeSpy.mockRestore();
       rmSync(file, { force: true });
+    }
+  });
+
+  /**
+   * A `--quiet` szerződése: NÉMA KONZOL, de a nyom megmarad. A RAG-lépéseket a
+   * retrieve.ts a modul-szintű `traceLog`-gal írja, amit a Trace per-példány
+   * `print` flagje nem ért el — `--quiet` alatt is a konzolra ömlött (a #6 PR
+   * review 4. tétele). A `setQuiet` ezt zárja le, a watch-logot nem érintve.
+   */
+  it('setQuiet(true) esetén a traceLog NEM ír a konzolra — de a watch-logba igen', () => {
+    const file = join(tmpdir(), `szobakertesz-quiet-${process.pid}.log`);
+    const writeSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true);
+    try {
+      setWatchLog(file);
+      setQuiet(true);
+      traceLog('néma sor');
+
+      expect(writeSpy).not.toHaveBeenCalled();
+      expect(readFileSync(file, 'utf8')).toContain('néma sor');
+    } finally {
+      setQuiet(false);
+      setWatchLog(null);
+      writeSpy.mockRestore();
+      rmSync(file, { force: true });
+    }
+  });
+
+  it('setQuiet(false) után a traceLog újra ír a konzolra', () => {
+    const writeSpy = vi
+      .spyOn(process.stdout, 'write')
+      .mockImplementation(() => true);
+    try {
+      setQuiet(false);
+      traceLog('hangos sor');
+      expect(writeSpy).toHaveBeenCalled();
+    } finally {
+      writeSpy.mockRestore();
     }
   });
 });
