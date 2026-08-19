@@ -9,7 +9,7 @@ import {
 import { createAnthropic, type AnthropicProvider } from '@ai-sdk/anthropic';
 import { loadConfig, type Config } from '../config.js';
 import type { ToolOutcome, ToolReporter } from '../tools/tool-outcome.js';
-import { Trace } from '../trace.js';
+import { setQuiet, Trace } from '../trace.js';
 import {
   logInteraction,
   type LogEntryInput,
@@ -159,11 +159,17 @@ export async function runAgentLoop(
   const log = options.log ?? logInteraction;
   const systemPrompt = agent.systemPrompt;
 
+  const print = options.print ?? true;
+  // A `traceLog` MODUL-SZINTŰ (a Trace `print`-je csak per-példány), és a RAG-nyomot
+  // a retrieve.ts azon keresztül írja. `--quiet` alatt tehát a konzolra ömlött volna,
+  // pedig a `--quiet` szerződése a néma konzol. A watch-log ettől függetlenül megtelik.
+  setQuiet(!print);
+
   const trace = new Trace({
     question: trimmed,
     model: config.anthropicModel,
     systemPrompt,
-    print: options.print ?? true,
+    print,
     persist: options.persistTrace ?? true,
   });
 
