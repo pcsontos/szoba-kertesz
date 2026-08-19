@@ -47,8 +47,10 @@ export default [
       // paramétereket amúgy sem jelzi. Az első utolsó helyen álló ilyen param
       // (`_keepTop`, retrieve.spec.ts) hozta elő a figyelmeztetést. Mostantól
       // a prefix KIFEJEZETT kivétel, nem a szabály mellékhatása.
+      // 'error', nem 'warn': ha a `_` prefix kifejezett szerződés, akkor a
+      // megsértése bukjon el a CI lint-lépésén is — warn szinten némán átment.
       '@typescript-eslint/no-unused-vars': [
-        'warn',
+        'error',
         {
           argsIgnorePattern: '^_',
           varsIgnorePattern: '^_',

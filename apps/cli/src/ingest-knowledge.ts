@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import {
   chunkMarkdown,
   clearKnowledge,
@@ -38,7 +38,29 @@ try {
   }
 }
 
-const KNOWLEDGE_DIR = join(process.cwd(), 'seed', 'knowledge');
+// A korpusz a repo GYÖKERÉBEN van (seed/knowledge/). A `process.cwd()`-hez kötve
+// más könyvtárból indítva ENOENT-tel szállt volna el, `import.meta.url`-hez kötve
+// pedig nem fordul: a CLI CJS-re buildel (esbuild format: cjs), ott az import.meta
+// tilos. Ezért FELFELÉ KERESSÜK a gyökeret — így a repo bármely alkönyvtárából megy.
+function findKnowledgeDir(): string {
+  let dir = process.cwd();
+  for (;;) {
+    const candidate = join(dir, 'seed', 'knowledge');
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      throw new Error(
+        'Nem találom a korpuszt: a seed/knowledge könyvtár sehol nincs meg a jelenlegi ' +
+          'könyvtár fölött. A parancsot a repón BELÜLRŐL kell futtatni (pnpm knowledge:ingest).',
+      );
+    }
+    dir = parent;
+  }
+}
+
+const KNOWLEDGE_DIR = findKnowledgeDir();
 const EMBED_BATCH_SIZE = 100; // ennyi darabot embeddelünk egy API-hívásban
 
 async function main(): Promise<void> {
@@ -89,6 +111,15 @@ async function main(): Promise<void> {
   for (let index = 0; index < pending.length; index += EMBED_BATCH_SIZE) {
     const batch = pending.slice(index, index + EMBED_BATCH_SIZE);
     const embeddings = await embedBatch(batch.map((chunk) => chunk.content));
+    // FAIL-FAST a `as number[]` cast helyett: ha az embedding-hívás kevesebb
+    // vektort ad vissza, a hiba korábban a toVectorLiteral join(',')-jánál
+    // csapódott le, értelmezhetetlen üzenettel. Itt még megmondható, mi történt.
+    if (embeddings.length !== batch.length) {
+      throw new Error(
+        `Az embedding-hívás ${embeddings.length} vektort adott ${batch.length} darabra — ` +
+          'a kettőnek egyeznie kell. A betöltés megszakadt, a tudásbázis félkész.',
+      );
+    }
     const rows: KnowledgeChunkInput[] = batch.map((chunk, position) => ({
       ...chunk,
       embedding: embeddings[position] as number[],
