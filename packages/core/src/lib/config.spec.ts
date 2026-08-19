@@ -62,6 +62,7 @@ describe('loadConfig', () => {
       'anthropicModel',
       'databaseUrlReadWrite',
       'databaseUrlReadonly',
+      'openaiApiKey',
     ]);
   });
 
@@ -85,5 +86,23 @@ describe('loadConfig', () => {
     expect(withoutRw.databaseUrlReadWrite).toBeUndefined();
     // Az admin-kapcsolat egyik ágon sem szivárog be.
     expect(withRw).not.toHaveProperty('databaseUrl');
+  });
+  it('az OPENAI_API_KEY hiánya NEM buktatja el a configot (a RAG opcionális)', () => {
+    // A tudásbázis (RAG) embedding-útja az EGYETLEN nem-Anthropic hívás, és
+    // opcionális: kulcs nélkül a katalógus-oldal hiánytalanul megy, csak a
+    // searchKnowledge bukik — ott, ahol tényleg számít (embed.ts).
+    const withKey = loadConfig({
+      ANTHROPIC_API_KEY: 'sk-ant-test-key',
+      DATABASE_URL_READONLY: READONLY_URL,
+      OPENAI_API_KEY: 'sk-proj-test-key',
+    });
+    const withoutKey = loadConfig({
+      ANTHROPIC_API_KEY: 'sk-ant-test-key',
+      DATABASE_URL_READONLY: READONLY_URL,
+    });
+
+    expect(withKey.openaiApiKey).toEqual('sk-proj-test-key');
+    expect(withoutKey.openaiApiKey).toBeUndefined();
+    expect(withoutKey.anthropicApiKey).toEqual('sk-ant-test-key');
   });
 });

@@ -8,6 +8,10 @@ const EnvSchema = z.object({
   // ezért OPCIONÁLIS: aki csak kérdezni akar, ne bukjon el a hiányán.
   // A hiányát a db-readwrite.ts jelzi, fail-fast, érthető magyar üzenettel.
   DATABASE_URL_READWRITE: z.string().min(1).optional(),
+  // Csak a tudásbázis (RAG) embedding-útjához kell — a katalógus-oldal enélkül is
+  // teljesen működik, ezért OPCIONÁLIS, ugyanúgy, mint a READWRITE kapcsolat.
+  // A hiányát az embed.ts jelzi, fail-fast, érthető magyar üzenettel.
+  OPENAI_API_KEY: z.string().min(1).optional(),
 });
 
 export interface Config {
@@ -15,6 +19,7 @@ export interface Config {
   readonly anthropicModel: string;
   readonly databaseUrlReadonly: string;
   readonly databaseUrlReadWrite?: string;
+  readonly openaiApiKey?: string;
 }
 
 /**
@@ -55,5 +60,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     anthropicModel: parsed.data.ANTHROPIC_MODEL,
     databaseUrlReadonly: parsed.data.DATABASE_URL_READONLY,
     databaseUrlReadWrite: parsed.data.DATABASE_URL_READWRITE,
+    openaiApiKey: parsed.data.OPENAI_API_KEY,
   };
 }
