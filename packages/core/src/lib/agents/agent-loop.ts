@@ -103,6 +103,17 @@ export interface AskOptions {
    * (a stream akkor is lefut, csak nem jelentünk róla).
    */
   readonly onTextDelta?: (delta: string) => void;
+  /**
+   * ÜZENET-csatorna: a hívó megkapja a `streamText` eredményét, és abból az AI SDK
+   * üzenet-streamjét (text ÉS tool-részek) továbbíthatja — ettől tud a böngésző
+   * kártyát rajzolni a tool-eredményből (lásd apps/server/src/app.ts).
+   *
+   * Ha meg van adva, a stream FOGYASZTÁSA a hívó dolga: mi nem hívunk
+   * `consumeStream()`-et, csak megvárjuk a stream végét. A Trace és a JSONL-napló
+   * ettől függetlenül fut — a `prepareStep` / `onStepEnd` hookokat az SDK hívja,
+   * ahogy az `onChunk`-ot (és rajta az `onTextDelta`-t) is.
+   */
+  readonly onStream?: (result: ReturnType<typeof streamText>) => void;
 }
 
 export interface AskResult {
@@ -297,10 +308,17 @@ export async function runAgentLoop(
       },
     });
 
-    // A streamet EL KELL fogyasztani — ez pörgeti a loopot körről körre.
-    await result.consumeStream();
+    if (options.onStream) {
+      // A hívó fogyasztja a streamet (ő továbbítja a böngészőnek). MEGVÁRJUK a végét:
+      // az onError-ban elkapott hiba és a körök usage-e csak azután van a helyén.
+      options.onStream(result);
+      await result.finishReason;
+    } else {
+      // A streamet EL KELL fogyasztani — ez pörgeti a loopot körről körre.
+      await result.consumeStream();
+    }
   } catch (error: unknown) {
-    return finishInterrupted(error);
+    return finishInterrupted(streamError ?? error);
   }
 
   if (streamError !== null) {

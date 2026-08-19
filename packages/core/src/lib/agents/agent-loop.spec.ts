@@ -435,3 +435,41 @@ describe('askAgent — AI SDK 7 loop', () => {
     expect(entry?.toolSteps).toHaveLength(1);
   });
 });
+
+describe('onStream — az ÜZENET-csatorna', () => {
+  it('a hívó kapja meg a stream eredményét, és a válasz ugyanaz marad', async () => {
+    const { model } = mockModel(textStepChunks('Nyolc kategória.'));
+    let handedOver = false;
+
+    const result = await askAgent('kérdés', {
+      ...baseDeps,
+      model,
+      onStream: (streamResult) => {
+        handedOver = true;
+        // A hívó dolga a fogyasztás — élesben ezt a szerver teszi a válaszba pipe-olva.
+        void streamResult.consumeStream();
+      },
+    });
+
+    expect(handedOver).toBe(true);
+    expect(result.answer).toBe('Nyolc kategória.');
+    expect(result.usage.inputTokens).toBeGreaterThan(0);
+  });
+
+  it('onStream MELLETT is lefut az onTextDelta — erre épül a szerver tartalék-válasza', async () => {
+    const { model } = mockModel(textStepChunks('Kész.'));
+    const deltas: string[] = [];
+
+    await askAgent('kérdés', {
+      ...baseDeps,
+      model,
+      onStream: (streamResult) => {
+        void streamResult.consumeStream();
+      },
+      onTextDelta: (delta) => deltas.push(delta),
+    });
+
+    // Az onChunk hookot az SDK hívja a stream feldolgozásakor — mindegy, KI olvassa.
+    expect(deltas.join('')).toBe('Kész.');
+  });
+});
