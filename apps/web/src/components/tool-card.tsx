@@ -123,7 +123,14 @@ function KnowledgeCard({
 
 function SqlCard({ input, output }: { input: unknown; output: unknown }) {
   const query = (input as { query?: string } | null)?.query;
-  const parsed = parseOutput<{ rowCount: number }>(output);
+  // A runSql `content`-je a SOROK TÖMBJE (JSON.stringify(result.rows) a
+  // run-sql-tool.ts-ben), NEM `{ rowCount }` objektum. Amíg itt objektumot
+  // vártunk, a kártyán „sor" állt szám nélkül — a Task 17 élő ellenőrzése
+  // hozta elő. A tömb-ág az igazi út; az objektum-ág csak védőháló.
+  const parsed = parseOutput<unknown>(output);
+  const rowCount = Array.isArray(parsed)
+    ? parsed.length
+    : (parsed as { rowCount?: number } | null)?.rowCount;
 
   return (
     <div className="mt-2 space-y-1">
@@ -132,7 +139,9 @@ function SqlCard({ input, output }: { input: unknown; output: unknown }) {
           {query}
         </pre>
       )}
-      {parsed && <p className="text-neutral-500">{parsed.rowCount} sor</p>}
+      {typeof rowCount === 'number' && (
+        <p className="text-neutral-500">{rowCount} sor</p>
+      )}
     </div>
   );
 }
