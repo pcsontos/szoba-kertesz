@@ -116,7 +116,7 @@ describe('askAgent — AI SDK 7 loop', () => {
     expect(log).toHaveBeenCalledTimes(1);
   });
 
-  it('mindhárom toolt felkínálja a modellnek', async () => {
+  it('mind a NÉGY toolt felkínálja a modellnek', async () => {
     let seenTools: string[] = [];
     const model = new MockLanguageModelV4({
       doStream: (async (options: { tools?: { name: string }[] }) => {
@@ -132,11 +132,12 @@ describe('askAgent — AI SDK 7 loop', () => {
     });
 
     // Saját kiegészítés #1: a listCategories ott van a toolkészletben — a
-    // kurzusnál csak kettő tool van, nálunk három.
+    // kurzusnál csak kettő tool van, nálunk a searchKnowledge-dzsel együtt négy.
     expect(seenTools).toEqual([
       'runSql',
       'listCategories',
       'getClientPreferences',
+      'searchKnowledge',
     ]);
   });
 

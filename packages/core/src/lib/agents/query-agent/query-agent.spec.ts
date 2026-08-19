@@ -58,15 +58,20 @@ const baseDeps = {
 };
 
 describe('askAgent — szerep szerinti toolkészlet', () => {
-  it('vásárlóként HÁROM tool megy ki, delegateToIngest NÉLKÜL', async () => {
+  it('vásárlóként NÉGY tool megy ki, delegateToIngest NÉLKÜL', async () => {
     const { model, seen } = toolNameProbe();
 
     await askAgent('kérdés', { ...baseDeps, model, role: 'customer' });
 
-    expect(seen).toEqual(['runSql', 'listCategories', 'getClientPreferences']);
+    expect(seen).toEqual([
+      'runSql',
+      'listCategories',
+      'getClientPreferences',
+      'searchKnowledge',
+    ]);
   });
 
-  it('adminként NÉGY tool megy ki, a delegateToIngest-tel', async () => {
+  it('adminként ÖT tool megy ki, a delegateToIngest-tel', async () => {
     const { model, seen } = toolNameProbe();
 
     await askAgent('kérdés', { ...baseDeps, model, role: 'admin' });
@@ -75,6 +80,7 @@ describe('askAgent — szerep szerinti toolkészlet', () => {
       'runSql',
       'listCategories',
       'getClientPreferences',
+      'searchKnowledge',
       'delegateToIngest',
     ]);
   });
@@ -85,5 +91,24 @@ describe('askAgent — szerep szerinti toolkészlet', () => {
     await askAgent('kérdés', { ...baseDeps, model });
 
     expect(seen).not.toContain('delegateToIngest');
+  });
+
+  it('a searchKnowledge MINDKÉT szerepnél ott van — a tudásbázis nem admin-képesség', async () => {
+    const customer = toolNameProbe();
+    await askAgent('kérdés', {
+      ...baseDeps,
+      model: customer.model,
+      role: 'customer',
+    });
+
+    const admin = toolNameProbe();
+    await askAgent('kérdés', {
+      ...baseDeps,
+      model: admin.model,
+      role: 'admin',
+    });
+
+    expect(customer.seen).toContain('searchKnowledge');
+    expect(admin.seen).toContain('searchKnowledge');
   });
 });

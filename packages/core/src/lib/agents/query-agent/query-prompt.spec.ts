@@ -114,6 +114,18 @@ describe('SYSTEM_PROMPT', () => {
     expect(examplesText).toMatch(/ORDER BY/);
     expect(examplesText).toMatch(/listCategories\(\)/);
   });
+
+  it('has a <grounding> section that forbids answering from the model own knowledge', () => {
+    expect(SYSTEM_PROMPT).toMatch(/<grounding>[\s\S]*<\/grounding>/);
+    expect(SYSTEM_PROMPT).toContain('nincs hozzáférésed');
+    expect(SYSTEM_PROMPT).toContain('Erről nincs információm a tudásbázisban.');
+  });
+
+  it('teaches WHICH tool to use for care questions vs catalog facts', () => {
+    const toolsMatch = SYSTEM_PROMPT.match(/<tools>([\s\S]*)<\/tools>/);
+    expect(toolsMatch?.[1]).toContain('searchKnowledge(question)');
+    expect(SYSTEM_PROMPT).toContain('SZÖVEGES TUDÁS');
+  });
 });
 
 describe('buildQueryPrompt — szerep szerint', () => {

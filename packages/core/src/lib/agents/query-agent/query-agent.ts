@@ -4,6 +4,7 @@ import { runAgentLoop, type AskOptions, type AskResult } from '../agent-loop.js'
 import { runSqlTool } from '../../tools/run-sql/run-sql-tool.js';
 import { listCategoriesTool } from '../../tools/list-categories/list-categories-tool.js';
 import { getClientPreferencesTool } from '../../tools/get-client-preferences/get-client-preferences-tool.js';
+import { searchKnowledgeTool } from '../../tools/search-knowledge/search-knowledge-tool.js';
 import { delegateToIngestTool } from '../../tools/delegate-to-ingest/delegate-to-ingest-tool.js';
 import {
   CURRENT_ROLE,
@@ -14,8 +15,8 @@ import {
 // query-agent.ts — a KÉRDÉS-VÁLASZ agent (a termék "ask" oldala). READ-ONLY: természetes
 // nyelvű kérdésből SQL-t ír, lefuttatja, magyarul válaszol. Egy agent = prompt + toolok + loop:
 //   prompt:  query-prompt.ts (szerep, séma, SQL-szabályok)
-//   toolok:  runSql (read-only SELECT) + listCategories + getClientPreferences,
-//            adminként PLUSZ delegateToIngest (a másik agent, tool-ként)
+//   toolok:  runSql (read-only SELECT) + listCategories + getClientPreferences +
+//            searchKnowledge (tudásbázis), adminként PLUSZ delegateToIngest
 //   loop:    a közös agent-loop (../agent-loop.ts)
 //
 // Ez a minta ismétlődik minden további agentnél: a fájl NEM tartalmaz loop-logikát,
@@ -67,6 +68,9 @@ export async function askAgent(
         runSql: runSqlTool(report),
         listCategories: listCategoriesTool(report),
         getClientPreferences: getClientPreferencesTool(report),
+        // A MÁSIK tudásforrás: a katalógus TÉNYEI mellé a cikkek TUDÁSA. Hogy melyiket
+        // hívja, azt nem mi döntjük el — a modell dönt, a tool leírása alapján.
+        searchKnowledge: searchKnowledgeTool(report),
         // A KÉPESSÉG-KAPCSOLÁS: adminnál a kulcs bekerül az objektumba,
         // vásárlónál a spread üresen terül szét — a modell nem is tudja,
         // hogy létezik ez a tool. Ez erősebb, mint egy prompt-tiltás.
