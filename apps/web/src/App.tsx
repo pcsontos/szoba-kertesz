@@ -25,6 +25,7 @@ import { isNearBottom } from './lib/scroll.js';
 //   markdown       — az agent felsorolást ír; nyersen a "- " karakterek látszanának
 //   okos scroll    — stream közben csak akkor görgetünk, ha a felhasználó alul van
 //   Állj gomb      — egy hosszú válasz megszakítható
+//   hiba-sáv       — a szerver magyar hibaüzenete LÁTSZIK (a useChat `error`-ja)
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
@@ -38,7 +39,7 @@ const textOf = (message: {
 
 export function App() {
   const [input, setInput] = useState('');
-  const { messages, sendMessage, status, stop } = useChat({
+  const { messages, sendMessage, status, stop, error } = useChat({
     transport: new DefaultChatTransport({ api: `${API_URL}/api/chat` }),
   });
 
@@ -123,6 +124,19 @@ export function App() {
           </div>
         ))}
       </div>
+
+      {/* A HIBA LÁTHATÓ. A szerver a futásidejű hibát `error` RÉSZKÉNT küldi, magyar
+          szöveggel (app.ts onError) — a useChat ezt az `error`-ba teszi, nem üzenetbe.
+          Amíg ezt senki nem rendereltük, a felhasználó SEMMIT nem látott: ha a hiba az
+          első delta előtt jött, a status visszaállt `ready`-re, buborék nélkül. */}
+      {error && (
+        <p
+          role="alert"
+          className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800"
+        >
+          {error.message}
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="flex gap-2">
         <Input
