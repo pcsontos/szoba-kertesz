@@ -19,6 +19,7 @@ export * from './lib/agents/ingest-agent/ingest-prompt.js';
 
 export * from './lib/rag/chunk.js';
 export * from './lib/rag/embed.js';
+export * from './lib/rag/knowledge-store.js';
 
 export * from './lib/tools/tool-outcome.js';
 export * from './lib/tools/run-sql/run-sql-tool.js';
