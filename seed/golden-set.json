@@ -1,0 +1,58 @@
+[
+  {
+    "id": "sargulo-level",
+    "question": "Miért sárgulnak a szobanövényem levelei?",
+    "language": "hu",
+    "kind": "thematic",
+    "why": "A leggyakoribb gondozási kérdés. Sok cikk érinti, tehát a RETRIEVAL bősége a kihívás, nem a hiánya."
+  },
+  {
+    "id": "kigyonoveny-ontozes",
+    "question": "Milyen gyakran öntözzem a kígyónövényt?",
+    "language": "hu",
+    "kind": "thematic",
+    "why": "A CÍMSOR-ÚTVONAL próbája: 23 cikkben van '## Water' szakasz, és a növény neve egyikben sincs benne. Ha valahol, itt kell javulnia a találatnak."
+  },
+  {
+    "id": "tulontozott-monstera",
+    "question": "Túlöntöztem a monsterámat, mit tegyek?",
+    "language": "hu",
+    "kind": "thematic",
+    "why": "A RERANK próbája: a 'monstera öntözése' chunk vektorban közel van, de a valódi válasz a gyökérrothadásról szóló szakaszban van, ami más szavakkal beszél ugyanarról."
+  },
+  {
+    "id": "sotet-furdoszoba",
+    "question": "Milyen növény bírja a sötét fürdőszobát?",
+    "language": "hu",
+    "kind": "thematic",
+    "why": "Két tudásforrás határa: a fény- és páraigény a cikkekben van, a konkrét termék a katalógusban. A retrieval-mérés csak a cikk-oldalt nézi."
+  },
+  {
+    "id": "atulteteshez-fold",
+    "question": "Milyen földet használjak átültetéskor?",
+    "language": "hu",
+    "kind": "thematic",
+    "why": "Több cikk '## Soil' szakasza felel rá (23 cikkben van ilyen). A HyDE-nak itt kell eldöntenie, melyik kontextusban kérdezünk."
+  },
+  {
+    "id": "yellow-leaves-en",
+    "question": "why are the leaves on my houseplant turning yellow?",
+    "language": "en",
+    "kind": "control",
+    "why": "ANGOL KONTROLL az 1. kérdéshez. A nyelvi szakadék nulla, tehát a nyers és a teljes pipeline különbsége itt tisztán a HyDE és a rerank számlájára megy."
+  },
+  {
+    "id": "snake-plant-water-en",
+    "question": "how often should I water a snake plant?",
+    "language": "en",
+    "kind": "control",
+    "why": "ANGOL KONTROLL a 2. kérdéshez. Ugyanaz a mérés nyelvi szakadék nélkül — így elválik, mennyit adott a címsor-útvonal és mennyit a fordítás."
+  },
+  {
+    "id": "negativ-auto",
+    "question": "Hogyan cseréljek téli gumit az autómon?",
+    "language": "hu",
+    "kind": "negative",
+    "why": "NEGATÍV TESZT. A korpusz növénygondozási cikkekből áll, erről egy szó sincs benne. A pgvector ettől függetlenül visszaad 20 találatot — a kérdés az, kimondja-e az agent, hogy nincs információja, forráskitalálás helyett."
+  }
+]

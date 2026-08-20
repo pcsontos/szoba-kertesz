@@ -13,6 +13,13 @@ export default [
       // több száz hibát ad (no-var, {} típus, enforce-module-boundaries), ami
       // pirosra viszi a `db:lint`-et anélkül, hogy bármi javítható lenne benne.
       '**/generated',
+      // A `tsconfig.spec.json` outDir-je (out-tsc/vitest): a typecheck emittált
+      // .d.ts-ei. Gitignore-olt, gépi kimenet — ugyanaz a kategória, mint a dist.
+      // A FORRÁS tiszta lehet, miközben az emittált deklaráció mégis szabályt sért:
+      // egy modul-privát Zod-sémára a .d.ts-ben már csak a `z.infer<typeof …>`
+      // hivatkozik, tehát ott „csak típusként használt" — a no-unused-vars elbukik
+      // egy olyan fájlon, amit senki nem írt és nem is szerkeszthet.
+      '**/out-tsc',
       '**/vite.config.*.timestamp*',
       '**/vitest.config.*.timestamp*',
     ],
