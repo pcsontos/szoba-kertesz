@@ -6,6 +6,7 @@
     "cli": "tsx --conditions=@szoba-kertesz/source apps/cli/src/main.ts",
     "knowledge:ingest": "tsx --conditions=@szoba-kertesz/source apps/cli/src/ingest-knowledge.ts",
     "embed:demo": "tsx --conditions=@szoba-kertesz/source apps/cli/src/embed-demo.ts",
+    "golden:run": "tsx --conditions=@szoba-kertesz/source apps/cli/src/golden-run.ts",
     "szobakertesz": "nx run cli:build && node apps/cli/dist/main.js",
     "szobakertesz:debug": "nx run cli:build:development && node --inspect apps/cli/dist/main.js --show-prompt",
     "serve:api": "nx serve server",
