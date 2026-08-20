@@ -53,6 +53,13 @@
     "question": "Hogyan cseréljek téli gumit az autómon?",
     "language": "hu",
     "kind": "negative",
-    "why": "NEGATÍV TESZT. A korpusz növénygondozási cikkekből áll, erről egy szó sincs benne. A pgvector ettől függetlenül visszaad 20 találatot — a kérdés az, kimondja-e az agent, hogy nincs információja, forráskitalálás helyett."
+    "why": "NEGATÍV TESZT — a SZEREP határa. A korpusz növénygondozási cikkekből áll, erről egy szó sincs benne. Mérve: az agent ezt a kérdést 0 tool-hívással utasítja el, tehát a keresésig el sem jut — ezért kell mellé a légycsapós kérdés is."
+  },
+  {
+    "id": "negativ-legycsapo",
+    "question": "Hogyan gondozzam a Vénusz légycsapóját?",
+    "language": "hu",
+    "kind": "negative",
+    "why": "NEGATÍV TESZT — a TUDÁS határa, és a grounding valódi próbája. Növénygondozási kérdés, tehát átmegy a szerep-kapun és LEFUT a keresés — de a korpuszban egyetlen cikk sem szól húsevő növényről (mérve: 0 találat a 'Venus flytrap'-re). A pgvector ettől függetlenül visszaad 20 darabot: a kérdés az, kimondja-e az agent, hogy nincs róla információja, forráskitalálás helyett."
   }
 ]
