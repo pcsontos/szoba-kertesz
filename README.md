@@ -2,6 +2,20 @@
 
 Magyar nyelvű AI-ágens szobanövény-katalógushoz: természetes nyelvű kérdésekre a valódi katalógusadatból válaszol — böngészőből és parancssorból egyaránt. A katalógust egy külön, írási jogú ágens tartja karban.
 
+## HF3 — hol találod a leadandókat
+
+> A kurzus 3. házi feladata (RAG) ebben a repóban készült el. A hat leadandó és a helyük — a részletes
+> végigvezetés: [`docs/hf3-leadas.md`](docs/hf3-leadas.md).
+
+| # | leadandó | hol | mi bizonyítja |
+|---|---|---|---|
+| 1 | működő repo + futtatási instrukciók | [„Build és futtatás"](#build-és-futtatás) | a CI zöld: `lint` + `typecheck` + `build` |
+| 2 | chunking-stratégia indoklással | [`docs/chunking-strategia.md`](docs/chunking-strategia.md) | minden száma a 202 cikken mérve; 16 unit teszt a `chunk.ts`-en |
+| 3 | golden set + nyers vs. teljes + negatív teszt | [`docs/golden-set.md`](docs/golden-set.md) · [`docs/golden/`](docs/golden/) | 9 kérdés, két tudásbázis-állapoton, két generált mérésben |
+| 4 | multi-provider szereposztás | [„Multi-provider szereposztás"](#multi-provider-szereposztás) | három modell, három indok, aktuális árakkal |
+| 5 | `docs/ARCHITEKTURA.md` + ábra | [`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md) · [`docs/img/`](docs/img/) | 7 szakasz + az adatfolyam-ábra a törlés útjával |
+| 6 | költségbecslés | [„Költségbecslés"](#költségbecslés) | mért és becsült számok szétválasztva |
+
 ## Jelenlegi státusz
 
 ### Felület — streamelő chat (`apps/web`)
@@ -41,7 +55,7 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Minőségi kapuk
 
-232 teszteset 41 spec fájlban (Vitest): `core` 184, `cli` 16, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
+260 teszteset 45 spec fájlban (Vitest): `core` 194, `cli` 34, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
 
 ---
 
@@ -343,6 +357,7 @@ Három dolog látszik ebből:
 - [`docs/dev-workflow.md`](docs/dev-workflow.md) — git workflow, branch- és commit-konvenciók
 - [`docs/implementacios-terv.md`](docs/implementacios-terv.md) — a teljes fázisterv (A1–A6, B1–B3)
 - [`docs/roi.md`](docs/roi.md) — ROI-levezetés (5 fős lakberendező iroda megtakarítása számokkal)
+- [`docs/hf3-leadas.md`](docs/hf3-leadas.md) — a HF3 hat leadandójának végigvezetése: mit kért a kiírás, hol teljesül
 - [`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md) — a tudásbázis karbantartásának terve + adatfolyam-ábra
 - [`docs/chunking-strategia.md`](docs/chunking-strategia.md) — mit mértünk a korpuszon, és mi következett belőle
 - [`docs/golden-set.md`](docs/golden-set.md) — a golden set elemzése: nyers vektorkeresés vs. teljes pipeline, negatív teszt
