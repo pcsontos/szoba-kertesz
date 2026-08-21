@@ -174,6 +174,20 @@ describe('chunkMarkdown', () => {
     );
   });
 
+  it('a szóköz nélküli "#hashtag" nem nullázza ki a címsor-útvonalat', () => {
+    // A markdown szerint sem címsor (a # után szóköz kell). Ha annak számítana, h1-ként
+    // a path.length = 0 törölné az egész útvonalat a dokumentum hátralévő részére.
+    const chunks = chunkMarkdown(
+      '## Water\n\nHetente egyszer.\n\n#hashtag\n\nA folytatás.',
+      { docTitle: 'Snake Plant' },
+    );
+
+    // A #hashtag utáni darab is a "Water" szakaszban áll, nem útvonal nélkül.
+    expect(chunks.at(-1)?.content).toBe(
+      'Snake Plant › Water\n\n#hashtag\n\nA folytatás.',
+    );
+  });
+
   it('a PRÓZA-címsor a törzsben marad, de az útvonalba NEM kerül be', () => {
     // A korpuszban a cikkek bevezetője gyakran "######"-tal formázott MONDAT. Ha ez
     // útvonalnak számítana, a teljes bevezető előtagként rárakódna a szakasz minden

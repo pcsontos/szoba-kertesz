@@ -78,11 +78,19 @@ interface Heading {
   readonly text: string;
 }
 
-/** "## Water" → { level: 2, text: 'Water' }; "###" → { level: 3, text: '' }. */
+/**
+ * "## Water" → { level: 2, text: 'Water' }; "###" → { level: 3, text: '' }.
+ *
+ * A `#` után SZÓKÖZ (vagy sorvég) kell — ez a markdown szabálya is, és itt védelem:
+ * a `#hashtag` alak különben h1-nek számítana, és a `path.length = 0` KINULLÁZNÁ a
+ * címsor-útvonalat a dokumentum hátralévő részére. A mai korpuszban ilyen sor nincs
+ * (mérve: 0 találat a `^#{1,6}[^ #\s]` mintára a 202 fájlon), tehát ez nem javítás,
+ * hanem bebiztosítás — ugyanaz a `(\s|$)` feltétel, amit a `hasProse` már használ.
+ */
 function parseHeading(paragraph: string): Heading | null {
   // Csak az ELSŐ sort nézzük: egy bekezdés kezdődhet címsorral és folytatódhat szöveggel.
   const firstLine = paragraph.split('\n', 1)[0] ?? '';
-  const match = firstLine.match(/^(#{1,6})\s*(.*)$/);
+  const match = firstLine.match(/^(#{1,6})(?:\s+(.*))?$/);
   if (!match) {
     return null;
   }
