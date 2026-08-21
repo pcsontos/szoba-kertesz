@@ -74,13 +74,31 @@ function parseHeading(paragraph: string): Heading | null {
 }
 
 /**
+ * Ennyi karakter fölött egy címsor már MONDAT, nem címke. Mérve a korpuszon: 49 darab
+ * áll ilyen, "######"-tal jelölt bevezető szövegből — a leghosszabb valódi szakaszcím
+ * ("Perfect Pairings For Your Plants") ennél jóval rövidebb, tehát a határ tisztán vág.
+ */
+const HEADING_AS_PROSE = 60;
+
+/**
  * Van-e a darabban BÁRMI a címsorokon kívül? Ha nincs, a darab csak címke — üres
  * tartalommal versenyezne a keresésben, ezért nem kerül a tudásbázisba.
+ *
+ * A kivétel MÉRÉSBŐL jött: a korpuszban a cikkek bevezetője gyakran címsorként van
+ * formázva ("###### Ferns are fabulous. They are amongst the first plants…"). Az
+ * tartalom, nem címke; ha a puszta "#-sor = nem törzs" szabályt alkalmaznánk rá,
+ * 49 tartalmas darabot dobnánk el. A hossz a legolcsóbb megkülönböztető köztük.
  */
 function hasProse(content: string): boolean {
   return content.split('\n').some((line) => {
     const trimmed = line.trim();
-    return trimmed.length > 0 && !/^#{1,6}(\s|$)/.test(trimmed);
+    if (trimmed.length === 0) {
+      return false;
+    }
+    if (!/^#{1,6}(\s|$)/.test(trimmed)) {
+      return true;
+    }
+    return trimmed.replace(/^#{1,6}\s*/, '').length > HEADING_AS_PROSE;
   });
 }
 

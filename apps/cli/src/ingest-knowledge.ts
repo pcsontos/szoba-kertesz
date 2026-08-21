@@ -57,7 +57,12 @@ async function main(): Promise<void> {
   for (const file of files) {
     const raw = readFileSync(join(KNOWLEDGE_DIR, file), 'utf8');
     const document = parseKnowledgeDocument(raw, file.replace('.md', ''));
-    for (const chunk of chunkMarkdown(document.body)) {
+    // A CÍM átadása a chunkernek: minden darab elé a címsor-útvonal kerül
+    // ("How To Care for a Snake Plant › Water") — enélkül a szakasz-darabok
+    // megkülönböztethetetlenek, mert a növény neve csak a cikk címében szerepel.
+    for (const chunk of chunkMarkdown(document.body, {
+      docTitle: document.title,
+    })) {
       pending.push({
         source: document.source,
         title: document.title,

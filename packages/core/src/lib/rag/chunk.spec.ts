@@ -142,6 +142,22 @@ describe('chunkMarkdown', () => {
     expect(chunks.map((chunk) => chunk.index)).toEqual([0, 1]);
   });
 
+  it('a MONDATNYI címsor TÖRZSNEK számít, a rövid címke nem', () => {
+    // Mérve a korpuszon: 49 darab ÁLL bevezető mondatból, "######"-tal jelölve
+    // ("Ferns are fabulous. They are amongst the first plants…"). Az tartalom, nem
+    // címke — a hossz a legolcsóbb megkülönböztető. A rövid szakaszcím viszont
+    // ("General Care", "FAQs": 62 ilyen darab) továbbra is kiesik.
+    const sentence =
+      'Ferns are fabulous. They are amongst the first plants on earth to form a vascular system.';
+
+    const kept = chunkMarkdown(`###### ${sentence}`, { docTitle: 'Ferns' });
+    const dropped = chunkMarkdown('## General Care', { docTitle: 'Ferns' });
+
+    expect(kept).toHaveLength(1);
+    expect(kept[0]?.content).toContain(sentence);
+    expect(dropped).toEqual([]);
+  });
+
   it('a MÉLY címsorszinteket is követi, és a kihagyott szinteket átugorja', () => {
     // A korpuszban a leggyakoribb címsorszint az h5 (767 db), h2 alatt közvetlenül —
     // a köztes h3/h4 szintek hiányoznak. Az útvonalban ezek nem hagyhatnak lyukat.
