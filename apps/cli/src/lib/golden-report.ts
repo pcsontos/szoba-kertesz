@@ -24,6 +24,13 @@ export interface GoldenRow {
   readonly agentAnswer?: string;
 }
 
+/**
+ * Markdown-táblacellába kerülő szöveg. A `|` a cellahatár: escape nélkül EGY kérdőjeles
+ * kérdés szétdobná a teljes összefoglaló táblát. A golden set ma verziókövetett, tehát
+ * ez nem éles kockázat — de a jelentés generált fájl, amit senki nem néz át kézzel.
+ */
+const cell = (text: string): string => text.replaceAll('|', '\\|');
+
 function formatHits(hits: readonly GoldenHit[]): string {
   if (hits.length === 0) {
     return '_nincs találat_';
@@ -70,8 +77,8 @@ export function renderGoldenReport(
     const rawTop = row.raw[0]?.title ?? '—';
     const fullTop = row.full[0]?.title ?? '—';
     lines.push(
-      `| ${position + 1} | ${row.question.question} | ${row.question.language} | ` +
-        `${rawTop} | ${fullTop} | ${reordered(row) ? 'IGEN — átrendezte' : 'nem'} |`,
+      `| ${position + 1} | ${cell(row.question.question)} | ${row.question.language} | ` +
+        `${cell(rawTop)} | ${cell(fullTop)} | ${reordered(row) ? 'IGEN — átrendezte' : 'nem'} |`,
     );
   }
 

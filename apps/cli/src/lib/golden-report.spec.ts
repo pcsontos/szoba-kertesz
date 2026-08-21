@@ -70,4 +70,33 @@ describe('renderGoldenReport', () => {
     expect(report).toContain('NEGATÍV TESZT');
     expect(report).toContain('Erről nincs információm a tudásbázisban.');
   });
+
+  it('ÜRES találati listát is kiír — a semmi is mérési eredmény', () => {
+    // Valós ág: üres tudásbázison a `retrieveKnowledge` `hits: []`-t ad. Ilyenkor a
+    // jelentés ne néma sorokat írjon, és az "átrendezett" oszlop ne mondjon IGEN-t
+    // olyan sorrendről, ami nem is létezik.
+    const empty: GoldenRow = { question: row.question, raw: [], full: [] };
+
+    const report = renderGoldenReport('ures', new Date(), [empty]);
+
+    expect(report).toContain('_nincs találat_');
+    expect(report).toContain('| — | — | nem |');
+    expect(report).toContain('_A top-1 találat nem változott._');
+  });
+
+  it('a kérdésben lévő | nem dobja szét a táblát', () => {
+    const piped: GoldenRow = {
+      ...row,
+      question: { ...row.question, question: 'Fény | árnyék?' },
+    };
+
+    const report = renderGoldenReport('x', new Date(), [piped]);
+    const summaryRow = report
+      .split('\n')
+      .find((line) => line.startsWith('| 1 |'));
+
+    expect(summaryRow).toContain('Fény \\| árnyék?');
+    // 6 oszlop = 7 NEM escapelt cellahatár. Escape nélkül 8 lenne, és elcsúszna a tábla.
+    expect(summaryRow?.match(/(?<!\\)\|/g)).toHaveLength(7);
+  });
 });

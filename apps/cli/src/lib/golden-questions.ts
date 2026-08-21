@@ -23,7 +23,7 @@ const GoldenSetSchema = z.array(QuestionSchema).min(1);
 
 export type GoldenQuestion = z.infer<typeof QuestionSchema>;
 
-/** Validálás a rendszerhatáron: elgépelt `kind` ne fusson végig 16 fizetős hívásig. */
+/** Validálás a rendszerhatáron: elgépelt `kind` ne fusson végig 18 fizetős hívásig. */
 export function parseGoldenSet(raw: unknown): GoldenQuestion[] {
   return GoldenSetSchema.parse(raw);
 }

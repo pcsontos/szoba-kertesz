@@ -13,6 +13,7 @@ import {
   type GoldenHit,
   type GoldenRow,
 } from './lib/golden-report.js';
+import { parseLabel } from './lib/parse-label.js';
 import { findRepoPath } from './lib/repo-root.js';
 
 // golden-run.ts — A GOLDEN SET FUTTATÁSA. Futtatás: `pnpm golden:run --label <név>`
@@ -37,21 +38,6 @@ try {
   }
 }
 
-/** `--label <név>` kiolvasása. Alap: `futas`. A név a fájlnévbe kerül. */
-function parseLabel(argv: readonly string[]): string {
-  const index = argv.indexOf('--label');
-  const value = index === -1 ? undefined : argv[index + 1];
-  if (value === undefined || value.startsWith('--')) {
-    return 'futas';
-  }
-  if (!/^[a-z0-9-]+$/.test(value)) {
-    throw new Error(
-      `Érvénytelen label: "${value}". Csak kisbetű, szám és kötőjel használható — a név fájlnévbe kerül.`,
-    );
-  }
-  return value;
-}
-
 const toGoldenHit = (hit: RerankedHit): GoldenHit => ({
   title: hit.title,
   source: hit.source,
@@ -60,7 +46,7 @@ const toGoldenHit = (hit: RerankedHit): GoldenHit => ({
   score: hit.score,
 });
 
-/** A RAG saját nyoma néma: 16 futás színes trace-e olvashatatlan lenne. */
+/** A RAG saját nyoma néma: 18 retrieval-futás színes trace-e olvashatatlan lenne. */
 const silent = { log: (): void => undefined };
 
 async function main(): Promise<void> {
@@ -120,4 +106,13 @@ main()
   .finally(async () => {
     await closeKnowledgePool();
     await closeReadonlyPool();
+  })
+  // A `.finally` visszaadott promise-ára is kell ág: ha a pool-zárás elszáll, a Node
+  // unhandled rejectionnel állna meg — a fenti magyar hibaüzenet UTÁN, azt elfedve.
+  .catch((error: unknown) => {
+    console.error(
+      'A kapcsolatok lezárása nem sikerült:',
+      error instanceof Error ? error.message : String(error),
+    );
+    process.exitCode = 1;
   });
