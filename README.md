@@ -33,7 +33,7 @@ A `packages/core` **framework-független** — nem tud sem a CLI-ről, sem a HTT
 Az ágens **kétféle kérdésre** felel, és tudja, melyikre melyikkel:
 
 - **„Mit árultok?"** → SQL a `products` táblán (`runSql`, `listCategories`).
-- **„Hogyan gondozzam?"** → **tudásbázis-keresés** (`searchKnowledge`): 202 letöltött növénygondozási cikk a repo gyökerében (`seed/knowledge/`), alcím-határon darabolva, `pgvector`-ral vektorizálva — 2041 chunk × 1536 dimenzió a `knowledge_chunks` táblában. A keresés a **read-only** szerepen megy, a betöltés adminon.
+- **„Hogyan gondozzam?"** → **tudásbázis-keresés** (`searchKnowledge`): 202 letöltött növénygondozási cikk a repo gyökerében (`seed/knowledge/`), alcím-határon darabolva, `pgvector`-ral vektorizálva — 1906 chunk × 1536 dimenzió a `knowledge_chunks` táblában. A keresés a **read-only** szerepen megy, a betöltés adminon.
 
 A keresés nem kulcsszó-egyezés, hanem **jelentés-távolság**, és négy lépésből áll: **HyDE** (a modell kitalál egy hipotetikus választ, és azt keressük a kérdés helyett — így a kérdés és a dokumentumok ugyanazon a nyelven „beszélnek"), **embedding** (OpenAI `text-embedding-3-small`), **pgvector top-20** (`<=>` koszinusz-távolság, egyetlen SQL-ben), majd **átrangsorolás** egy kisebb modellel (`claude-haiku-4-5`) — kézzelfogható modell-routing: a drága modell válaszol, az olcsó válogat.
 
@@ -114,7 +114,7 @@ pnpm exec prisma migrate deploy
 pnpm exec prisma db seed
 ```
 
-A **tudásbázis** (202 gondozási cikk → 2041 vektorizált chunk) külön lépés, mert valódi OpenAI-hívásokat indít:
+A **tudásbázis** (202 gondozási cikk → 1906 vektorizált chunk) külön lépés, mert valódi OpenAI-hívásokat indít:
 
 ```bash
 pnpm knowledge:ingest
@@ -318,12 +318,12 @@ A tanulság egy mondatban: **a drága modell válaszol, az olcsó válogat.**
 | tétel | mért érték |
 |---|---|
 | dokumentum | 202 |
-| chunk | 1906, átlag 598 karakter |
-| embeddelt szöveg | ~1,14 millió karakter ≈ **285 000 token** |
+| chunk | 1906, átlag 576 karakter |
+| embeddelt szöveg | ~1,10 millió karakter ≈ **274 000 token** |
 | API-hívás | 20 (100-as kötegek) |
-| **költség** | **~0,6 cent** (285 000 / 1M × $0,02) |
+| **költség** | **~0,55 cent** (274 000 / 1M × $0,02) |
 
-Egy teljes újraépítés tehát **fél cent alatt van** — ezért helyes döntés ma a `TRUNCATE` + újratöltés az inkrementális frissítés helyett ([`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md)).
+Egy teljes újraépítés tehát **nagyjából fél cent** — ezért helyes döntés ma a `TRUNCATE` + újratöltés az inkrementális frissítés helyett ([`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md)).
 
 ### Egy kérdés ára
 

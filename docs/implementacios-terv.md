@@ -1,7 +1,7 @@
 # Szobakertesz — implementációs terv (proposal)
 
 > **Generálva:** 2026-07-01
-> **Forrás:** `brs-szoba-kertesz.md`, `architektura.md`, `tech-stack.md`, `konvenciók.md`, `dev-workflow.md`, `system-prompt.md`.
+> **Forrás:** `brs-szoba-kertesz.md`, `architektura-monorepo.md`, `tech-stack.md`, `konvenciók.md`, `dev-workflow.md`, `system-prompt.md`.
 > **Komplexitás:** közepes-magas (Nx monorepo + kézzel írt LLM tool-use agent).
 > A terv két nagy részből áll: **A) a környezet létrehozása** (mérföldkő: kész, futó, tesztelhető projekt) és **B) az implementáció 3 fázisa** (echo → LLM DB nélkül → SQL-es agent). Minden lépés kicsi, önállóan tesztelhető increment. A lépés végén **te tesztelsz**, utána **feature branch-en commit + merge a masterbe** zárja (Conventional Commits — lásd `dev-workflow.md`).
 
@@ -35,7 +35,7 @@ pnpm-workspace.yaml: packages/*, apps/*
 @szoba-kertesz/cli     apps/cli       CLI belépési pont, bin: szobakertesz
 ```
 
-`packages/core` **nem függ** `packages/db`-től: az agent read-only `pg` klienssel dolgozik, a Prisma csak a séma/migráció/seed oldalon létezik (`architektura.md` 2. pont).
+`packages/core` **nem függ** `packages/db`-től: az agent read-only `pg` klienssel dolgozik, a Prisma csak a séma/migráció/seed oldalon létezik (`architektura-monorepo.md` 2. pont).
 
 ---
 
