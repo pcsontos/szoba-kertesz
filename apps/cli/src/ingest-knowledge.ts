@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import {
   chunkMarkdown,
   clearKnowledge,
@@ -9,6 +9,7 @@ import {
   type KnowledgeChunkInput,
 } from '@szoba-kertesz/core';
 import { parseKnowledgeDocument } from './lib/knowledge-document.js';
+import { findRepoPath } from './lib/repo-root.js';
 
 // ingest-knowledge.ts — A TUDÁSBÁZIS FELÉPÍTÉSE. Futtatás: `pnpm knowledge:ingest`
 //
@@ -38,29 +39,9 @@ try {
   }
 }
 
-// A korpusz a repo GYÖKERÉBEN van (seed/knowledge/). A `process.cwd()`-hez kötve
-// más könyvtárból indítva ENOENT-tel szállt volna el, `import.meta.url`-hez kötve
-// pedig nem fordul: a CLI CJS-re buildel (esbuild format: cjs), ott az import.meta
-// tilos. Ezért FELFELÉ KERESSÜK a gyökeret — így a repo bármely alkönyvtárából megy.
-function findKnowledgeDir(): string {
-  let dir = process.cwd();
-  for (;;) {
-    const candidate = join(dir, 'seed', 'knowledge');
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-    const parent = dirname(dir);
-    if (parent === dir) {
-      throw new Error(
-        'Nem találom a korpuszt: a seed/knowledge könyvtár sehol nincs meg a jelenlegi ' +
-          'könyvtár fölött. A parancsot a repón BELÜLRŐL kell futtatni (pnpm knowledge:ingest).',
-      );
-    }
-    dir = parent;
-  }
-}
-
-const KNOWLEDGE_DIR = findKnowledgeDir();
+// A korpusz a repo GYÖKERÉBEN van (seed/knowledge/) — a gyökeret a findRepoPath keresi
+// meg FELFELÉ haladva, így a repo bármely alkönyvtárából indítható a szkript.
+const KNOWLEDGE_DIR = findRepoPath('seed', 'knowledge');
 const EMBED_BATCH_SIZE = 100; // ennyi darabot embeddelünk egy API-hívásban
 
 async function main(): Promise<void> {
@@ -76,7 +57,12 @@ async function main(): Promise<void> {
   for (const file of files) {
     const raw = readFileSync(join(KNOWLEDGE_DIR, file), 'utf8');
     const document = parseKnowledgeDocument(raw, file.replace('.md', ''));
-    for (const chunk of chunkMarkdown(document.body)) {
+    // A CÍM átadása a chunkernek: minden darab elé a címsor-útvonal kerül
+    // ("How To Care for a Snake Plant › Water") — enélkül a szakasz-darabok
+    // megkülönböztethetetlenek, mert a növény neve csak a cikk címében szerepel.
+    for (const chunk of chunkMarkdown(document.body, {
+      docTitle: document.title,
+    })) {
       pending.push({
         source: document.source,
         title: document.title,

@@ -1,6 +1,6 @@
 # Szoba-kertész — Üzleti követelmény-leírás (BRS)
 
-> Kurzus-melléklet. Egyben a build brief, amelyet 1:1 átadunk a Claude Code-nak a projekt elején. A technikai részleteket külön dokumentumok tartalmazzák: `stack.md`, `architektura.md`, `konvenciok.md`, `dev-workflow.md`.
+> Kurzus-melléklet. Egyben a build brief, amelyet 1:1 átadunk a Claude Code-nak a projekt elején. A technikai részleteket külön dokumentumok tartalmazzák: `stack.md`, `architektura-monorepo.md`, `konvenciok.md`, `dev-workflow.md`.
 
 ## 1. Üzleti igény / probléma
 
@@ -66,7 +66,7 @@ Kívül (későbbi órák):
 
 - **NFR1, Biztonság:** az agent read-only adatbázis-kapcsolaton fut, csak SELECT.
 - **NFR2, Átláthatóság:** a működés naplóból és `--show-prompt`-ból követhető.
-- **NFR3, Karbantarthatóság:** a `konvenciok.md` és `architektura.md` betartása.
+- **NFR3, Karbantarthatóság:** a `konvenciok.md` és `architektura-monorepo.md` betartása.
 - **NFR4, Reprodukálhatóság:** a projekt a `stack.md` szerinti, legfrissebb stabil eszközökkel felépíthető.
 
 ## 5. Sikerkritériumok

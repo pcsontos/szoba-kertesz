@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1010" width="1000" height="1010" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title>A tudásbázis karbantartásának adatfolyama</title>
+  <desc>Forrásfájlok beolvasása, tartalom-hash összevetése, majd három ág: kihagyás, újravektorizálás, illetve törlés — a DB-írás egyetlen tranzakcióban.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#33415c"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="1010" fill="#ffffff"/>
+
+  <!-- ── TRANZAKCIÓ keret (hátul, hogy a dobozok ráüljenek) ────────────── -->
+  <rect x="230" y="600" width="540" height="212" rx="12" fill="#f1f5f9" stroke="#64748b" stroke-width="2" stroke-dasharray="7 5"/>
+  <text x="252" y="628" text-anchor="start" font-size="15" font-weight="700" fill="#334155">EGY tranzakció</text>
+
+  <!-- ── Dobozok ───────────────────────────────────────────────────────── -->
+  <!-- SRC -->
+  <rect x="360" y="30" width="280" height="60" rx="8" fill="#ffffff" stroke="#33415c" stroke-width="2"/>
+  <text x="500" y="54" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">seed/knowledge/*.md</text>
+  <text x="500" y="74" text-anchor="middle" font-size="13" fill="#475569">(forrás)</text>
+
+  <!-- SCAN -->
+  <rect x="345" y="140" width="310" height="60" rx="8" fill="#ffffff" stroke="#33415c" stroke-width="2"/>
+  <text x="500" y="164" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">beolvasás + tisztítás</text>
+  <text x="500" y="184" text-anchor="middle" font-size="13" fill="#475569">(front matter, bolti zaj)</text>
+
+  <!-- HASH döntés -->
+  <polygon points="500,250 700,320 500,390 300,320" fill="#fef9c3" stroke="#a16207" stroke-width="2"/>
+  <text x="500" y="314" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">tartalom-hash</text>
+  <text x="500" y="334" text-anchor="middle" font-size="14" font-weight="700" fill="#0f172a">változott?</text>
+
+  <!-- SKIP (bal ág) -->
+  <rect x="30" y="430" width="240" height="60" rx="8" fill="#ffffff" stroke="#33415c" stroke-width="2"/>
+  <text x="150" y="454" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">kihagyva</text>
+  <text x="150" y="474" text-anchor="middle" font-size="12" fill="#475569">(nincs embedding-költség)</text>
+
+  <!-- CHUNK (középső ág) -->
+  <rect x="365" y="430" width="270" height="60" rx="8" fill="#ffffff" stroke="#33415c" stroke-width="2"/>
+  <text x="500" y="454" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">chunkMarkdown</text>
+  <text x="500" y="474" text-anchor="middle" font-size="13" fill="#475569">+ címsor-útvonal</text>
+
+  <!-- PURGE (jobb ág) -->
+  <rect x="720" y="430" width="260" height="60" rx="8" fill="#ffffff" stroke="#33415c" stroke-width="2"/>
+  <text x="850" y="454" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">DELETE FROM</text>
+  <text x="850" y="474" text-anchor="middle" font-size="13" fill="#475569">knowledge_chunks WHERE source = ?</text>
+
+  <!-- EMBED -->
+  <rect x="345" y="520" width="310" height="60" rx="8" fill="#ffffff" stroke="#33415c" stroke-width="2"/>
+  <text x="500" y="544" text-anchor="middle" font-size="14" font-weight="600" fill="#0f172a">embedText</text>
+  <text x="500" y="564" text-anchor="middle" font-size="12" fill="#475569">(OpenAI text-embedding-3-small)</text>
+
+  <!-- Tranzakción belüli lépések -->
+  <rect x="255" y="644" width="490" height="44" rx="6" fill="#ffffff" stroke="#33415c" stroke-width="1.5"/>
+  <text x="500" y="671" text-anchor="middle" font-size="13" fill="#0f172a">1. a dokumentum régi chunkjai törölve</text>
+
+  <rect x="255" y="698" width="490" height="44" rx="6" fill="#ffffff" stroke="#33415c" stroke-width="1.5"/>
+  <text x="500" y="725" text-anchor="middle" font-size="13" fill="#0f172a">2. az új chunkok beírva</text>
+
+  <rect x="255" y="752" width="490" height="44" rx="6" fill="#ffffff" stroke="#33415c" stroke-width="1.5"/>
+  <text x="500" y="779" text-anchor="middle" font-size="13" fill="#0f172a">3. knowledge_documents: hash + indexed_at frissítve</text>
+
+  <!-- DB henger -->
+  <path d="M 370 858 a 130 16 0 0 1 260 0 v 58 a 130 16 0 0 1 -260 0 z" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+  <ellipse cx="500" cy="858" rx="130" ry="16" fill="#e0f2fe" stroke="#0369a1" stroke-width="2"/>
+  <text x="500" y="896" text-anchor="middle" font-size="14" font-weight="600" fill="#0c4a6e">knowledge_chunks</text>
+  <text x="500" y="914" text-anchor="middle" font-size="12" fill="#0c4a6e">(pgvector)</text>
+
+  <!-- SEARCH -->
+  <rect x="345" y="956" width="310" height="40" rx="8" fill="#ffffff" stroke="#33415c" stroke-width="2"/>
+  <text x="500" y="981" text-anchor="middle" font-size="13" fill="#0f172a">searchChunks (szoba-kertesz_ro)</text>
+
+  <!-- ── Nyilak ────────────────────────────────────────────────────────── -->
+  <line x1="500" y1="90" x2="500" y2="134" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="500" y1="200" x2="500" y2="244" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- HASH -> SKIP (bal) -->
+  <path d="M 300 320 H 150 V 424" fill="none" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="215" y="311" text-anchor="middle" font-size="13" font-weight="600" fill="#166534">nem</text>
+
+  <!-- HASH -> CHUNK (közép) -->
+  <line x1="500" y1="390" x2="500" y2="424" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="556" y="412" text-anchor="middle" font-size="13" font-weight="600" fill="#9a3412">igen / új</text>
+
+  <!-- HASH -> PURGE (jobb) -->
+  <path d="M 700 320 H 850 V 424" fill="none" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="795" y="311" text-anchor="middle" font-size="13" font-weight="600" fill="#9f1239">eltűnt a forrásból</text>
+
+  <!-- CHUNK -> EMBED -->
+  <line x1="500" y1="490" x2="500" y2="514" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- EMBED -> TX -->
+  <line x1="500" y1="580" x2="500" y2="638" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- PURGE -> TX -->
+  <path d="M 850 490 V 666 H 751" fill="none" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- TX -> DB -->
+  <line x1="500" y1="812" x2="500" y2="838" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+  <!-- DB -> SEARCH -->
+  <line x1="500" y1="932" x2="500" y2="950" stroke="#33415c" stroke-width="2" marker-end="url(#arrow)"/>
+</svg>

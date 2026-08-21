@@ -1,6 +1,6 @@
 # Kódkonvenciók és best practice-ek
 
-> Kurzus-melléklet. **Projekt-független** coding conventions, bármely TypeScript projektre. (A plantbase-specifikus döntések: `architektura.md`; az agent SQL-szabályai: `system-prompt.md`.) Ezt is 1:1 átadjuk a Claude Code-nak.
+> Kurzus-melléklet. **Projekt-független** coding conventions, bármely TypeScript projektre. (A plantbase-specifikus döntések: `architektura-monorepo.md`; az agent SQL-szabályai: `system-prompt.md`.) Ezt is 1:1 átadjuk a Claude Code-nak.
 
 ## Naming
 

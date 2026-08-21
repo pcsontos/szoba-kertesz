@@ -223,6 +223,6 @@ Az interaktív mód pipe-olva is működik — pont ezt védi a 4. saját kiegé
 ## Kapcsolódó doksik
 
 - `docs/superpowers/plans/2026-08-16-ora-04-multiagent.md` — a végrehajtott terv, taskonkénti végrehajtási jegyzetekkel
-- `docs/architektura.md` — a `core` `agents/` + `tools/` bontása és a három DB-kapcsolat
+- `docs/architektura-monorepo.md` — a `core` `agents/` + `tools/` bontása és a három DB-kapcsolat
 - `docs/system-prompt.md` — a query-agent prompt-szerződése (bájtazonos a kóddal)
 - `CLAUDE.md` — a projekt invariánsai és a parancsok

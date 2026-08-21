@@ -2,6 +2,20 @@
 
 Magyar nyelvű AI-ágens szobanövény-katalógushoz: természetes nyelvű kérdésekre a valódi katalógusadatból válaszol — böngészőből és parancssorból egyaránt. A katalógust egy külön, írási jogú ágens tartja karban.
 
+## HF3 — hol találod a leadandókat
+
+> A kurzus 3. házi feladata (RAG) ebben a repóban készült el. A hat leadandó és a helyük — a részletes
+> végigvezetés: [`docs/hf3-leadas.md`](docs/hf3-leadas.md).
+
+| # | leadandó | hol | mi bizonyítja |
+|---|---|---|---|
+| 1 | működő repo + futtatási instrukciók | [„Build és futtatás"](#build-és-futtatás) | a CI zöld: `lint` + `typecheck` + `build` |
+| 2 | chunking-stratégia indoklással | [`docs/chunking-strategia.md`](docs/chunking-strategia.md) | minden száma a 202 cikken mérve; 17 unit teszt a `chunk.ts`-en |
+| 3 | golden set + nyers vs. teljes + negatív teszt | [`docs/golden-set.md`](docs/golden-set.md) · [`docs/golden/`](docs/golden/) | 9 kérdés, két tudásbázis-állapoton, két generált mérésben |
+| 4 | multi-provider szereposztás | [„Multi-provider szereposztás"](#multi-provider-szereposztás) | három modell, három indok, aktuális árakkal |
+| 5 | `docs/ARCHITEKTURA.md` + ábra | [`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md) · [`docs/img/`](docs/img/) | 7 szakasz + az adatfolyam-ábra a törlés útjával |
+| 6 | költségbecslés | [„Költségbecslés"](#költségbecslés) | mért és becsült számok szétválasztva |
+
 ## Jelenlegi státusz
 
 ### Felület — streamelő chat (`apps/web`)
@@ -19,7 +33,7 @@ A `packages/core` **framework-független** — nem tud sem a CLI-ről, sem a HTT
 Az ágens **kétféle kérdésre** felel, és tudja, melyikre melyikkel:
 
 - **„Mit árultok?"** → SQL a `products` táblán (`runSql`, `listCategories`).
-- **„Hogyan gondozzam?"** → **tudásbázis-keresés** (`searchKnowledge`): 202 letöltött növénygondozási cikk a repo gyökerében (`seed/knowledge/`), alcím-határon darabolva, `pgvector`-ral vektorizálva — 2041 chunk × 1536 dimenzió a `knowledge_chunks` táblában. A keresés a **read-only** szerepen megy, a betöltés adminon.
+- **„Hogyan gondozzam?"** → **tudásbázis-keresés** (`searchKnowledge`): 202 letöltött növénygondozási cikk a repo gyökerében (`seed/knowledge/`), alcím-határon darabolva, `pgvector`-ral vektorizálva — 1906 chunk × 1536 dimenzió a `knowledge_chunks` táblában. A keresés a **read-only** szerepen megy, a betöltés adminon.
 
 A keresés nem kulcsszó-egyezés, hanem **jelentés-távolság**, és négy lépésből áll: **HyDE** (a modell kitalál egy hipotetikus választ, és azt keressük a kérdés helyett — így a kérdés és a dokumentumok ugyanazon a nyelven „beszélnek"), **embedding** (OpenAI `text-embedding-3-small`), **pgvector top-20** (`<=>` koszinusz-távolság, egyetlen SQL-ben), majd **átrangsorolás** egy kisebb modellel (`claude-haiku-4-5`) — kézzelfogható modell-routing: a drága modell válaszol, az olcsó válogat.
 
@@ -41,11 +55,11 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Minőségi kapuk
 
-232 teszteset 41 spec fájlban (Vitest): `core` 184, `cli` 16, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
+262 teszteset 45 spec fájlban (Vitest): `core` 195, `cli` 35, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
 
 ---
 
-Architektúra és domain-modell: [`docs/architektura.md`](docs/architektura.md) · teljes fázisterv: [`docs/implementacios-terv.md`](docs/implementacios-terv.md) · konvenciók: [`docs/konvenciók.md`](docs/konvenciók.md)
+Architektúra és domain-modell: [`docs/architektura-monorepo.md`](docs/architektura-monorepo.md) · teljes fázisterv: [`docs/implementacios-terv.md`](docs/implementacios-terv.md) · konvenciók: [`docs/konvenciók.md`](docs/konvenciók.md)
 
 A projekt egy AI-ágensfejlesztés kurzus keretében készül: a mérföldköveket a tananyag adja, a tervezési és megvalósítási döntések a `docs/` alatt dokumentáltak.
 
@@ -100,7 +114,7 @@ pnpm exec prisma migrate deploy
 pnpm exec prisma db seed
 ```
 
-A **tudásbázis** (202 gondozási cikk → 2041 vektorizált chunk) külön lépés, mert valódi OpenAI-hívásokat indít:
+A **tudásbázis** (202 gondozási cikk → 1906 vektorizált chunk) külön lépés, mert valódi OpenAI-hívásokat indít:
 
 ```bash
 pnpm knowledge:ingest
@@ -283,10 +297,58 @@ node --inspect apps/cli/dist/main.js ask "kérdés"
 
 majd VS Code-ban indítsd az **"Attach to @szoba-kertesz/cli (terminal)"** konfigurációt. Ha egy nagyon korai sorra (pl. a fájl elejére) teszel breakpointot, `--inspect-brk`-val indítsd a folyamatot, hogy megvárja a csatlakozást, mielőtt bármi lefutna.
 
+## Multi-provider szereposztás
+
+A rendszerben **három modell** dolgozik, és mindegyik azért az, amiért:
+
+| modell | feladat | miért pont az |
+|---|---|---|
+| OpenAI `text-embedding-3-small` | szöveg → 1536 szám (a tudásbázis felépítése + **minden** keresés) | **Kényszer, nem választás:** az Anthropic nem ad embedding-modellt. Ez a projekt egyetlen nem-Anthropic hívása, és ezért opcionális az `OPENAI_API_KEY` — nélküle a katalógus-oldal teljesen működik, csak a `searchKnowledge` bukik el érthető magyar üzenettel. |
+| Claude Haiku 4.5 | **HyDE** (hipotetikus válasz a kereséshez) + **rerank** (a top-20 átrangsorolása) | Sok hívás, sablonos feladat, alacsony minőségi plafon: egy 2-3 mondatos angol bekezdés kitalálása és 20 részlet 0-10-es pontozása nem igényel nagy modellt. A rerank `generateObject`-tel megy, tehát a kimenet szerkezete garantált — nem kell parse-olni, amit a modell írt. |
+| Claude Sonnet 4.6 (`ANTHROPIC_MODEL`) | a **végső válasz** | Itt a megfogalmazás, a magyar nyelv, a tool-használat sorrendje és a grounding-fegyelem számít — hogy a modell kimondja, ha nincs információja, ahelyett hogy forrást találna ki. |
+
+A tanulság egy mondatban: **a drága modell válaszol, az olcsó válogat.**
+
+## Költségbecslés
+
+> **Amit mértünk, és amit becsülünk.** A válasz-oldal tokenszámai **valódi naplósorok** (`logs/*.jsonl`, `usage` mező). A HyDE, a rerank és az embedding hívásai viszont a `retrieve.ts`-en belül futnak, **nem az agent-loopban** — az `onStepEnd` nem látja őket, tehát a JSONL sem tartalmazza. Ezekre a **mért karakterszámokból** adunk becslést (4 karakter ≈ 1 token). Árak: [Anthropic](https://www.anthropic.com/pricing) $1/$5 (Haiku 4.5) és $3/$15 (Sonnet 4.6) / 1M token, [OpenAI](https://developers.openai.com/api/docs/pricing) $0,02 / 1M token.
+
+### A tudásbázis felépítése (`pnpm knowledge:ingest`)
+
+| tétel | mért érték |
+|---|---|
+| dokumentum | 202 |
+| chunk | 1906, átlag 576 karakter |
+| embeddelt szöveg | ~1,10 millió karakter ≈ **274 000 token** |
+| API-hívás | 20 (100-as kötegek) |
+| **költség** | **~0,55 cent** (274 000 / 1M × $0,02) |
+
+Egy teljes újraépítés tehát **nagyjából fél cent** — ezért helyes döntés ma a `TRUNCATE` + újratöltés az inkrementális frissítés helyett ([`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md)).
+
+### Egy kérdés ára
+
+Egy **gondozási** kérdés (a tudásbázist is használja) négy hívásból áll:
+
+| lépés | modell | input | output | költség |
+|---|---|---|---|---|
+| HyDE | Haiku 4.5 | ~75 token (prompt + kérdés) | ≤200 token (`HYDE_MAX_TOKENS`) | ~0,11 cent |
+| embedding | `text-embedding-3-small` | ~200 token | — | ~0,0004 cent |
+| rerank | Haiku 4.5 | ~3100 token (20 × 600 karakter előnézet) | ~250 token | ~0,44 cent |
+| **válasz** | **Sonnet 4.6** | **8702 token** (mért) | **287 token** (mért) | **~3,0 cent** |
+| | | | **összesen** | **~3,6 cent** |
+
+Egy **katalógus**-kérdés (csak SQL, tudásbázis nélkül) ennél olcsóbb: mérve 3849 / 235 token, azaz **~1,5 cent**.
+
+Három dolog látszik ebből:
+
+1. **A válaszmodell viszi a költség ~85%-át.** A RAG-pipeline három hívása együtt sem éri el a fele árát.
+2. **A RAG ára maga a kontextus:** a kereséssel dolgozó kérdés inputja 3849 → 8702 token, mert az öt darab bekerül a promptba. A modellváltás olcsóbb modellre itt sokkal többet spórolna, mint a pipeline bármelyik lépésének elhagyása.
+3. **Az embedding gyakorlatilag ingyen van** — a teljes tudásbázis felépítése annyiba kerül, mint egy hatod válasz.
+
 ## Dokumentáció
 
 - [`docs/brs-szoba-kertesz.md`](docs/brs-szoba-kertesz.md) — üzleti/funkcionális követelmények
-- [`docs/architektura.md`](docs/architektura.md) — a tervezett fájlstruktúra és kulcsdöntések
+- [`docs/architektura-monorepo.md`](docs/architektura-monorepo.md) — a tervezett fájlstruktúra és kulcsdöntések
 - [`docs/tech-stack.md`](docs/tech-stack.md) — technológiai stack és a `products` tábla sémája
 - [`docs/system-prompt.md`](docs/system-prompt.md) — az agent tényleges system promptja
 - [`docs/system-prompt-javitas.md`](docs/system-prompt-javitas.md) — a system prompt minőségi javításainak indoklása
@@ -295,6 +357,10 @@ majd VS Code-ban indítsd az **"Attach to @szoba-kertesz/cli (terminal)"** konfi
 - [`docs/dev-workflow.md`](docs/dev-workflow.md) — git workflow, branch- és commit-konvenciók
 - [`docs/implementacios-terv.md`](docs/implementacios-terv.md) — a teljes fázisterv (A1–A6, B1–B3)
 - [`docs/roi.md`](docs/roi.md) — ROI-levezetés (5 fős lakberendező iroda megtakarítása számokkal)
+- [`docs/hf3-leadas.md`](docs/hf3-leadas.md) — a HF3 hat leadandójának végigvezetése: mit kért a kiírás, hol teljesül
+- [`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md) — a tudásbázis karbantartásának terve + adatfolyam-ábra
+- [`docs/chunking-strategia.md`](docs/chunking-strategia.md) — mit mértünk a korpuszon, és mi következett belőle
+- [`docs/golden-set.md`](docs/golden-set.md) — a golden set elemzése: nyers vektorkeresés vs. teljes pipeline, negatív teszt
 
 ## Git workflow
 
