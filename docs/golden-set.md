@@ -13,10 +13,10 @@ A kérdések a `seed/golden-set.json`-ben állnak, verziókövetve. Ez nem forma
 | # | kérdés | nyelv | típus | mit hivatott bizonyítani |
 |---|---|---|---|---|
 | 1 | Miért sárgulnak a szobanövényem levelei? | `hu` | `thematic` | A leggyakoribb gondozási kérdés. Sok cikk érinti, tehát a RETRIEVAL bősége a kihívás, nem a hiánya. |
-| 2 | Milyen gyakran öntözzem a kígyónövényt? | `hu` | `thematic` | A CÍMSOR-ÚTVONAL próbája: 23 cikkben van '## Water' szakasz, és a növény neve egyikben sincs benne. Ha valahol, itt kell javulnia a találatnak. |
+| 2 | Milyen gyakran öntözzem a kígyónövényt? | `hu` | `thematic` | A CÍMSOR-ÚTVONAL próbája: mérve 54 cikkben van külön 'Water' szakasz-címsor, és a növény neve egyikben sincs benne. Ha valahol, itt kell javulnia a találatnak. |
 | 3 | Túlöntöztem a monsterámat, mit tegyek? | `hu` | `thematic` | A RERANK próbája: a 'monstera öntözése' chunk vektorban közel van, de a valódi válasz a gyökérrothadásról szóló szakaszban van, ami más szavakkal beszél ugyanarról. |
 | 4 | Milyen növény bírja a sötét fürdőszobát? | `hu` | `thematic` | Két tudásforrás határa: a fény- és páraigény a cikkekben van, a konkrét termék a katalógusban. A retrieval-mérés csak a cikk-oldalt nézi. |
-| 5 | Milyen földet használjak átültetéskor? | `hu` | `thematic` | Több cikk '## Soil' szakasza felel rá (23 cikkben van ilyen). A HyDE-nak itt kell eldöntenie, melyik kontextusban kérdezünk. |
+| 5 | Milyen földet használjak átültetéskor? | `hu` | `thematic` | Több cikk 'Soil' szakasza felel rá (mérve 28 cikkben van ilyen). A HyDE-nak itt kell eldöntenie, melyik kontextusban kérdezünk. |
 | 6 | why are the leaves on my houseplant turning yellow? | `en` | `control` | ANGOL KONTROLL az 1. kérdéshez. A nyelvi szakadék nulla, tehát a nyers és a teljes pipeline különbsége itt tisztán a HyDE és a rerank számlájára megy. |
 | 7 | how often should I water a snake plant? | `en` | `control` | ANGOL KONTROLL a 2. kérdéshez. Ugyanaz a mérés nyelvi szakadék nélkül — így elválik, mennyit adott a címsor-útvonal és mennyit a fordítás. |
 | 8 | Hogyan cseréljek téli gumit az autómon? | `hu` | `negative` | NEGATÍV TESZT — a SZEREP határa. A korpusz növénygondozási cikkekből áll, erről egy szó sincs benne. Mérve: az agent ezt a kérdést 0 tool-hívással utasítja el, tehát a keresésig el sem jut — ezért kell mellé a légycsapós kérdés is. |
@@ -41,6 +41,12 @@ Két tudásbázis-állapoton futott le ugyanez:
 | `regi-chunker` | 2041 darab, címsor-útvonal nélkül | `docs/golden/futas-regi-chunker.md` |
 | `uj-chunker` | 1906 darab, címsor-útvonallal | `docs/golden/futas-uj-chunker.md` |
 
+Az `uj-chunker` futás a **jelenlegi** tudásbázist méri: a PR-review után a próza-címsorok kikerültek a
+címsor-útvonalból (lásd [`chunking-strategia.md`](chunking-strategia.md) 4. pont), a tudásbázis
+újratöltődött, és a mérés utána futott újra — tehát a `pnpm golden:run --label uj-chunker` ma is
+ezt adja vissza. A `regi-chunker` ezzel szemben **történeti** mérés: a mostani kóddal nem
+reprodukálható, mert ahhoz a régi chunkerrel kellene újratölteni a `knowledge_chunks` táblát.
+
 **Egy korlát, amit előre ki kell mondani:** a két állapot **abszolút távolságai nem összevethetők**.
 Az előtag minden darab szövegét megváltoztatja, tehát minden vektor elmozdul. Ami összevethető, az a
 **sorrend** és az, hogy *melyik cikkből* jönnek a találatok.
@@ -51,15 +57,15 @@ Az új tudásbázison mért top-1 találatok (`futas-uj-chunker.md`):
 
 | # | kérdés | nyers top-1 | teljes top-1 | rerank |
 |---|---|---|---|---|
-| 1 | Miért sárgulnak a szobanövényem levele | Bird of Paradise Care Guide #14 · 0.629 | 5 Causes For Your Plant’s Yellow Leaves #1 · 0.236 | 9/10 |
-| 2 | Milyen gyakran öntözzem a kígyónövényt | Bird’s Nest Fern #3 · 0.618 | How To Care for a Snake Plant #6 · 0.162 | 10/10 |
-| 3 | Túlöntöztem a monsterámat, mit tegyek? | The Hole Truth: Monsteras #5 · 0.717 | How to Care for a Desert Rose #7 · 0.449 | 9/10 |
-| 4 | Milyen növény bírja a sötét fürdőszobá | The Plant That Loves a Humid Bathroom #3 · 0.487 | 10 Best Low Light Indoor Plants for Your Home or Office #2 · 0.368 | 9/10 |
-| 5 | Milyen földet használjak átültetéskor? | How to Reuse Coffee Grounds to Fertilize Houseplants #5 · 0.782 | Plant Care: Potting Mix 101 #8 · 0.294 | 9/10 |
-| 6 | why are the leaves on my houseplant tu | 5 Causes For Your Plant’s Yellow Leaves #4 · 0.327 | 5 Causes For Your Plant’s Yellow Leaves #3 · 0.261 | 9/10 |
-| 7 | how often should I water a snake plant | How To Care for a Snake Plant #6 · 0.254 | How To Care for a Snake Plant #6 · 0.163 | 10/10 |
-| 8 | Hogyan cseréljek téli gumit az autómon | A Gardener's Guide to Growing Evergreen Trees and Shrubs #10 · 0.707 | Japanese Maple Care Guide #11 · 0.666 | 0/10 |
-| 9 | Hogyan gondozzam a Vénusz légycsapóját | Fiddle Me This: Caring for a Fiddle Leaf Fig #6 · 0.764 | How to Care for a Tradescantia #3 · 0.456 | 0/10 |
+| 1 | Miért sárgulnak a szobanövényem levele | Bird of Paradise Care Guide #14 · 0.629 | 5 Causes For Your Plant’s Yellow Leaves #5 · 0.248 | 9/10 |
+| 2 | Milyen gyakran öntözzem a kígyónövényt | Bird’s Nest Fern #3 · 0.618 | How To Care for a Snake Plant #6 · 0.160 | 10/10 |
+| 3 | Túlöntöztem a monsterámat, mit tegyek? | The Hole Truth: Monsteras #5 · 0.717 | How to Care for a Banana Plant #7 · 0.441 | 5/10 |
+| 4 | Milyen növény bírja a sötét fürdőszobá | The Plant That Loves a Humid Bathroom #0 · 0.527 | 10 Best Low Light Indoor Plants for Your Home or Office #2 · 0.382 | 9/10 |
+| 5 | Milyen földet használjak átültetéskor? | Between Two Ferns #16 · 0.765 | Plant Care: Potting Mix 101 #8 · 0.287 | 9/10 |
+| 6 | why are the leaves on my houseplant tu | 5 Causes For Your Plant’s Yellow Leaves #4 · 0.327 | 5 Causes For Your Plant’s Yellow Leaves #3 · 0.238 | 10/10 |
+| 7 | how often should I water a snake plant | How To Care for a Snake Plant #6 · 0.254 | How To Care for a Snake Plant #6 · 0.194 | 10/10 |
+| 8 | Hogyan cseréljek téli gumit az autómon | A Gardener's Guide to Growing Evergreen Trees and Shrubs #10 · 0.707 | Our Top 7 Winter Plant Care Tips #0 · 0.493 | 0/10 |
+| 9 | Hogyan gondozzam a Vénusz légycsapóját | Fiddle Me This: Caring for a Fiddle Leaf Fig #6 · 0.764 | How to Care for a Tradescantia #3 · 0.463 | 0/10 |
 
 **A teljes pipeline 9 kérdésből 8-nál más darabot tett az élre**, mint a nyers keresés. Ebből
 **hét esetben másik CIKK** került az első helyre, a 6. kérdésnél viszont ugyanaz a cikk maradt, csak
@@ -85,16 +91,17 @@ A 2. kérdés (*„Milyen gyakran öntözzem a kígyónövényt?"*) a legbeszéd
 
 **Teljes pipeline (HyDE + rerank):**
 
-1. **How To Care for a Snake Plant** #6 · dist 0.162 · rerank 10/10
-2. **Fall Plant Care Tips For Houseplants** #4 · dist 0.289 · rerank 9/10
-3. **How Often & How Much You Should Water Houseplants** #9 · dist 0.363 · rerank 4/10
-4. **How Often & How Much You Should Water Houseplants** #4 · dist 0.361 · rerank 3/10
-5. **How Often & How Much You Should Water Houseplants** #3 · dist 0.382 · rerank 3/10
+1. **How To Care for a Snake Plant** #6 · dist 0.160 · rerank 10/10
+2. **Fall Plant Care Tips For Houseplants** #4 · dist 0.270 · rerank 9/10
+3. **The Essential Low Maintenance Plant for Busy Schedules** #3 · dist 0.396 · rerank 8/10
+4. **Our Top 10 Plant Care Tips** #6 · dist 0.379 · rerank 5/10
+5. **How Often & How Much You Should Water Houseplants** #9 · dist 0.379 · rerank 4/10
 
 Az első lista *növénygondozási* darabokat hoz — páfrány, fűszernövény, monstera —, mert a magyar
 kérdés vektora nagyjából egyforma távol van mindegyiktől. A második lista élén a **kígyónövény saját**
-cikkének öntözési szakasza áll, 10/10-es rerank-pontszámmal, és a 3–5. hely is öntözésről szóló
-cikk. Két különböző lépés dolgozott itt:
+cikkének öntözési szakasza áll, 10/10-es rerank-pontszámmal, mögötte pedig őszi és általános
+gondozási darabok — a 4. és 5. helyezett előtagja szó szerint `Our Top 10 Plant Care Tips › 3.​ ​Be
+mindful when watering`, illetve a kifejezetten öntözésről szóló cikk. Két különböző lépés dolgozott itt:
 
 - a **HyDE** angolul megfogalmazott hipotetikus választ ad, tehát a keresés már nem magyar kérdést,
   hanem angol *választ* keres az angol korpuszban — ez hozza be egyáltalán a jó darabokat a top-20-ba;
@@ -128,9 +135,16 @@ nem vágó *Bird of Paradise Care Guide* állt az élen, az újon a témába vá
 foglalja el az első négy helyet, és a *Bird of Paradise* az ötödik helyre szorult.
 
 A 7. kérdésnél (*„how often should I water a snake plant?"*) a top-1 mindkét bázison ugyanaz, de a
-lista alja átalakult: a régin *Moon Valley Pilea*, *A is for Aroids* és *Oxalis* darabjai álltak a
-2–5. helyen, az újon öntözésről szóló cikkek. Vagyis ahol a nyers keresés amúgy is eltalálta a
-választ, ott az előtag **a mezőny többi részét** javította.
+lista alja átalakult. A régin *Moon Valley Pilea* #4, *A is for Aroids* #7 és *Oxalis* #6 darabjai
+álltak a 3–5. helyen. Az újon:
+
+2. **Philodendron** #3 · dist 0.373 → előtagja `Philodendron › Water`
+3. **Jade Plant** #3 · dist 0.374 → előtagja `Jade Plant › Water`
+4–5. **How Often & How Much You Should Water Houseplants** #4 és #3
+
+Vagyis ahol a nyers keresés amúgy is eltalálta a választ, ott az előtag **a mezőny többi részét**
+javította — és pontosan úgy, ahogy a stratégia ígérte: a névtelen „Water" szakaszokból *megnevezett*
+öntözési szakaszok lettek, és a kérdés ezeket találja meg a véletlenszerű cikkrészletek helyett.
 
 **A magyar kérdéseknél viszont a nyers oldal továbbra sem talál pontosan** — a 2. kérdés nyers
 listája az új bázison sem tartalmaz kígyónövény-darabot. Ez a mérés józanító tanulsága: a
@@ -150,7 +164,9 @@ A golden setben **két** negatív kérdés van, mert az első futás megmutatta,
 
 Az agent **0 tool-hívással** válaszolt (a JSONL napló szerint), tehát a tudásbázisig el sem jutott:
 
-> Ez a kérdés kívül esik a szakterületemen! 😊 Én a **Szobakertész asszisztens** vagyok, és kizárólag növényekkel, növénygondozással, valamint a webshop katalógusával kapcsolatos kérdésekben tudok segíteni.
+> Ez egy növénygondozási asszisztens vagyok, és kizárólag növényekkel, növénygondozással és a webshop katalógusával kapcsolatos kérdésekben tudok segíteni. 🌿
+>
+> Az autós gumicsere sajnos nem tartozik a szakterületemre — ahhoz érdemes autószerelőhöz fordulni, vagy egy erre specializált weboldalt felkeresni.
 
 Ez érvényes eredmény — a szerep-határ működik —, de **nem a groundingot bizonyítja**: a
 retrieval le sem futott, tehát a „ne a saját tudásodból válaszolj" szabály nem került próbára.
@@ -162,25 +178,23 @@ Ez növénygondozási kérdés, tehát **átmegy a szerep-kapun**, és a napló 
 `searchKnowledge` toolt. A korpuszban viszont **egyetlen cikk sem szól húsevő növényről**. A keresés
 ennek ellenére öt találatot adott vissza:
 
-1. **How to Care for a Tradescantia** #3 · dist 0.456 · rerank 0/10
-2. **How to Care for a Fittonia** #4 · dist 0.485 · rerank 0/10
-3. **How to Care for a Stromanthe Triostar** #4 · dist 0.487 · rerank 0/10
-4. **How to Care for a Tradescantia** #4 · dist 0.492 · rerank 0/10
-5. **Our Top 10 Plant Care Tips** #6 · dist 0.492 · rerank 0/10
+1. **How to Care for a Tradescantia** #3 · dist 0.463 · rerank 0/10
+2. **Our Top 10 Plant Care Tips** #7 · dist 0.483 · rerank 0/10
+3. **How To Care for a Spider Plant** #4 · dist 0.486 · rerank 0/10
+4. **Our Top 10 Plant Care Tips** #6 · dist 0.487 · rerank 0/10
+5. **How To Care for a Spider Plant** #7 · dist 0.495 · rerank 0/10
 
 Figyeld meg: **a reranker mind az ötre 0/10-et adott** — tehát *felismerte*, hogy egyik sem válaszol a
 kérdésre. Ez a pontszám azonban nem jut el a modellhez, és nem is dob el semmit: mind az öt darab
 bekerült a kontextusba. Az agent válasza szó szerint:
 
-> Sajnálom, a bolt tudásbázisában **nem található specifikus cikk a Vénusz légycsapó (Dionaea muscipula) gondozásáról** – a keresés más növények gondozási leírásait hozta fel, amelyek nem relevánsak.
-> 
-> Erről a kérdésről nincs információm a tudásbázisban. 🌿
-> 
-> Amit tehetek helyette:
-> - **Megnézem, hogy a Vénusz légycsapó szerepel-e a katalógusunkban** – ha szeretnéd, megkeresem az elérhető példányokat.
-> - Ha más növény gondozásáról kérdezel, szívesen segítek!
-> 
-> Keressem meg a katalógusban, hogy van-e raktáron Vénusz légycsapó?
+> Sajnálom, a tudásbázisban **nem található specifikus cikk a Vénusz légycsapó (Dionaea muscipula) gondozásáról**. A keresés más növényekre vonatkozó cikkeket hozott vissza, amelyek nem relevánsak ehhez a kérdéshez.
+>
+> Erről nincs információm a tudásbázisban. 🌿
+>
+> Ha szeretnéd, tudok segíteni az alábbiakban:
+> - **Megkeresem a katalógusban**, hogy kapható-e nálunk Vénusz légycsapó.
+> - **Más, rokon témájú kérdésekben** (pl. húsevő növények általános igényei) szívesen keresek a tudásbázisban, ha más formában teszed fel a kérdést.
 
 **Az eredmény tehát: kimondja, hogy nincs róla információja, és nem hivatkozik kitalált forrásra.**
 A prompt-szabály önmagában elég volt — küszöböt ezért nem építettünk. Ha az agent halandzsázott
@@ -216,9 +230,11 @@ A keresésre gyakorolt hatás **kérdésenként eltérő, és nem egyirányú**:
   átültetés-kérdés, ahol a teljes pipeline top-1-e a *How to Care for a Sago Palm* helyett a
   *Plant Care: Potting Mix 101* lett.
 - **Ahol alig:** a kígyónövény-kérdés teljes pipeline-ja már a régi bázison is a helyes cikket hozta
-  (0,186 → 0,162); ott az előtag a lista alját tette relevánsabbá.
-- **Ahol látszólag rontott:** a monstera-kérdésnél az új futás öt általános gondozási darabot hozott
-  a régi futás *Signs of Overwatering* darabjai helyett.
+  (0,186 → 0,160); ott az előtag a lista alját tette relevánsabbá.
+- **Ahol látszólag rontott:** a monstera-kérdésnél az új futás élére két *másik növény* öntözési
+  szakasza került (*Banana Plant* #7 és *Stromanthe Triostar* #7, 5/10 és 4/10), a régi futás
+  *Signs of Overwatering* darabjai helyett — a 3–5. hely viszont már három **monstera-darab**,
+  úgyhogy a helyes cikk benne van a kontextusban, csak nem az élen.
 
 ### Miért nem lehet ebből „a chunker rontott"-ra következtetni
 
@@ -233,6 +249,11 @@ A monstera-esetet külön megmértük: **ugyanaz a kérdés, ugyanaz a tudásbá
 
 A **nyers** oldal ugyanekkor stabil volt: mindhárom találat a *The Hole Truth: Monsteras* cikkből,
 0,717–0,737 távolsággal.
+
+Ezt a jelenlegi jelentés **negyedik adatpontként** erősíti meg: a próza-előtagok kiszűrése után
+újratöltött tudásbázison ugyanennek a kérdésnek a top-1-e megint más lett (*How to Care for a Banana
+Plant* #7, 5/10) — miközben a nyers oldal ismét a *The Hole Truth: Monsteras* darabjait hozta,
+0,717-tel az élen, változatlanul. A determinisztikus oszlop stabil, a modell-vezérelt ingadozik.
 
 Vagyis a szórás forrása a **HyDE**: futásonként más hipotetikus választ ír, és a
 „recovery" vs. „emergency care" megfogalmazás más darabokba visz. **Egyetlen kérdés egyetlen futása

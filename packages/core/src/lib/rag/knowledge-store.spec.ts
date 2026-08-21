@@ -131,7 +131,7 @@ describe('knowledge-store', () => {
   it('az azonos irányú vektor távolsága gyakorlatilag nulla, a merőlegesé 1', async () => {
     // A távolságot KÖZVETLENÜL kérdezzük vissza, nem a searchChunks top-K-ján át.
     // Miért: a betöltött korpusz mellett a szándékosan MERŐLEGES sor (távolság 1.0) a
-    // legtávolabbiak közé esik — a 2041 chunkból 1724 közelebb van nála —, a source-szűrés
+    // legtávolabbiak közé esik — az 1906 chunkból 1653 közelebb van nála —, a source-szűrés
     // pedig az SQL LIMIT UTÁN, JS-ben fut, tehát a sor semmilyen ésszerű K-ba nem férne be.
     // Így a `<=>` szemantikáját a korpusz méretétől függetlenül mérjük; a searchChunks
     // rendezését a fenti teszt bizonyítja.
