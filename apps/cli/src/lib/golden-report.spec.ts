@@ -44,11 +44,28 @@ describe('renderGoldenReport', () => {
     expect(report).not.toContain('-1/10');
   });
 
-  it('a rerank ÁTRENDEZÉSÉT külön megjelöli', () => {
+  it('a TOP-1 változását külön megjelöli', () => {
     const report = renderGoldenReport('x', new Date(), [row]);
 
     // A nyers top-1 Pothos volt, a teljesé Snake Plant — ezt a jelentésnek ki kell mondania.
-    expect(report).toMatch(/átrendez/i);
+    expect(report).toContain('| top-1 változott |');
+    expect(report).toContain('MÁS darabot tett az élre');
+  });
+
+  it('a top-1 jelzés csak a TOP-1-et méri, a 2–5. hely cseréjét NEM', () => {
+    // Az oszlop neve korábban „átrendezett" volt, a mérés viszont mindig is a top-1-re
+    // szólt. Ha a rerank csak a lista alját forgatja, ide „nem" kerül — és a jelentésnek
+    // ezt kell mondania, nem többet.
+    const sameTopDifferentTail: GoldenRow = {
+      ...row,
+      raw: [hit('Snake Plant', 0.26, -1), hit('Pothos', 0.31, -1)],
+      full: [hit('Snake Plant', 0.26, 9), hit('Fittonia', 0.4, 5)],
+    };
+
+    const report = renderGoldenReport('x', new Date(), [sameTopDifferentTail]);
+
+    expect(report).toContain('| nem |');
+    expect(report).toContain('_A top-1 találat nem változott._');
   });
 
   it('a negatív kérdésnél kiírja az AGENT válaszát, mert a grounding próbája az', () => {

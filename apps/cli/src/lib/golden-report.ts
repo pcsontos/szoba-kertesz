@@ -44,8 +44,15 @@ function formatHits(hits: readonly GoldenHit[]): string {
     .join('\n');
 }
 
-/** Átrendezett-e a rerank? A top-1 cím + darab-index változása a legolvashatóbb jel. */
-function reordered(row: GoldenRow): boolean {
+/**
+ * Más darab került-e az élre? A top-1 cím + darab-index változása a legolvashatóbb jel.
+ *
+ * Amit ez NEM mér: a 2–5. hely átrendeződését. Ezért hívjuk „top-1 változott"-nak az
+ * oszlopot, nem „átrendezett"-nek — a régi név többet állított, mint a mérés: ha a
+ * rerank csak a 2. és 3. helyet cseréli, ide „nem" kerül. A teljes sorrend összevetése
+ * használhatatlan lenne jelzésnek: a mérésben mind a 9 kérdésnél IGEN jönne ki.
+ */
+function topHitChanged(row: GoldenRow): boolean {
   const rawTop = row.raw[0];
   const fullTop = row.full[0];
   if (!rawTop || !fullTop) {
@@ -69,7 +76,7 @@ export function renderGoldenReport(
     '',
     '## Összefoglaló',
     '',
-    '| # | kérdés | nyelv | nyers top-1 | teljes top-1 | átrendezett |',
+    '| # | kérdés | nyelv | nyers top-1 | teljes top-1 | top-1 változott |',
     '|---|---|---|---|---|---|',
   ];
 
@@ -78,7 +85,7 @@ export function renderGoldenReport(
     const fullTop = row.full[0]?.title ?? '—';
     lines.push(
       `| ${position + 1} | ${cell(row.question.question)} | ${row.question.language} | ` +
-        `${cell(rawTop)} | ${cell(fullTop)} | ${reordered(row) ? 'IGEN — átrendezte' : 'nem'} |`,
+        `${cell(rawTop)} | ${cell(fullTop)} | ${topHitChanged(row) ? 'IGEN' : 'nem'} |`,
     );
   }
 
@@ -101,8 +108,9 @@ export function renderGoldenReport(
       '',
       formatHits(row.full),
       '',
-      reordered(row)
-        ? '**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.'
+      topHitChanged(row)
+        ? '**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata ' +
+            'különbözik. A 2–5. hely eltérését ez a jelzés nem méri.'
         : '_A top-1 találat nem változott._',
     );
 

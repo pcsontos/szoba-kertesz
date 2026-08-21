@@ -47,6 +47,12 @@ címsor-útvonalból (lásd [`chunking-strategia.md`](chunking-strategia.md) 4. 
 ezt adja vissza. A `regi-chunker` ezzel szemben **történeti** mérés: a mostani kóddal nem
 reprodukálható, mert ahhoz a régi chunkerrel kellene újratölteni a `knowledge_chunks` táblát.
 
+Mindkét jelentés utolsó oszlopa **„top-1 változott"**, nem „átrendezett": a mérés mindig is a top-1
+cím + darab-index változását nézte, a régi oszlopnév viszont többet állított ennél. Az oszlop
+átnevezése a két meglévő fájlban **formátum-átvezetés**, nem adatmódosítás — egyetlen mért szám sem
+változott tőle. (A teljes sorrend összevetése nem lenne jobb jelzés: akkor mind a 9 kérdésnél „IGEN"
+állna, és az oszlop semmit nem mondana.)
+
 **Egy korlát, amit előre ki kell mondani:** a két állapot **abszolút távolságai nem összevethetők**.
 Az előtag minden darab szövegét megváltoztatja, tehát minden vektor elmozdul. Ami összevethető, az a
 **sorrend** és az, hogy *melyik cikkből* jönnek a találatok.

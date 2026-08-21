@@ -5,17 +5,17 @@
 
 ## Összefoglaló
 
-| # | kérdés | nyelv | nyers top-1 | teljes top-1 | átrendezett |
+| # | kérdés | nyelv | nyers top-1 | teljes top-1 | top-1 változott |
 |---|---|---|---|---|---|
-| 1 | Miért sárgulnak a szobanövényem levelei? | hu | Bird of Paradise Care Guide | 5 Causes For Your Plant’s Yellow Leaves | IGEN — átrendezte |
-| 2 | Milyen gyakran öntözzem a kígyónövényt? | hu | Bird’s Nest Fern | How To Care for a Snake Plant | IGEN — átrendezte |
-| 3 | Túlöntöztem a monsterámat, mit tegyek? | hu | The Hole Truth: Monsteras | How to Care for a Banana Plant | IGEN — átrendezte |
-| 4 | Milyen növény bírja a sötét fürdőszobát? | hu | The Plant That Loves a Humid Bathroom | 10 Best Low Light Indoor Plants for Your Home or Office | IGEN — átrendezte |
-| 5 | Milyen földet használjak átültetéskor? | hu | Between Two Ferns | Plant Care: Potting Mix 101 | IGEN — átrendezte |
-| 6 | why are the leaves on my houseplant turning yellow? | en | 5 Causes For Your Plant’s Yellow Leaves | 5 Causes For Your Plant’s Yellow Leaves | IGEN — átrendezte |
+| 1 | Miért sárgulnak a szobanövényem levelei? | hu | Bird of Paradise Care Guide | 5 Causes For Your Plant’s Yellow Leaves | IGEN |
+| 2 | Milyen gyakran öntözzem a kígyónövényt? | hu | Bird’s Nest Fern | How To Care for a Snake Plant | IGEN |
+| 3 | Túlöntöztem a monsterámat, mit tegyek? | hu | The Hole Truth: Monsteras | How to Care for a Banana Plant | IGEN |
+| 4 | Milyen növény bírja a sötét fürdőszobát? | hu | The Plant That Loves a Humid Bathroom | 10 Best Low Light Indoor Plants for Your Home or Office | IGEN |
+| 5 | Milyen földet használjak átültetéskor? | hu | Between Two Ferns | Plant Care: Potting Mix 101 | IGEN |
+| 6 | why are the leaves on my houseplant turning yellow? | en | 5 Causes For Your Plant’s Yellow Leaves | 5 Causes For Your Plant’s Yellow Leaves | IGEN |
 | 7 | how often should I water a snake plant? | en | How To Care for a Snake Plant | How To Care for a Snake Plant | nem |
-| 8 | Hogyan cseréljek téli gumit az autómon? | hu | A Gardener's Guide to Growing Evergreen Trees and Shrubs | Our Top 7 Winter Plant Care Tips | IGEN — átrendezte |
-| 9 | Hogyan gondozzam a Vénusz légycsapóját? | hu | Fiddle Me This: Caring for a Fiddle Leaf Fig | How to Care for a Tradescantia | IGEN — átrendezte |
+| 8 | Hogyan cseréljek téli gumit az autómon? | hu | A Gardener's Guide to Growing Evergreen Trees and Shrubs | Our Top 7 Winter Plant Care Tips | IGEN |
+| 9 | Hogyan gondozzam a Vénusz légycsapóját? | hu | Fiddle Me This: Caring for a Fiddle Leaf Fig | How to Care for a Tradescantia | IGEN |
 
 ---
 
@@ -41,7 +41,7 @@
 4. **5 Causes For Your Plant’s Yellow Leaves** #1 · dist 0.251 · rerank 8/10
 5. **5 Causes For Your Plant’s Yellow Leaves** #4 · dist 0.289 · rerank 8/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -67,7 +67,7 @@
 4. **Our Top 10 Plant Care Tips** #6 · dist 0.379 · rerank 5/10
 5. **How Often & How Much You Should Water Houseplants** #9 · dist 0.379 · rerank 4/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -93,7 +93,7 @@
 4. **How To Care for a Monstera Deliciosa** #13 · dist 0.301 · rerank 2/10
 5. **How To Care for a Monstera Deliciosa** #8 · dist 0.307 · rerank 1/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -119,7 +119,7 @@
 4. **10 Best Low Light Indoor Plants for Your Home or Office** #3 · dist 0.380 · rerank 8/10
 5. **10 Best Low Light Indoor Plants for Your Home or Office** #4 · dist 0.397 · rerank 8/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -145,7 +145,7 @@
 4. **Plant Care: Potting Mix 101** #6 · dist 0.356 · rerank 9/10
 5. **Patio Gardening 101: Growing in Containers** #7 · dist 0.363 · rerank 9/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -171,7 +171,7 @@
 4. **5 Causes For Your Plant’s Yellow Leaves** #5 · dist 0.257 · rerank 9/10
 5. **Signs of Overwatering Your Plants** #5 · dist 0.310 · rerank 9/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -223,7 +223,7 @@ _A top-1 találat nem változott._
 4. **Our Top 7 Winter Plant Care Tips** #7 · dist 0.506 · rerank 0/10
 5. **Fall Plant Care Tips For Houseplants** #1 · dist 0.506 · rerank 0/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ### Az agent válasza (a grounding próbája)
 
@@ -257,7 +257,7 @@ _A top-1 találat nem változott._
 4. **Our Top 10 Plant Care Tips** #6 · dist 0.487 · rerank 0/10
 5. **How To Care for a Spider Plant** #7 · dist 0.495 · rerank 0/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ### Az agent válasza (a grounding próbája)
 

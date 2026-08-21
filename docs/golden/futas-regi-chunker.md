@@ -5,17 +5,17 @@
 
 ## Összefoglaló
 
-| # | kérdés | nyelv | nyers top-1 | teljes top-1 | átrendezett |
+| # | kérdés | nyelv | nyers top-1 | teljes top-1 | top-1 változott |
 |---|---|---|---|---|---|
-| 1 | Miért sárgulnak a szobanövényem levelei? | hu | Bird of Paradise Care Guide | 5 Causes For Your Plant’s Yellow Leaves | IGEN — átrendezte |
-| 2 | Milyen gyakran öntözzem a kígyónövényt? | hu | How To Care for a Monstera Deliciosa | How To Care for a Snake Plant | IGEN — átrendezte |
-| 3 | Túlöntöztem a monsterámat, mit tegyek? | hu | How To Care for a Monstera Deliciosa | How To Care for a Monstera Deliciosa | IGEN — átrendezte |
-| 4 | Milyen növény bírja a sötét fürdőszobát? | hu | The Plant That Loves a Humid Bathroom | 10 Best Low Light Indoor Plants for Your Home or Office | IGEN — átrendezte |
-| 5 | Milyen földet használjak átültetéskor? | hu | Gardening 101: How to Water Your Garden | How to Care for a Sago Palm | IGEN — átrendezte |
-| 6 | why are the leaves on my houseplant turning yellow? | en | Bird of Paradise Care Guide | 5 Causes For Your Plant’s Yellow Leaves | IGEN — átrendezte |
+| 1 | Miért sárgulnak a szobanövényem levelei? | hu | Bird of Paradise Care Guide | 5 Causes For Your Plant’s Yellow Leaves | IGEN |
+| 2 | Milyen gyakran öntözzem a kígyónövényt? | hu | How To Care for a Monstera Deliciosa | How To Care for a Snake Plant | IGEN |
+| 3 | Túlöntöztem a monsterámat, mit tegyek? | hu | How To Care for a Monstera Deliciosa | How To Care for a Monstera Deliciosa | IGEN |
+| 4 | Milyen növény bírja a sötét fürdőszobát? | hu | The Plant That Loves a Humid Bathroom | 10 Best Low Light Indoor Plants for Your Home or Office | IGEN |
+| 5 | Milyen földet használjak átültetéskor? | hu | Gardening 101: How to Water Your Garden | How to Care for a Sago Palm | IGEN |
+| 6 | why are the leaves on my houseplant turning yellow? | en | Bird of Paradise Care Guide | 5 Causes For Your Plant’s Yellow Leaves | IGEN |
 | 7 | how often should I water a snake plant? | en | How To Care for a Snake Plant | How To Care for a Snake Plant | nem |
 | 8 | Hogyan cseréljek téli gumit az autómon? | hu | A Gardener's Guide to Growing Evergreen Trees and Shrubs | A Gardener's Guide to Growing Evergreen Trees and Shrubs | nem |
-| 9 | Hogyan gondozzam a Vénusz légycsapóját? | hu | How to Care for Begonias | How to Care for a Fittonia | IGEN — átrendezte |
+| 9 | Hogyan gondozzam a Vénusz légycsapóját? | hu | How to Care for Begonias | How to Care for a Fittonia | IGEN |
 
 ---
 
@@ -41,7 +41,7 @@
 4. **5 Causes For Your Plant’s Yellow Leaves** #5 · dist 0.295 · rerank 8/10
 5. **5 Causes For Your Plant’s Yellow Leaves** #4 · dist 0.302 · rerank 8/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -67,7 +67,7 @@
 4. **How To Keep Your Plants Alive While On Vacation** #14 · dist 0.360 · rerank 3/10
 5. **How Often & How Much You Should Water Houseplants** #9 · dist 0.349 · rerank 2/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -93,7 +93,7 @@
 4. **How To Care for a Monstera Deliciosa** #5 · dist 0.336 · rerank 6/10
 5. **Signs of Overwatering Your Plants** #3 · dist 0.438 · rerank 5/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -119,7 +119,7 @@
 4. **Our 6 Most Popular Houseplants for Fall** #2 · dist 0.430 · rerank 9/10
 5. **The Ultimate Low Light Plant** #3 · dist 0.433 · rerank 9/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -145,7 +145,7 @@
 4. **How to Care for a Rubber Tree or Ficus Elastica** #8 · dist 0.296 · rerank 10/10
 5. **How to Care for a Pothos Plant** #7 · dist 0.299 · rerank 10/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -171,7 +171,7 @@
 4. **5 Causes For Your Plant’s Yellow Leaves** #2 · dist 0.312 · rerank 9/10
 5. **5 Causes For Your Plant’s Yellow Leaves** #4 · dist 0.278 · rerank 8/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ---
 
@@ -262,7 +262,7 @@ _A top-1 találat nem változott._
 4. **How to Care for Begonias** #5 · dist 0.478 · rerank 0/10
 5. **Dino Plant** #10 · dist 0.481 · rerank 0/10
 
-**A rerank átrendezte a sorrendet** — a két lista top-1 találata különbözik.
+**A teljes pipeline MÁS darabot tett az élre** — a két lista top-1 találata különbözik. A 2–5. hely eltérését ez a jelzés nem méri.
 
 ### Az agent válasza (a grounding próbája)
 
