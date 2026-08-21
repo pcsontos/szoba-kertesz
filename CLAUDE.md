@@ -80,7 +80,7 @@ The layout is the teaching map: **one concept = one directory**, the shared piec
 
 ## Architecture (Nx monorepo — scaffolded)
 
-`docs/architektura.md` specifies the structure, now in place:
+`docs/architektura-monorepo.md` specifies the structure, now in place:
 
 ```
 packages/core   agent logic — agents/ (agent-loop + one dir per agent),

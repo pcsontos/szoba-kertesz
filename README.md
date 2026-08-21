@@ -45,7 +45,7 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ---
 
-Architektúra és domain-modell: [`docs/architektura.md`](docs/architektura.md) · teljes fázisterv: [`docs/implementacios-terv.md`](docs/implementacios-terv.md) · konvenciók: [`docs/konvenciók.md`](docs/konvenciók.md)
+Architektúra és domain-modell: [`docs/architektura-monorepo.md`](docs/architektura-monorepo.md) · teljes fázisterv: [`docs/implementacios-terv.md`](docs/implementacios-terv.md) · konvenciók: [`docs/konvenciók.md`](docs/konvenciók.md)
 
 A projekt egy AI-ágensfejlesztés kurzus keretében készül: a mérföldköveket a tananyag adja, a tervezési és megvalósítási döntések a `docs/` alatt dokumentáltak.
 
@@ -286,7 +286,7 @@ majd VS Code-ban indítsd az **"Attach to @szoba-kertesz/cli (terminal)"** konfi
 ## Dokumentáció
 
 - [`docs/brs-szoba-kertesz.md`](docs/brs-szoba-kertesz.md) — üzleti/funkcionális követelmények
-- [`docs/architektura.md`](docs/architektura.md) — a tervezett fájlstruktúra és kulcsdöntések
+- [`docs/architektura-monorepo.md`](docs/architektura-monorepo.md) — a tervezett fájlstruktúra és kulcsdöntések
 - [`docs/tech-stack.md`](docs/tech-stack.md) — technológiai stack és a `products` tábla sémája
 - [`docs/system-prompt.md`](docs/system-prompt.md) — az agent tényleges system promptja
 - [`docs/system-prompt-javitas.md`](docs/system-prompt-javitas.md) — a system prompt minőségi javításainak indoklása
