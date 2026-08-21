@@ -283,6 +283,54 @@ node --inspect apps/cli/dist/main.js ask "kérdés"
 
 majd VS Code-ban indítsd az **"Attach to @szoba-kertesz/cli (terminal)"** konfigurációt. Ha egy nagyon korai sorra (pl. a fájl elejére) teszel breakpointot, `--inspect-brk`-val indítsd a folyamatot, hogy megvárja a csatlakozást, mielőtt bármi lefutna.
 
+## Multi-provider szereposztás
+
+A rendszerben **három modell** dolgozik, és mindegyik azért az, amiért:
+
+| modell | feladat | miért pont az |
+|---|---|---|
+| OpenAI `text-embedding-3-small` | szöveg → 1536 szám (a tudásbázis felépítése + **minden** keresés) | **Kényszer, nem választás:** az Anthropic nem ad embedding-modellt. Ez a projekt egyetlen nem-Anthropic hívása, és ezért opcionális az `OPENAI_API_KEY` — nélküle a katalógus-oldal teljesen működik, csak a `searchKnowledge` bukik el érthető magyar üzenettel. |
+| Claude Haiku 4.5 | **HyDE** (hipotetikus válasz a kereséshez) + **rerank** (a top-20 átrangsorolása) | Sok hívás, sablonos feladat, alacsony minőségi plafon: egy 2-3 mondatos angol bekezdés kitalálása és 20 részlet 0-10-es pontozása nem igényel nagy modellt. A rerank `generateObject`-tel megy, tehát a kimenet szerkezete garantált — nem kell parse-olni, amit a modell írt. |
+| Claude Sonnet 4.6 (`ANTHROPIC_MODEL`) | a **végső válasz** | Itt a megfogalmazás, a magyar nyelv, a tool-használat sorrendje és a grounding-fegyelem számít — hogy a modell kimondja, ha nincs információja, ahelyett hogy forrást találna ki. |
+
+A tanulság egy mondatban: **a drága modell válaszol, az olcsó válogat.**
+
+## Költségbecslés
+
+> **Amit mértünk, és amit becsülünk.** A válasz-oldal tokenszámai **valódi naplósorok** (`logs/*.jsonl`, `usage` mező). A HyDE, a rerank és az embedding hívásai viszont a `retrieve.ts`-en belül futnak, **nem az agent-loopban** — az `onStepEnd` nem látja őket, tehát a JSONL sem tartalmazza. Ezekre a **mért karakterszámokból** adunk becslést (4 karakter ≈ 1 token). Árak: [Anthropic](https://www.anthropic.com/pricing) $1/$5 (Haiku 4.5) és $3/$15 (Sonnet 4.6) / 1M token, [OpenAI](https://developers.openai.com/api/docs/pricing) $0,02 / 1M token.
+
+### A tudásbázis felépítése (`pnpm knowledge:ingest`)
+
+| tétel | mért érték |
+|---|---|
+| dokumentum | 202 |
+| chunk | 1906, átlag 598 karakter |
+| embeddelt szöveg | ~1,14 millió karakter ≈ **285 000 token** |
+| API-hívás | 20 (100-as kötegek) |
+| **költség** | **~0,6 cent** (285 000 / 1M × $0,02) |
+
+Egy teljes újraépítés tehát **fél cent alatt van** — ezért helyes döntés ma a `TRUNCATE` + újratöltés az inkrementális frissítés helyett ([`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md)).
+
+### Egy kérdés ára
+
+Egy **gondozási** kérdés (a tudásbázist is használja) négy hívásból áll:
+
+| lépés | modell | input | output | költség |
+|---|---|---|---|---|
+| HyDE | Haiku 4.5 | ~75 token (prompt + kérdés) | ≤200 token (`HYDE_MAX_TOKENS`) | ~0,11 cent |
+| embedding | `text-embedding-3-small` | ~200 token | — | ~0,0004 cent |
+| rerank | Haiku 4.5 | ~3100 token (20 × 600 karakter előnézet) | ~250 token | ~0,44 cent |
+| **válasz** | **Sonnet 4.6** | **8702 token** (mért) | **287 token** (mért) | **~3,0 cent** |
+| | | | **összesen** | **~3,6 cent** |
+
+Egy **katalógus**-kérdés (csak SQL, tudásbázis nélkül) ennél olcsóbb: mérve 3849 / 235 token, azaz **~1,5 cent**.
+
+Három dolog látszik ebből:
+
+1. **A válaszmodell viszi a költség ~85%-át.** A RAG-pipeline három hívása együtt sem éri el a fele árát.
+2. **A RAG ára maga a kontextus:** a kereséssel dolgozó kérdés inputja 3849 → 8702 token, mert az öt darab bekerül a promptba. A modellváltás olcsóbb modellre itt sokkal többet spórolna, mint a pipeline bármelyik lépésének elhagyása.
+3. **Az embedding gyakorlatilag ingyen van** — a teljes tudásbázis felépítése annyiba kerül, mint egy hatod válasz.
+
 ## Dokumentáció
 
 - [`docs/brs-szoba-kertesz.md`](docs/brs-szoba-kertesz.md) — üzleti/funkcionális követelmények
@@ -295,6 +343,9 @@ majd VS Code-ban indítsd az **"Attach to @szoba-kertesz/cli (terminal)"** konfi
 - [`docs/dev-workflow.md`](docs/dev-workflow.md) — git workflow, branch- és commit-konvenciók
 - [`docs/implementacios-terv.md`](docs/implementacios-terv.md) — a teljes fázisterv (A1–A6, B1–B3)
 - [`docs/roi.md`](docs/roi.md) — ROI-levezetés (5 fős lakberendező iroda megtakarítása számokkal)
+- [`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md) — a tudásbázis karbantartásának terve + adatfolyam-ábra
+- [`docs/chunking-strategia.md`](docs/chunking-strategia.md) — mit mértünk a korpuszon, és mi következett belőle
+- [`docs/golden-set.md`](docs/golden-set.md) — a golden set elemzése: nyers vektorkeresés vs. teljes pipeline, negatív teszt
 
 ## Git workflow
 
