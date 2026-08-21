@@ -19,6 +19,17 @@ export default [
       // egy modul-privát Zod-sémára a .d.ts-ben már csak a `z.infer<typeof …>`
       // hivatkozik, tehát ott „csak típusként használt" — a no-unused-vars elbukik
       // egy olyan fájlon, amit senki nem írt és nem is szerkeszthet.
+      //
+      // A PR-review azt javasolta, hogy a gyökérnél oldjuk meg: `noEmit` a
+      // tsconfig.spec.json-ban, hogy ne is keletkezzen .d.ts. MEGMÉRVE (2026-08-21,
+      // TypeScript 5.9.3, @nx/js/typescript plugin) ez ROSSZABB: a typecheck target
+      // ilyenkor nem szigorúbb lesz, hanem ELTŰNIK —
+      //   "The 'typecheck' target is disabled because one or more project references
+      //    set 'noEmit: true' in their tsconfig."
+      // …és a parancs 0-s kóddal, zölden fut le anélkül, hogy bármit ellenőrizne.
+      // A `composite: true` miatt (tsconfig.base.json) a declaration sem kapcsolható
+      // ki. Vagyis a lint-ignore itt nem a tünet kezelése, hanem az ára annak, hogy a
+      // typecheck valóban fusson: a zölden hazudó ellenőrzésnél ez a jobb csere.
       '**/out-tsc',
       '**/vite.config.*.timestamp*',
       '**/vitest.config.*.timestamp*',

@@ -10,7 +10,7 @@ Magyar nyelvű AI-ágens szobanövény-katalógushoz: természetes nyelvű kérd
 | # | leadandó | hol | mi bizonyítja |
 |---|---|---|---|
 | 1 | működő repo + futtatási instrukciók | [„Build és futtatás"](#build-és-futtatás) | a CI zöld: `lint` + `typecheck` + `build` |
-| 2 | chunking-stratégia indoklással | [`docs/chunking-strategia.md`](docs/chunking-strategia.md) | minden száma a 202 cikken mérve; 16 unit teszt a `chunk.ts`-en |
+| 2 | chunking-stratégia indoklással | [`docs/chunking-strategia.md`](docs/chunking-strategia.md) | minden száma a 202 cikken mérve; 17 unit teszt a `chunk.ts`-en |
 | 3 | golden set + nyers vs. teljes + negatív teszt | [`docs/golden-set.md`](docs/golden-set.md) · [`docs/golden/`](docs/golden/) | 9 kérdés, két tudásbázis-állapoton, két generált mérésben |
 | 4 | multi-provider szereposztás | [„Multi-provider szereposztás"](#multi-provider-szereposztás) | három modell, három indok, aktuális árakkal |
 | 5 | `docs/ARCHITEKTURA.md` + ábra | [`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md) · [`docs/img/`](docs/img/) | 7 szakasz + az adatfolyam-ábra a törlés útjával |
@@ -55,7 +55,7 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Minőségi kapuk
 
-260 teszteset 45 spec fájlban (Vitest): `core` 194, `cli` 34, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
+262 teszteset 45 spec fájlban (Vitest): `core` 195, `cli` 35, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
 
 ---
 
