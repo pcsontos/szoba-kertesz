@@ -77,7 +77,7 @@ describe('chunkMarkdown', () => {
   // MIÉRT: a korpusz 112 gondozási cikke azonos szerkezetű — a cím a növény neve,
   // alatta Sunlight / Water / Humidity / … szakaszok. Mérve: 54 cikkben van külön
   // "Water" címsor, 56-ban "Humidity", és a NÖVÉNY NEVE egyikben sincs benne. A darabok
-  // 42%-ából hiányzik a saját cikkük címének kulcsszava, tehát a vektortérben
+  // 43%-ából hiányzik a saját cikkük címének kulcsszava, tehát a vektortérben
   // megkülönböztethetetlenek. A címsorok SZINTJE nem egységes (a korpusz leggyakoribb
   // szintje az h5), ezért a teszt is több szinten próbálja az útvonalat.
 
@@ -159,7 +159,7 @@ describe('chunkMarkdown', () => {
   });
 
   it('a MÉLY címsorszinteket is követi, és a kihagyott szinteket átugorja', () => {
-    // A korpuszban a leggyakoribb címsorszint az h5 (767 db), h2 alatt közvetlenül —
+    // A korpuszban a leggyakoribb címsorszint az h5 (607 db), h2 alatt közvetlenül —
     // a köztes h3/h4 szintek hiányoznak. Az útvonalban ezek nem hagyhatnak lyukat.
     const chunks = chunkMarkdown(
       '## Learn More\n\nBevezető.\n\n##### Water\n\nHetente egyszer.',
@@ -172,5 +172,53 @@ describe('chunkMarkdown', () => {
     expect(chunks[1]?.content).toBe(
       'Snake Plant › Learn More › Water\n\n##### Water\n\nHetente egyszer.',
     );
+  });
+
+  it('a PRÓZA-címsor a törzsben marad, de az útvonalba NEM kerül be', () => {
+    // A korpuszban a cikkek bevezetője gyakran "######"-tal formázott MONDAT. Ha ez
+    // útvonalnak számítana, a teljes bevezető előtagként rárakódna a szakasz minden
+    // darabjára — mérve 624 karakteres előtagot is termelt, a törzs mellé, ugyanabba
+    // a darabba. Helymegjelölésnek egy bekezdésnyi szöveg használhatatlan.
+    const intro = `###### ${'Ferns are fabulous and they are amongst the first plants on land.'} `;
+    const chunks = chunkMarkdown(
+      `# Fern Guide\n\n${intro}\n\n## Water\n\nHetente.`,
+      {
+        docTitle: 'Fern Guide',
+      },
+    );
+
+    const introChunk = chunks.find((chunk) =>
+      chunk.content.includes('fabulous'),
+    );
+    expect(introChunk?.content).toBe(`Fern Guide\n\n${intro.trim()}`);
+    // A rákövetkező szakasz útvonala is tiszta marad: a bevezető nem szennyezte be.
+    expect(chunks.at(-1)?.content).toBe(
+      'Fern Guide › Water\n\n## Water\n\nHetente.',
+    );
+  });
+
+  it('ÜRES docTitle = nincs cím: nem gyárt fej nélküli " › Water" előtagot', () => {
+    // A betöltő ma nem ad üres címet (`field('title') || fallbackTitle`), de a publikus
+    // API engedi — és üres címmel az előtag rosszabb lenne, mint a hiánya.
+    const chunks = chunkMarkdown('## Water\n\nHetente egyszer.', {
+      docTitle: '   ',
+    });
+
+    expect(chunks[0]?.content).toBe('## Water\n\nHetente egyszer.');
+  });
+
+  it('a maxChars CÉL-méret, nem kemény korlát — az előtag fölé kerül', () => {
+    // Ezt a tesztet nem azért írtuk, mert így HELYES, hanem mert így VAN: az útvonal-
+    // előtag a méret-ellenőrzés után kerül a darabba. Mérve a korpuszon: a leghosszabb
+    // darab 1988 karakter 1000-es kerettel. Ha valaki szűkíti a keretet, itt bukjon el.
+    const body = 'x'.repeat(100);
+    const chunks = chunkMarkdown(`## Water\n\n${body}`, {
+      docTitle: 'Snake Plant',
+      maxChars: 120,
+    });
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]?.content.length).toBeGreaterThan(120);
+    expect(chunks[0]?.content.startsWith('Snake Plant › Water\n\n')).toBe(true);
   });
 });

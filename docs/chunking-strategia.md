@@ -109,13 +109,24 @@ A harmadik csoport valódi tartalom, csak `######`-tal formázva — a cikkek be
 Ezért a szabály kivételt kapott: **60 karakter fölött egy címsor már mondat, nem címke**. A leghosszabb
 valódi szakaszcím a korpuszban jóval rövidebb ennél, tehát a határ tisztán vág.
 
+**Ugyanez a határ dönt az útvonalról is** — és ez a PR-review után derült ki. Ha a mondat-címsor
+*címsorként* számít, akkor be is kerül a címsor-útvonalba, és onnan **előtagként rárakódik a szakasz
+minden darabjára** — ráadásul a törzs mellé, ugyanabba a darabba. Mérve a 202 fájlon: **381 darab (20%)
+előtagja volt 100 karakternél hosszabb, 121-é 200-nál, a leghosszabb 624 karakter** — vagyis egy teljes
+bevezető bekezdés, megduplázva, minden darab tetején. Ez pontosan az a jelentés-elmosódás, ami ellen a
+darabolás egyáltalán van: az egy cikkből származó darabokat **egymáshoz** teszi hasonlóbbá.
+
+A szabály tehát két helyen dönt, ugyanabban a szellemben: a mondat-címsor **tartalom** (a darab marad),
+de **nem címke** (az útvonalba nem kerül be). Az eredmény: a leghosszabb előtag 624 → **191 karakter**,
+200 fölött **egy sincs**, a darabszám pedig változatlan — a szűrés csak az előtagot érinti.
+
 Végeredmény: **2041 → 1906 darab**, kiesik 135.
 
 ## 5. Amit tudatosan NEM csináltunk
 
 | lehetőség | a mért adat | miért nem |
 |---|---|---|
-| **A törpe darabok összevonása** | a régi chunkerben 462 darab (23%) volt 200 karakter alatt | Az előtag ezt **magától** megoldotta: az új chunkerben 190 darab (10%) van 200 alatt, és a medián 429 → 547 karakterre nőtt. Egy külön összevonó lépés ma nem javítana számottevően, viszont elrontaná a szakaszhatárokat — a méret kedvéért ragasztana össze két gondolatot. |
+| **A törpe darabok összevonása** | a régi chunkerben 462 darab (23%) volt 200 karakter alatt | Az előtag ezt **magától** megoldotta: az új chunkerben 218 darab (11%) van 200 alatt, és a medián 429 → 531 karakterre nőtt. Egy külön összevonó lépés ma nem javítana számottevően, viszont elrontaná a szakaszhatárokat — a méret kedvéért ragasztana össze két gondolatot. |
 | **A szakaszhatár szűkítése h1–h3-ra** | csak h1–h3-nál vágva 700 szakasz lenne, medián 581 karakter, de **204 szakasz 1000 karakter fölött** | A korpusz szakaszszintje h5 (607 db) — a h4–h6 határok elhagyása pont a *gondozási szakaszokat* olvasztaná össze („Water" + „Humidity" + „Soil" egy darabban). A méret ettől nem lenne jobb, a fókusz viszont elveszne. |
 | **A h5/h6 külön kezelése** | a címsorok 59%-a h4–h6 | Nincs mit kezelni rajta: az útvonal szintfüggetlen. Egy szint-alapú szabály ennél a korpusznál önkényes lenne. |
 | **Szemantikus (modell-alapú) darabolás** | — | Minden dokumentum újradarabolása modellhívásokba kerülne, minden újraépítéskor. A szerző tagolása ingyen van, és ennél a korpusznál — ahol a szerkezet erős és következetes — elég. |
@@ -131,8 +142,8 @@ felesleges technika nem érdem, hanem karbantartási teher.
 |---|---|---|
 | darabszám | 2041 | 1906 |
 | a darab tartalmazza a saját cikkének címét | 1157 (57%) | **1906 (100%)** |
-| medián darabhossz | 429 karakter | **547 karakter** |
-| 200 karakter alatti darab | 462 (23%) | **190 (10%)** |
+| medián darabhossz | 429 karakter | **531 karakter** |
+| 200 karakter alatti darab | 462 (23%) | **218 (11%)** |
 | legkisebb darab | 3 karakter | **28 karakter** |
 
 **Mérés a kereséssel** ([`docs/golden-set.md`](golden-set.md)): a legtisztább bizonyíték az angol
