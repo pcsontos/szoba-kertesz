@@ -11,7 +11,7 @@
     "question": "Milyen gyakran öntözzem a kígyónövényt?",
     "language": "hu",
     "kind": "thematic",
-    "why": "A CÍMSOR-ÚTVONAL próbája: 23 cikkben van '## Water' szakasz, és a növény neve egyikben sincs benne. Ha valahol, itt kell javulnia a találatnak."
+    "why": "A CÍMSOR-ÚTVONAL próbája: mérve 54 cikkben van külön 'Water' szakasz-címsor, és a növény neve egyikben sincs benne. Ha valahol, itt kell javulnia a találatnak."
   },
   {
     "id": "tulontozott-monstera",
@@ -32,7 +32,7 @@
     "question": "Milyen földet használjak átültetéskor?",
     "language": "hu",
     "kind": "thematic",
-    "why": "Több cikk '## Soil' szakasza felel rá (23 cikkben van ilyen). A HyDE-nak itt kell eldöntenie, melyik kontextusban kérdezünk."
+    "why": "Több cikk 'Soil' szakasza felel rá (mérve 28 cikkben van ilyen). A HyDE-nak itt kell eldöntenie, melyik kontextusban kérdezünk."
   },
   {
     "id": "yellow-leaves-en",
