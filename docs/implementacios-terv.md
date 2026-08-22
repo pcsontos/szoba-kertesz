@@ -173,6 +173,19 @@ pnpm-workspace.yaml: packages/*, apps/*
 
 Minden sor végén: **te tesztelsz → ha zöld, commitolunk és merge-elünk.**
 
+## Hol tart a terv — a kurzus-alkalmak (kiegészítés, 2026-08-22)
+
+Az A1–B3 fázisok után a projekt a kurzus alkalmain nőtt tovább; ez a táblázat köti össze a fenti tervet a jelennel. A részletes tervek a `docs/superpowers/plans/` alatt vannak, alkalmanként egy fájl.
+
+| Alkalom | Mi került be | Mi maradt ki tudatosan |
+| --- | --- | --- |
+| 04. | második agent (`ingest`), egy írási út (`upsertProduct`), a KÖZÖS agent-loop, Shopify-feed | — |
+| 05. | `apps/server` + `apps/web` (streamelő chat), szerep (`--role admin`), `delegateToIngest` | — |
+| 06. | tudásbázis (RAG): 202 cikk → 1906 chunk, HyDE + rerank, tool-kártyák, üzenet-stream | — |
+| 07. | **A+B fázis:** `customers` tábla + `queryCustomers`, beszélgetés-perzisztencia (`threads` + `messages`), negyedik DB-szerep, thread-API, `--thread`, webes thread-lista és megosztható URL | **C fázis** (orchestrátor-agent, package-agent, `ORCHESTRATION_MODE`) és **D fázis** (voice miniapp, flow-test skill) |
+
+A 07. alkalom C fázisa azért maradt ki, mert önmagában nagyobb, mint az A+B együtt, a kódvezetés maga jelöli kiszállási pontnak az A+B végét, és a 08–09. alkalom nem épít rá. A döntés indoklása a `docs/superpowers/specs/2026-08-22-ora-07-perzisztencia-design.md` 1. döntésénél, a lezárás bizonyítéka a `docs/ora-07-zaro-ellenorzes.md`-ben.
+
 ## Testing Strategy
 
 - **Unit (Vitest, TDD ahol értelmes):** `echo`, `sql-guard`, `config` (env-validáció), `system-prompt` (schema-context tartalom) — piros → zöld → refaktor.
