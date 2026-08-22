@@ -29,6 +29,18 @@ try {
   process.exit(1);
 }
 
+// A perzisztencia a szerver ALAPFUNKCIÓJA: enélkül a /api/chat MINDEN kérésnél
+// elhasalna. Ezért itt, indításkor derüljön ki, ne az első üzenetnél. A config.ts
+// szándékosan OPCIONÁLISNAK veszi ezt a változót — a CLI egylövetű `ask` parancsa
+// nem perzisztál, tehát annak tényleg nem kell.
+if (!process.env['DATABASE_URL_CHAT']) {
+  console.error(
+    'szobakertész szerver: hiányzó DATABASE_URL_CHAT — a beszélgetés-tár (threads + ' +
+      'messages) ezen a kapcsolaton megy, a szoba-kertesz_chat szerepen. Vedd fel a .env fájlba.',
+  );
+  process.exit(1);
+}
+
 // A folyamatos "control room" log — UGYANAZ a fájl, mint a CLI-nél (tail -f).
 setWatchLog(join(process.cwd(), 'logs', 'agent.log'));
 
