@@ -3428,6 +3428,50 @@ git add apps/web/src
 git commit -m "feat: thread-lista és megosztható beszélgetés-URL a webchatben (Task 11)"
 ```
 
+> **Végrehajtva 2026-08-22:** mind a tíz lépés, commit `122dc9f` (6 fájl). Teszt-állapot utána:
+> **324 zöld** (core 221, cli 52, server 31, **web 20** — a 13-ról), `typecheck` + `lint` + `build`
+> mind az öt projektre zöld.
+>
+> **A fenti `App.tsx`-részlet NEM FORDUL — ne másold vissza:** a `part as { state: string }` alakú
+> kényszerítés `TS2352`-t ad („neither type sufficiently overlaps"), mert az `AssistantPart` nem fedi
+> ezeket a mezőket, tehát a cast csak `unknown`-on át menne. A megoldás nem cast, hanem TÍPUS: a
+> `state?`, `input?`, `output?` mezők bekerültek az `AssistantPart` interfészbe, és az `App.tsx`
+> `part.state ?? ''` / `part.input` / `part.output` alakban adja tovább a `ToolCard`-nak.
+>
+> **A `fetch`-et MINDKÉT web-specben stubolni kell** — a terv ezt csak az új teszteknél tette. Az App
+> induláskor lekéri a `/api/threads`-et, tehát stub nélkül a `App.spec.tsx` meglévő két tesztje és a
+> teljes `App.error.spec.tsx` VALÓDI hálózati hívást indítana a localhost:3000-re. Az error-specben a
+> stub SOSEM oldódik fel (`new Promise(() => undefined)`): egy késve érkező válasz a teszt lezárása
+> után frissítene állapotot, amire React `act()`-figyelmeztetés jön. A `App.spec.tsx` két régi
+> tesztje pedig `await findByText(...)`-tel zárul, ugyanezért.
+>
+> **A terv négy tesztjén felül egy ötödik:** a `?thread=` URL-ből való visszatöltés **tool-kártyával**
+> — ez pinneli, hogy a tár a TELJES `UIMessage.parts`-ot őrzi (a CLI lapít, a web nem).
+>
+> **A `useEffect`-ben nincs `eslint-disable`:** a terv a mount-effektushoz `exhaustive-deps` kikapcsolást
+> javasolt; helyette egy `restored` ref-guard van, és az `openThread` benne van a függőségekben. Így a
+> szabály él, és egy esetleges identitás-változás sem tudja felülírni a közben elkezdett beszélgetést.
+>
+> **Step 9 — a négy pontból HÁROM ingyen igazolva** (csak DB-olvasás, egyetlen modellhívás nélkül):
+> F5 az `?thread=aef06f23-…` URL-lel → a teljes 8 üzenetes beszélgetés visszajött, **tool-kártyákkal**
+> · a kattintás `?thread=<uuid>`-ra írja az URL-t, és az URL önmagában visszaadja a beszélgetést · a
+> **Task 10-ben CLI-ből indított** beszélgetés ott van a listában, és megnyitva SZÖVEGKÉNT látszik,
+> kártya nélkül — a „tár egy, nézet kettő" elv élőben.
+>
+> **A negyedik pont (fizetős, ~3,6 cent):** új kérdés a böngészőből („Hány fűszernövény van a
+> katalógusban?") → tool-kártya + válasz („2 fűszernövény"), az URL magától
+> `?thread=f0e20519-…`-ra váltott, és a lista élére került az új beszélgetés. A tárban az
+> assistant-üzenet részei: `["step-start","tool-runSql","step-start","text"]` — **`data-thread`
+> NINCS köztük**, tehát a vezérlő rész tényleg kiszűrődik mentés előtt (Task 8), a tool-rész viszont
+> megmarad, ezért rajzolódnak vissza a kártyák.
+>
+> **Két üzemeltetési buktató, ami időbe került:** (1) egy órák óta bennragadt `nx serve server`
+> blokkolhatja az nx serve-taszkot („Waiting for server:serve:development in another nx process"),
+> miközben SEMMI nem figyel a 3000-en — kilövés helyett a szerver közvetlenül is indítható:
+> `pnpm exec tsx --conditions=@szoba-kertesz/source apps/server/src/main.ts`. (2) A `typecheck` és a
+> `build` EGY `run-many`-ben versenyezhet: a `vite build` felülírja az `apps/web/dist`-et, amiből a
+> `tsc` a projekt-hivatkozások `.d.ts`-eit olvasná (`TS6305`) — újrafuttatva zöld, nem valódi hiba.
+
 ---
 
 ### Task 12: Doksi-szinkron és záró élő ellenőrzés
