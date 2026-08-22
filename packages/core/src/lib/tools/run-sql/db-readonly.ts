@@ -51,10 +51,22 @@ function resolvePool(deps: DbReadonlyDeps): Pool {
  */
 export async function queryReadonly<T extends QueryResultRow = QueryResultRow>(
   sql: string,
-  deps: DbReadonlyDeps = {},
+  // A tömb SZÁNDÉKOSAN mutable (nem `readonly`): az `Array.isArray` egy readonly
+  // tömböt tartalmazó unióban nem szűkít, és a hívó oldalon cast kellene helyette.
+  valuesOrDeps: unknown[] | DbReadonlyDeps = [],
+  maybeDeps: DbReadonlyDeps = {},
 ): Promise<QueryResult<T>> {
+  // KÉT hívási alak, hogy a meglévő `queryReadonly(sql, deps)` hívók (runSql,
+  // listCategories) VÁLTOZATLANUL működjenek: ha a második argumentum tömb, az a
+  // paraméter-lista; ha objektum, az a deps. A queryCustomers az elsőt használja —
+  // ott a modell adja a szűrők ÉRTÉKÉT, tehát paraméterezni KELL.
+  const values = Array.isArray(valuesOrDeps) ? valuesOrDeps : [];
+  const deps = Array.isArray(valuesOrDeps) ? maybeDeps : valuesOrDeps;
   const pool = resolvePool(deps);
-  return pool.query<T>(sql);
+  // Paraméter nélkül EGYARGUMENTUMOS hívás marad. A `pool.query(sql, [])` a pg-nek
+  // ugyanaz, de a meglévő specek a hívás ALAKJÁRA is állítanak — és az a szerződés
+  // nem ennek a Tasknak a hatásköre.
+  return values.length > 0 ? pool.query<T>(sql, values) : pool.query<T>(sql);
 }
 
 /**

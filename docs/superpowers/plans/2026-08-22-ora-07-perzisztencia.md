@@ -826,9 +826,21 @@ export async function queryReadonly<T extends QueryResultRow = QueryResultRow>(
   const values = Array.isArray(valuesOrDeps) ? valuesOrDeps : [];
   const deps = Array.isArray(valuesOrDeps) ? maybeDeps : valuesOrDeps;
   const pool = resolvePool(deps);
-  return pool.query<T>(sql, values as unknown[]);
+  // Paraméter nélkül EGYARGUMENTUMOS hívás marad. A `pool.query(sql, [])` a pg-nek
+  // ugyanaz, de három meglévő spec a hívás ALAKJÁRA is állít.
+  return values.length > 0 ? pool.query<T>(sql, values) : pool.query<T>(sql);
 }
 ```
+
+**Két buktató, MÉRVE a végrehajtáskor — ne írd vissza a naiv változatot:**
+
+1. A paraméter-tömb típusa **`unknown[]`, nem `readonly unknown[]`**. Az `Array.isArray`
+   egy readonly tömböt tartalmazó unióban **nem szűkít** (`error TS2345`), és a hívó
+   oldalon cast kellene helyette.
+2. A `pool.query(sql, [])` alak **három meglévő specet elbuktat**
+   (`list-categories-tool.spec.ts`, `run-sql-tool.spec.ts`, `db-readonly.spec.ts`):
+   azok `toHaveBeenCalledWith(sql)`-t állítanak, egyetlen argumentummal. Ezért marad
+   az egyargumentumos ág, ha nincs paraméter — nem a specek íródnak át.
 
 - [ ] **Step 6: Run tests to verify they pass**
 
