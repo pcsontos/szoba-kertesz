@@ -2994,6 +2994,50 @@ git add apps/cli/src
 git commit -m "feat: a CLI interaktív módja is a beszélgetés-tárba ír (Task 10)"
 ```
 
+> **Végrehajtva 2026-08-22:** mind a tíz lépés, commit `22b512d` (8 fájl, +499/−63). Teszt-állapot
+> utána: **317 zöld** (core 221, cli 52, server 31, web 13), `typecheck` + `lint` zöld. A `cli` 35-ről
+> 52-re nőtt: parse-thread 3, parse-cli-args 10, interaktív perzisztencia 4.
+>
+> **Három ponton szándékosan ELTÉRTÜNK a tervtől — ne írd vissza a fenti változatot:**
+>
+> 1. **Az injektált `ask` MÁSODIK paramétere a `history`** (`RunInteractiveOptions.ask`). A terv
+>    `--thread`-tesztje `seenHistory = 2`-t állított be az injektált `ask` TÖRZSÉBEN, ami feltétel
+>    nélkül lefut: a teszt akkor is zöld lett volna, ha az előzmény-betöltés egyáltalán nem működik.
+>    A `history` átadásával a spec a VALÓDI előzményt nézi
+>    (`[{role:'user',content:'Korábbi kérdés'}, {role:'assistant',content:'Korábbi válasz'}]`).
+>    Ára: négy meglévő assertion kiegészült a második argumentummal.
+> 2. **A meglévő CLI-specekbe is kellett `store` injektálás** — a terv ezt nem vette észre. A
+>    perzisztencia alapértelmezése a VALÓDI tár, tehát `store` nélkül minden kérdést feltevő teszt
+>    sorokat írt volna a fejlesztői adatbázisba. Kapott egy `silentStore()` helpert az
+>    `interactive.spec.ts` ÉS az `own-additions.spec.ts` is — utóbbi a terv fájllistáján sem szerepelt.
+> 3. **`splitCliArgs` az érték nélküli kapcsolóra `''`-t ad**, nem `undefined`-ot. A terv változatában
+>    a `pnpm cli --role` (érték nélkül) NÉMÁN, alapértelmezett szereppel indított volna interaktív
+>    módot — a régi inline szűrő ilyenkor `parseRole(undefined)`-dal hibázott. Két plusz teszt fedi.
+>
+> **A Step 6 helper-hivatkozása téves volt:** a `lines`, `sink` és `emptyResult` NEM létezik az
+> `interactive.spec.ts`-ben (a meglévő minta `PassThrough` input/output + `makeResult`), ezért az új
+> teszteket ahhoz igazítottuk. A terv három tesztjén felül bekerült egy negyedik is: kérdés nélkül
+> kilépve NEM jön létre thread (a lusta létrehozás bizonyítéka), és a betöltési teszt előzményébe
+> tool-part is került — a `partsToText` lapítása így mérve van, nem feltételezve.
+>
+> **Négy INGYENES élő ellenőrzés a valódi CLI-vel:** `--thread nem-uuid` → magyar hiba, exit 1,
+> egyetlen DB- és API-hívás nélkül · `szobakertesz foo` → `error: unknown command 'foo'` (a
+> regresszió nem jött vissza) · `--thread 9999…` → „Nincs ilyen beszélgetés", exit 1 · a 8 üzenetes
+> demó-thread megnyitása és azonnali `exit` → betöltötte a `szoba-kertesz_chat` szerepen, és
+> **kérdés nélkül nem hagyott új sort** (a DB utána is 1 thread / 8 üzenet).
+>
+> **Step 9 (fizetős, ~3 cent):** `pnpm cli` → „Hány kaktusz van?" → új thread
+> (`e99297c6-c48c-47ba-9b3d-bbca2b9bb04f`), a válasz „2 kaktusz", mindkét oldal a `messages`-ben.
+> Utána KÜLÖN folyamatban `pnpm cli --thread e99297c6-…` → „és a pozsgásokból?" → **„3 pozsgás"**.
+> A visszautaló kérdés önmagában értelmezhetetlen, tehát az előzmény bizonyítottan a tárból jött
+> vissza. A thread végül 4 üzenet, és új thread NEM jött létre.
+>
+> **Buktató, amit a Step 9 hozott elő:** pipe-olt stdinnel az `exit` a folyamatban lévő agent-hívás
+> ELÉ érkezik (a readline egyetlen chunkból mindkét sort emittálja), ezért a próbát egy kis vezérlő
+> szkript hajtotta, ami a következő promptra vár. Ha a hívó a végén nyitva hagyja a pipe-ot, a CLI a
+> „Viszlát!" után nem lép ki — `child.stdin.end()` kell. Ez NEM a CLI hibája: TTY-n és EOF-ra rendben,
+> 0-s kóddal kilép (mérve mindkét irányban).
+
 ---
 
 ### Task 11: A böngésző — thread-lista és megosztható URL
