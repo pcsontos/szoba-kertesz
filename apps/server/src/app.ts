@@ -21,6 +21,7 @@ import {
   type UserRole,
 } from '@szoba-kertesz/core';
 import { createDebugKnowledgeRouter } from './debug-knowledge.js';
+import { createThreadsRouter } from './threads.js';
 
 // app.ts — VÉKONY HTTP-réteg a core agent fölött. A böngészőből érkező kérdés PONTOSAN
 // ugyanazon az úton megy, mint a CLI-ben: askAgent → a közös agent-loop. A @szoba-kertesz/core
@@ -128,6 +129,10 @@ export function createApp(options: CreateAppOptions = {}): Express {
   if (process.env.NODE_ENV !== 'production') {
     app.use('/debug/knowledge', createDebugKnowledgeRouter());
   }
+
+  // A beszélgetés-lista és -betöltés. ÉLESBEN IS mountolva (nem úgy, mint a
+  // /debug/knowledge): nem indít fizetős hívást, és a webes chat alapfunkciója.
+  app.use('/api/threads', createThreadsRouter(store));
 
   app.post('/api/chat', async (req: Request, res: Response) => {
     const parsed = ChatRequestSchema.safeParse(req.body);
