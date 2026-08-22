@@ -136,7 +136,7 @@ describe('askAgent — AI SDK 7 loop', () => {
     expect(seenTools).toEqual([
       'runSql',
       'listCategories',
-      'getClientPreferences',
+      'queryCustomers',
       'searchKnowledge',
     ]);
   });

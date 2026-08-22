@@ -44,7 +44,7 @@ const LABELS: Record<string, string> = {
   searchKnowledge: 'tudásbázis keresés',
   runSql: 'katalógus lekérdezés',
   listCategories: 'kategóriák',
-  getClientPreferences: 'ügyfél-preferenciák',
+  queryCustomers: 'ügyfél-lekérdezés',
   delegateToIngest: 'átadás a katalóguskezelőnek',
 };
 

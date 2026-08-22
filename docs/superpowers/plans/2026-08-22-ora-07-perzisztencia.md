@@ -869,6 +869,7 @@ git commit -m "feat: queryCustomers tool a customers táblához (Task 4)"
 - Modify: `packages/core/src/lib/agents/query-agent/query-agent.spec.ts:69,82`
 - Modify: `packages/core/src/lib/agents/agent-loop.spec.ts:139`
 - Modify: `packages/core/src/lib/trace.ts:301` (elavulttá váló komment)
+- Modify: `apps/web/src/components/tool-card.tsx` (a `LABELS` térkép — VÉGREHAJTÁSKOR derült ki: a web magyar címkét rendel minden toolhoz, és a `getClientPreferences` kulcsa itt is él; enélkül a böngészőben nyers tool-név jelenne meg)
 - Delete: `packages/core/src/lib/tools/get-client-preferences/` (a teljes könyvtár)
 
 **Interfaces:**
@@ -990,6 +991,8 @@ Expected: PASS. A `get-client-preferences-tool.spec.ts` négy tesztje eltűnik, 
 grep -rn "getClientPreferences\|CLIENT_PREFERENCES" --include='*.ts' --include='*.tsx' --include='*.md' packages/core/src apps/*/src docs/system-prompt.md
 ```
 Expected: üres. (A `docs/superpowers/plans/` és a `docs/ora-04-zaro-ellenorzes.md` **történeti** dokumentumok — azokat NE írd át, mert a múltbeli mérésekről szólnak.)
+
+**VÉGREHAJTÁSKOR derült ki:** a `README.md` tool-felsorolása és a `CLAUDE.md` „Key files” szakaszának query-agent sora is nevesítette a toolt. Mindkettő **ebben a Taskban** javítva — a most megváltoztatott toolkészletet írják le, tehát nem várhatnak a Task 12 doksi-körére.
 
 - [ ] **Step 10: Élő ellenőrzés — a régi doksi-példa új úton fut**
 

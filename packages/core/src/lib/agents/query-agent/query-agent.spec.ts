@@ -66,7 +66,7 @@ describe('askAgent — szerep szerinti toolkészlet', () => {
     expect(seen).toEqual([
       'runSql',
       'listCategories',
-      'getClientPreferences',
+      'queryCustomers',
       'searchKnowledge',
     ]);
   });
@@ -79,7 +79,7 @@ describe('askAgent — szerep szerinti toolkészlet', () => {
     expect(seen).toEqual([
       'runSql',
       'listCategories',
-      'getClientPreferences',
+      'queryCustomers',
       'searchKnowledge',
       'delegateToIngest',
     ]);

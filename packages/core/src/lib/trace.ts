@@ -284,8 +284,10 @@ export class Trace {
     const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
     const summary = outcome.summary ? flat(outcome.summary) : '';
     this.line('');
-    // A "DB-n" megjegyzés csak akkor igaz, ha tényleg SQL futott — a
-    // getClientPreferences például nem nyúl adatbázishoz.
+    // A "DB-n" megjegyzés az `outcome.sql`-en dől el, és az CSAK a modell által
+    // GENERÁLT lekérdezésnél van kitöltve (runSql). A listCategories és a
+    // queryCustomers is futtat SQL-t, de kódból építettet — azt nem a modell írta,
+    // tehát nem is az ő nyomát mutatjuk.
     this.line(
       c.yellow(
         bar(`TOOL · ${call.toolName}${isSqlTool ? ' (lefuttatjuk a DB-n)' : ''}`),

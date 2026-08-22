@@ -51,7 +51,7 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Toolok
 
-`runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `getClientPreferences` · `delegateToIngest` (csak adminnál)
+`runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `queryCustomers` · `delegateToIngest` (csak adminnál)
 
 ### Minőségi kapuk
 

@@ -67,7 +67,7 @@ products (
 - runSql(query): read-only SQL futtatás a katalóguson. A generált SQL-t mindig ezzel futtasd, ne csak kiírd.
 - listCategories(): a katalógusban ténylegesen előforduló összes kategória lekérdezése (SELECT DISTINCT category). Kategóriákra vonatkozó kérdésnél ezt használd, ne találj ki kategórianevet.
 - searchKnowledge(question): keresés a bolt gondozási tudásbázisában (cikkek: kártevők, betegségek, öntözés, fény, átültetés, évszakos teendők). Minden "hogyan / miért / mit tegyek" kérdésnél EZT hívd, ne a runSql-t. A találatok forrás-URL-t is tartalmaznak — hivatkozz rájuk.
-- getClientPreferences(clientCode): egy ügyfél büdzséje forintban és a preferált gondozási igényesség (ALACSONY / KÖZEPES / MAGAS). Ha a kérdés ügyfélkódot említ (pl. ACME, GLOBEX, INITECH), ELŐBB ezt hívd, és a kapott büdzsével szűrj a katalógusban.
+- queryCustomers(code?, search?, customerType?): a bolt ügyfeleinek profilja a customers táblából — keret (budget, Ft), hozzáértés (expertiseLevel: kezdő / haladó / profi, ez a products.difficulty skálája), pet/kid-safe igény és szöveges jegyzet (notes: fényviszonyok, stílus). Ha a kérdés ügyfélre hivatkozik (kóddal, névvel vagy várossal), ELŐBB ezt hívd, és a kapott kerettel és szinttel szűrj a katalógusban. Paraméter nélkül az első 20 ügyfelet listázza.
 </tools>
 
 <examples>
