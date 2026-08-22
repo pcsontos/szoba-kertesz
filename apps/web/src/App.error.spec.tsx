@@ -19,12 +19,20 @@ const chatState: {
 vi.mock('@ai-sdk/react', () => ({
   useChat: () => ({
     messages: [],
+    setMessages: vi.fn(),
     sendMessage: vi.fn(),
     status: 'ready',
     stop: vi.fn(),
     error: chatState.error,
   }),
 }));
+
+// Az App induláskor lekéri a beszélgetés-listát — stub nélkül ez valódi hálózati
+// hívás lenne a localhost:3000-re. SOSEM oldódik fel: a lista nem tárgya ennek a
+// specnek, egy késve érkező válasz pedig a teszt lezárása után frissítene állapotot
+// (React act()-figyelmeztetés).
+globalThis.fetch = (() =>
+  new Promise<Response>(() => undefined)) as typeof fetch;
 
 const { default: App } = await import('./App.js');
 
