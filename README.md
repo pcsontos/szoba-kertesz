@@ -107,12 +107,16 @@ docker compose ps   # szoba-kertesz-adatbazis legyen "healthy"
 
 Az `init.sql` a konténer **első** indításakor létrehozza a két agent-role-t (`szoba-kertesz_ro`, `szoba-kertesz_rw`). A jogosultságok **elsődleges forrása** azonban a `<ts>_db_roles` migráció, nem az `init.sql`: az utóbbi csak új konténernél fut le, így egy `prisma migrate reset` után a role-ok megmaradnának, a grantjeik viszont nem. Ezért friss adatbázishoz is elég a `migrate deploy`.
 
-Séma migrálása és a seed-katalógus (~30 növény) betöltése:
+Séma migrálása és a seed-katalógus (30 növény) betöltése:
 
 ```bash
-pnpm exec prisma migrate deploy
-pnpm exec prisma db seed
+pnpm db:migrate   # prisma migrate deploy
+pnpm db:seed      # prisma db seed
 ```
+
+Van egy harmadik script is, `pnpm db:reset` (`prisma migrate reset`), ami az egész adatbázist eldobja és a migrációkból újraépíti.
+
+> ⚠️ A `db:reset` **a tudásbázist is eldobja** (`knowledge_chunks`, 1906 sor). Utána `pnpm knowledge:ingest` kell, ami valódi, fizetős OpenAI-hívásokat indít (~0,55 cent). Ezért a script szándékosan **nem** kap `--force`-ot: a Prisma visszakérdez, mielőtt bármit törölne.
 
 A **tudásbázis** (202 gondozási cikk → 1906 vektorizált chunk) külön lépés, mert valódi OpenAI-hívásokat indít:
 

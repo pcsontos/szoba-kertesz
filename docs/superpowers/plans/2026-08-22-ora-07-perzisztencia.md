@@ -319,7 +319,7 @@ A `package.json` `"scripts"` blokkjába, a `"cli"` sor **elé**:
 ```bash
 pnpm db:migrate && pnpm db:seed
 ```
-Expected: `No pending migrations to apply.` (vagy a lefutó migrációk listája), majd `Seed kész: 31 növény betöltve.`
+Expected: `No pending migrations to apply.` (vagy a lefutó migrációk listája), majd `Seed kész: 30 növény betöltve.`
 
 ```bash
 pnpm cli ask "Hány kaktusz van?" --quiet
@@ -491,7 +491,7 @@ main()
 ```bash
 pnpm db:migrate && pnpm db:seed
 ```
-Expected: `Seed kész: 31 növény és 20 ügyfél betöltve.`
+Expected: `Seed kész: 30 növény és 20 ügyfél betöltve.`
 
 - [ ] **Step 6: Ellenőrzés — a `_ro` szerep LÁTJA az új táblát**
 
