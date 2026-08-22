@@ -42,4 +42,3 @@ export * from './lib/trace.js';
 export * from './lib/logger.js';
 export * from './lib/config.js';
 export * from './lib/core.js';
-export * from './lib/echo.js';

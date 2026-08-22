@@ -2,6 +2,7 @@ import { writeFileSync, mkdirSync, appendFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import type { ModelMessage } from 'ai';
 import type { ToolOutcome } from './tools/tool-outcome.js';
+import { c } from './ansi.js';
 
 // Megfigyelhetőség: a futás közben épülő, kör-strukturált nyom. UGYANARRA az adatra két nézet:
 //  (1) élő, színes konzol — minden hívás ELŐTT kiírja a TELJES kontextust ("EZT küldjük"), hogy
@@ -14,22 +15,7 @@ import type { ToolOutcome } from './tools/tool-outcome.js';
 // különbözik, nem ütköznek.
 //
 // A színezés minimális ANSI, függőség nélkül (NO_COLOR / nem-TTY → sima szöveg).
-
-const useColor = Boolean(process.stdout.isTTY) && !process.env['NO_COLOR'];
-const wrap =
-  (code: number) =>
-  (s: string): string =>
-    useColor ? `\x1b[${code}m${s}\x1b[0m` : s;
-const c = {
-  dim: wrap(2),
-  bold: wrap(1),
-  red: wrap(31),
-  green: wrap(32),
-  yellow: wrap(33),
-  magenta: wrap(35),
-  cyan: wrap(36),
-  white: wrap(37),
-};
+// A helper KÖZÖS: ugyanazt használja a rag/retrieve.ts RAG-nyoma is (ansi.ts).
 
 /** Egy sorba tördelt, levágott szöveg (a lapított átirathoz). */
 function clip(s: string, n: number): string {
