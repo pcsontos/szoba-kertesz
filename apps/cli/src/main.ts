@@ -11,6 +11,8 @@ import {
 import { runInteractive } from './interactive.js';
 import { printPrompt } from './lib/print-prompt.js';
 import { parseRole } from './lib/parse-role.js';
+import { parseThreadId } from './lib/parse-thread.js';
+import { splitCliArgs } from './lib/parse-cli-args.js';
 
 // .env betöltése a belépési pontban (a core sosem tölt fájlt, lásd
 // packages/core/src/lib/config.ts) — hiányzó .env esetén toleráljuk, mert
@@ -121,32 +123,13 @@ program
 // helyett interaktív módba lépne) — az argv-ellenőrzés csak a ténylegesen
 // üres hívásra szűkíti a triggert, a --help/--version/ask változatlan marad.
 //
-// A `--show-prompt` az egyetlen kivétel: mivel az `ask` mellett interaktív
-// módban is támogatott, egy önmagában álló `--show-prompt`-ot (subcommand
-// nélkül) az "üres hívás" részének tekintjük, és bekapcsolt flag-gel indítjuk
-// az interaktív módot — ehhez ki kell szűrni az argv-ből, mielőtt az
-// "üres-e" döntést meghoznánk.
-// A `--quiet` ugyanígy viselkedik: interaktív módban is értelmes, tehát
-// önmagában állva nem teszi "nem üressé" a hívást.
-const STANDALONE_FLAGS = ['--show-prompt', '--quiet'];
-
-const cliArgs = process.argv.slice(2);
-const showPromptFlag = cliArgs.includes('--show-prompt');
-const quietFlag = cliArgs.includes('--quiet');
-
-// A `--role <érték>` KÉT argv-elemet foglal, ezért a szűrése is kettőt visz:
-// a STANDALONE_FLAGS-lista önmagában nem elég, mert az érték ("admin")
-// nem-flag argumentumnak látszana, és a `pnpm cli --role admin` a
-// commanderhez menne interaktív mód helyett.
-// A `roleIndex === -1` ágat KI KELL írni: enélkül a `roleIndex + 1` nullára
-// esne, és `--role` nélküli hívásnál a szűrő a 0. argv-elemet dobná el — a
-// `szobakertesz foo` interaktív módba lépne a commander hibajelzése helyett.
-const roleIndex = cliArgs.indexOf('--role');
-const nonFlagArgs = cliArgs.filter(
-  (arg, index) =>
-    !STANDALONE_FLAGS.includes(arg) &&
-    (roleIndex === -1 || (index !== roleIndex && index !== roleIndex + 1)),
-);
+// A `--show-prompt`/`--quiet` az egyetlen kivétel: mivel az `ask` mellett
+// interaktív módban is támogatottak, önmagukban állva az "üres hívás" részének
+// számítanak. A `--role <érték>` és a `--thread <érték>` viszont KÉT argv-slotot
+// foglal — az értékük nem-flag argumentumnak látszana. Ez a döntés a
+// `lib/parse-cli-args.ts` tiszta függvényében él, ahol tesztelhető (a régi,
+// inline szűrő egyetlen elrontott indexen múlt).
+const cliArgs = splitCliArgs(process.argv.slice(2));
 
 // Folyamatos watch-log ("control room"): a `--quiet`-tól FÜGGETLENÜL ír, így
 // egy másik terminálban `tail -f logs/agent.log`-gal végig követhető a futás.
@@ -157,18 +140,20 @@ function handleFatalError(error: unknown): void {
   process.exitCode = 1;
 }
 
-if (nonFlagArgs.length === 0) {
+if (cliArgs.nonFlagArgs.length === 0) {
   try {
-    const roleFlag =
-      roleIndex === -1 ? undefined : parseRole(cliArgs[roleIndex + 1]);
     runInteractive({
-      showPrompt: showPromptFlag,
-      print: !quietFlag,
-      role: roleFlag,
+      showPrompt: cliArgs.showPrompt,
+      print: !cliArgs.quiet,
+      role: cliArgs.role === undefined ? undefined : parseRole(cliArgs.role),
+      threadId:
+        cliArgs.thread === undefined
+          ? undefined
+          : parseThreadId(cliArgs.thread),
     }).catch(handleFatalError);
   } catch (error: unknown) {
-    // Hibás `--role` érték: ugyanaz a rövid, magyar hibaüzenet, mint máshol —
-    // nem stack trace, és el sem indul az interaktív munkamenet.
+    // Hibás `--role` vagy `--thread` érték: ugyanaz a rövid, magyar hibaüzenet,
+    // mint máshol — nem stack trace, és el sem indul az interaktív munkamenet.
     handleFatalError(error);
   }
 } else {

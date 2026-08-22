@@ -10,7 +10,7 @@
  * MEGLÉTET rögzíti, hogy egy refaktor ne tudja némán elvinni.
  */
 import { PassThrough } from 'node:stream';
-import type { AskResult } from '@szoba-kertesz/core';
+import type { AskResult, ThreadStore } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
 
 function makeResult(answer: string): AskResult {
@@ -21,6 +21,20 @@ function makeResult(answer: string): AskResult {
     usage: { inputTokens: 1, outputTokens: 2 },
     toolSteps: [],
     stopReason: 'stop',
+  };
+}
+
+/**
+ * Néma beszélgetés-tár: a Task 10 óta az interaktív mód minden fordulót a valódi
+ * tárba írna (defaultThreadStore → DATABASE_URL_CHAT). A manifeszt a readline-guardot
+ * méri, nem a perzisztenciát — a tár injektálása tartja mellékhatás-mentesen.
+ */
+function silentStore(): ThreadStore {
+  return {
+    createThread: async () => '00000000-0000-4000-8000-000000000000',
+    appendMessage: async () => undefined,
+    loadThread: async () => [],
+    listThreads: async () => [],
   };
 }
 
@@ -61,7 +75,7 @@ describe('saját kiegészítés 4 — readline-guard a pufferelt sorokra', () =>
       });
     });
 
-    const done = runInteractive({ input, output, ask });
+    const done = runInteractive({ input, output, ask, store: silentStore() });
 
     // EGY chunkban két sor — a guard nélkül ezek egymásba futnának.
     input.write('első kérdés\nmásodik kérdés\n');
@@ -103,7 +117,13 @@ describe('saját kiegészítés 7 — --show-prompt', () => {
   it('showPrompt: true esetén kiírja a system promptot és az üzenet-tömböt', async () => {
     const ask = vi.fn().mockResolvedValue(makeResult('ok'));
 
-    const done = runInteractive({ input, output, ask, showPrompt: true });
+    const done = runInteractive({
+      input,
+      output,
+      ask,
+      store: silentStore(),
+      showPrompt: true,
+    });
     input.write('teszt\n');
     await flushAsync();
     input.write('exit\n');
@@ -116,7 +136,7 @@ describe('saját kiegészítés 7 — --show-prompt', () => {
   it('showPrompt nélkül nem dumpolja ki a promptot', async () => {
     const ask = vi.fn().mockResolvedValue(makeResult('ok'));
 
-    const done = runInteractive({ input, output, ask });
+    const done = runInteractive({ input, output, ask, store: silentStore() });
     input.write('teszt\n');
     await flushAsync();
     input.write('exit\n');
