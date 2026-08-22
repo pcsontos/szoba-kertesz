@@ -51,3 +51,14 @@ $$;
 -- Az id autoincrement()-je miatt kell: nélküle az INSERT
 -- "permission denied for sequence products_id_seq"-kel áll meg.
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO "szoba-kertesz_rw";
+
+-- A NEGYEDIK szerep: a beszélgetés-tár (threads + messages) útja.
+-- A chat szerep GRANT-jai a <ts>_chat_role migrációban vannak, nem itt: az init.sql
+-- a táblák létrehozása ELŐTT fut, tehát itt csak a szerep jöhet létre.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'szoba-kertesz_chat') THEN
+    CREATE ROLE "szoba-kertesz_chat" LOGIN PASSWORD 'szoba-kertesz_chat';
+  END IF;
+END
+$$;

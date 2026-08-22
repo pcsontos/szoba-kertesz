@@ -28,9 +28,9 @@ describe('loadConfig', () => {
   });
 
   it('throws a Hungarian, fail-fast error when ANTHROPIC_API_KEY is missing', () => {
-    expect(() =>
-      loadConfig({ DATABASE_URL_READONLY: READONLY_URL }),
-    ).toThrow(/ANTHROPIC_API_KEY/);
+    expect(() => loadConfig({ DATABASE_URL_READONLY: READONLY_URL })).toThrow(
+      /ANTHROPIC_API_KEY/,
+    );
   });
 
   it('throws when ANTHROPIC_API_KEY is an empty string', () => {
@@ -43,9 +43,9 @@ describe('loadConfig', () => {
   });
 
   it('throws a Hungarian, fail-fast error when DATABASE_URL_READONLY is missing', () => {
-    expect(() =>
-      loadConfig({ ANTHROPIC_API_KEY: 'sk-ant-test-key' }),
-    ).toThrow(/DATABASE_URL_READONLY/);
+    expect(() => loadConfig({ ANTHROPIC_API_KEY: 'sk-ant-test-key' })).toThrow(
+      /DATABASE_URL_READONLY/,
+    );
   });
 
   it('reads DATABASE_URL_READONLY into the config, but never DATABASE_URL (the admin/RW one)', () => {
@@ -60,6 +60,7 @@ describe('loadConfig', () => {
     expect(Object.keys(config).sort()).toEqual([
       'anthropicApiKey',
       'anthropicModel',
+      'databaseUrlChat',
       'databaseUrlReadWrite',
       'databaseUrlReadonly',
       'openaiApiKey',

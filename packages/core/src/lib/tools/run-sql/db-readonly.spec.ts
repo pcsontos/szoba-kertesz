@@ -13,7 +13,8 @@ try {
   process.loadEnvFile(repoRootEnvPath);
 } catch (error) {
   const isMissingEnvFile =
-    error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
+    error instanceof Error &&
+    (error as NodeJS.ErrnoException).code === 'ENOENT';
   if (!isMissingEnvFile) {
     throw error;
   }
@@ -30,9 +31,12 @@ describe('queryReadonly (injected pool, no real connection)', () => {
       query: vi.fn().mockResolvedValue({ rows: fakeRows, rowCount: 1 }),
     } as unknown as Pool;
 
-    const result = await queryReadonly('SELECT id, name FROM products LIMIT 1', {
-      pool: fakePool,
-    });
+    const result = await queryReadonly(
+      'SELECT id, name FROM products LIMIT 1',
+      {
+        pool: fakePool,
+      },
+    );
 
     expect(fakePool.query).toHaveBeenCalledWith(
       'SELECT id, name FROM products LIMIT 1',
@@ -46,9 +50,9 @@ describe('queryReadonly (injected pool, no real connection)', () => {
       query: vi.fn().mockRejectedValue(new Error('connection refused')),
     } as unknown as Pool;
 
-    await expect(
-      queryReadonly('SELECT 1', { pool: fakePool }),
-    ).rejects.toThrow('connection refused');
+    await expect(queryReadonly('SELECT 1', { pool: fakePool })).rejects.toThrow(
+      'connection refused',
+    );
   });
 });
 
@@ -71,8 +75,12 @@ describe('queryReadonly (real local DB — DATABASE_URL_READONLY)', () => {
   });
 
   it('reuses the lazily-created shared pool across repeated calls', async () => {
-    const first = await queryReadonly('SELECT count(*)::int AS total FROM products');
-    const second = await queryReadonly('SELECT count(*)::int AS total FROM products');
+    const first = await queryReadonly(
+      'SELECT count(*)::int AS total FROM products',
+    );
+    const second = await queryReadonly(
+      'SELECT count(*)::int AS total FROM products',
+    );
 
     expect(first.rows[0]).toEqual(second.rows[0]);
     expect((first.rows[0] as { total: number }).total).toBeGreaterThan(0);
@@ -95,13 +103,29 @@ describe('queryReadonly (real local DB — DATABASE_URL_READONLY)', () => {
       'SELECT count(*)::int AS total FROM products',
     );
 
-    await expect(
-      queryReadonly('DELETE FROM products'),
-    ).rejects.toThrow(/permission denied/i);
+    await expect(queryReadonly('DELETE FROM products')).rejects.toThrow(
+      /permission denied/i,
+    );
 
     const after = await queryReadonly(
       'SELECT count(*)::int AS total FROM products',
     );
     expect(after.rows[0]).toEqual(before.rows[0]);
+  });
+
+  it('a beszélgetéseket NEM látja — a messages a _ro elől REVOKE-olva van', async () => {
+    // Ez a Task 6 legfontosabb állítása: az ALTER DEFAULT PRIVILEGES magától
+    // odaadta volna a SELECT-et, és akkor a runSql kiolvashatná a chateket.
+    await expect(
+      queryReadonly('SELECT id FROM messages LIMIT 1'),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it('az ügyfeleket viszont LÁTJA — az üzleti adat, nem beszélgetés', async () => {
+    const result = await queryReadonly<{ count: string }>(
+      'SELECT count(*)::text AS count FROM customers',
+    );
+
+    expect(Number(result.rows[0].count)).toBeGreaterThan(0);
   });
 });

@@ -1019,6 +1019,7 @@ git commit -m "feat: queryCustomers váltja a getClientPreferences toolt (Task 5
 - Modify: `init.sql`
 - Modify: `.env.example`
 - Modify: `packages/core/src/lib/config.ts`
+- Modify: `packages/core/src/lib/config.spec.ts` (VÉGREHAJTÁSKOR derült ki: egy spec a `Config` kulcsainak PONTOS halmazát pinneli — ez a guard őrzi, hogy a `DATABASE_URL` sose szivárogjon be; az új kulcs miatt bővíteni kell)
 - Create: `packages/core/src/lib/threads/db-chat.ts`
 - Create: `packages/core/src/lib/threads/db-chat.spec.ts`
 - Modify: `packages/core/src/lib/tools/run-sql/db-readonly.spec.ts` (új teszt: a `messages` tiltva)
