@@ -59,6 +59,26 @@ describe('splitCliArgs — mi számít "üres" hívásnak', () => {
     ]);
   });
 
+  it('a `--thread=<uuid>` alak is működik — EGY slotot foglal', () => {
+    const args = splitCliArgs([`--thread=${THREAD}`]);
+
+    expect(args.nonFlagArgs).toEqual([]);
+    expect(args.thread).toBe(THREAD);
+  });
+
+  it('a `--role=admin` alak sem eszi meg a következő argumentumot', () => {
+    // A két-slotos ágon `--role admin ask` esetén az „admin" esik ki. Az `=` alaknál
+    // viszont CSAK a saját slotja — különben a subcommand tűnne el.
+    const args = splitCliArgs(['--role=admin', 'ask', 'kérdés']);
+
+    expect(args.role).toBe('admin');
+    expect(args.nonFlagArgs).toEqual(['ask', 'kérdés']);
+  });
+
+  it('az `=` alak érték nélkül is JELZI a kapcsolót', () => {
+    expect(splitCliArgs(['--thread=']).thread).toBe('');
+  });
+
   // Érték nélkül álló kapcsoló: a JELENLÉT megmarad (üres sztringként), hogy a
   // main.ts validálója ugyanúgy hibázzon, mint a régi inline szűrőnél — ott a
   // parseRole(undefined) dobott. Ha itt `undefined`-ot adnánk vissza, a hibás

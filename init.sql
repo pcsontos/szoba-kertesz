@@ -27,6 +27,10 @@ $$;
 GRANT CONNECT ON DATABASE "szoba-kertesz" TO "szoba-kertesz_ro";
 GRANT USAGE ON SCHEMA public TO "szoba-kertesz_ro";
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO "szoba-kertesz_ro";
+-- FIGYELEM: ezt a default privilege-et a <ts>_ro_explicit_grants migráció VISSZAVESZI
+-- (a #8 PR-review 5. tétele). A migrációk lefutása után tehát minden ÚJ tábla alapból
+-- láthatatlan a _ro szerepnek, és aki olvashatóvá akarja tenni, annak explicit
+-- GRANT SELECT-et kell írnia — a db-readonly.spec.ts engedélylista-tesztje ezt őrzi.
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT SELECT ON TABLES TO "szoba-kertesz_ro";
 
