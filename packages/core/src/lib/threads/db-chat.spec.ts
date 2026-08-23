@@ -57,6 +57,25 @@ describe('db-chat — a szoba-kertesz_chat szerep jogosultsági határai', () =>
     ).rejects.toThrow(/permission denied/i);
   });
 
+  it('üzenetet ÁTÍRNI sem tud — az append-only nem szófordulat, hanem grant', async () => {
+    // A #8 PR review 4. tétele: a `messages` UPDATE-je a chat-szerepen felesleges tág
+    // jog volt (a tár egyetlen művelete sem frissít üzenetet), és így a doksi
+    // „append-only" állítását a DB nem támasztotta alá. A grant szűkítése óta igen.
+    await expect(
+      queryChat('UPDATE messages SET role = $1 WHERE id = $2', ['user', -1]),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
+  it('a threads UPDATE-je viszont KELL — az updated_at léptetéséhez', async () => {
+    // Nem a jog megléte a lényeg, hanem hogy nem véletlenül van ott: enélkül a
+    // beszélgetés nem ugrana a lista élére egy új üzenetnél.
+    await expect(
+      queryChat('UPDATE threads SET updated_at = now() WHERE id = $1::uuid', [
+        '00000000-0000-4000-8000-000000000000',
+      ]),
+    ).resolves.toBeDefined();
+  });
+
   it('sémát módosítani NEM tud', async () => {
     await expect(
       queryChat('ALTER TABLE threads ADD COLUMN hacked boolean'),

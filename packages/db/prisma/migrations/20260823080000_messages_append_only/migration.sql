@@ -1,0 +1,11 @@
+-- A `messages` UPDATE-jogának visszavétele a beszélgetés-tár szerepétől.
+--
+-- MIÉRT: a tár négy művelete közül EGYIK SEM frissít üzenetet — az `appendMessage`
+-- INSERT-el a `messages`-be, és a `threads.updated_at`-et lépteti UPDATE-tel. Az
+-- üzenet-soron az UPDATE tehát felesleges tág jog volt, és a „a beszélgetés-történet
+-- append-only" állítást a DB szintjén NEM támasztotta alá (a #8 PR review 4. tétele).
+--
+-- Ezzel a `szoba-kertesz_chat` szerep a `messages`-en már csak SELECT + INSERT: egy
+-- korábbi üzenet visszamenőleg sem átírható, sem törölhető. A `threads`-en marad az
+-- UPDATE, mert az `updated_at` léptetéséhez kell.
+REVOKE UPDATE ON TABLE messages FROM "szoba-kertesz_chat";

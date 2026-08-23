@@ -84,6 +84,17 @@ A `parts` azért `jsonb` és nem `text`: a böngésző így a tool-kártyákat i
 
 A `threads.updated_at`-nek a Prisma `@updatedAt` MELLETT `@default(now())` is kell, mert a tár nyers SQL-lel ír, a `@updatedAt`-et viszont a Prisma kliensoldalon tölti: alapérték nélkül a kézi INSERT elhasalna a NOT NULL oszlopon.
 
+## DB-szerepek
+
+| Szerep | Kapcsolat | Mit lát |
+| --- | --- | --- |
+| admin | `DATABASE_URL` | mindent — Prisma (séma, migráció, seed) és a tudásbázis betöltése |
+| `szoba-kertesz_ro` | `DATABASE_URL_READONLY` | SELECT: `products`, `customers`, `knowledge_chunks` — a `threads`/`messages` **megtagadva** |
+| `szoba-kertesz_rw` | `DATABASE_URL_READWRITE` | SELECT/INSERT/UPDATE a `products`-on; DELETE és DDL nincs |
+| `szoba-kertesz_chat` | `DATABASE_URL_CHAT` | SELECT/INSERT a `threads`-en és a `messages`-en, UPDATE **csak a `threads`-en** (az `updated_at` léptetéséhez); minden más tábla megtagadva, DELETE sehol, és a `messages` nem írható át — **append-only** |
+
+A `messages` UPDATE-jét a `<ts>_messages_append_only` migráció vette vissza (a #8 PR review nyomán): a tár egyetlen művelete sem frissít üzenetet, tehát a grant tágabb volt, mint a kód — és az „append-only" állítást a DB nem támasztotta alá. Mérve: `UPDATE messages` → `permission denied`, `UPDATE threads` → `UPDATE 0`.
+
 ### Értékkészletek (kategorikus mezők)
 
 - **category:** szobanövény, kerti, pozsgás, kaktusz, fűszer, fa-cserje, lógó, virágzó

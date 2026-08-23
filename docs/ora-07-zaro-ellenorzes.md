@@ -52,9 +52,11 @@ Ez a kör a **negyedik** DB-szerepet hozta (`szoba-kertesz_chat`). Az alábbi t�
 | `szoba-kertesz_chat` | `SELECT id FROM knowledge_chunks LIMIT 1` | `ERROR: permission denied for table knowledge_chunks` |
 | `szoba-kertesz_chat` | `SELECT count(*) FROM threads` / `messages` | **4** / **14** |
 | `szoba-kertesz_chat` | `DELETE FROM messages WHERE id = -1` | `ERROR: permission denied for table messages` |
+| `szoba-kertesz_chat` | `UPDATE messages SET role = 'user' WHERE id = -1` | `ERROR: permission denied for table messages` — a PR-review után szűkített grant |
+| `szoba-kertesz_chat` | `UPDATE threads SET updated_at = now() …` | `UPDATE 0` — ez KELL, ettől ugrik a beszélgetés a lista élére |
 | `szoba-kertesz_rw` | `DELETE FROM products WHERE id = -1` | `ERROR: permission denied for table products` |
 
-**Amit ez bizonyít:** az agent, amelyik az SQL-t írja, a beszélgetéseket **nem olvashatja** — és a beszélgetés-tár nem fér hozzá sem a katalógushoz, sem az ügyfelekhez, sem a tudásbázishoz. Egy prompt-injektált „SELECT \* FROM messages" tehát a Postgresen bukik el, nem a prompton. A chat-szerep a saját sorait sem törölheti: a beszélgetés-történet **append-only**.
+**Amit ez bizonyít:** az agent, amelyik az SQL-t írja, a beszélgetéseket **nem olvashatja** — és a beszélgetés-tár nem fér hozzá sem a katalógushoz, sem az ügyfelekhez, sem a tudásbázishoz. Egy prompt-injektált „SELECT \* FROM messages" tehát a Postgresen bukik el, nem a prompton. A chat-szerep a saját sorait sem törölheti — és a #8 PR review óta át sem írhatja őket: a `messages` UPDATE-je a `<ts>_messages_append_only` migrációval visszakerült. Az **append-only** állítás így nem szófordulat, hanem grant; a `threads` UPDATE-je marad, mert az `updated_at` léptetéséhez kell.
 
 ## 4. A hamis előzmény hatástalan
 
@@ -135,6 +137,20 @@ A négy beszélgetés szándékosan **bennmarad** (nem teszt-szemét, hanem dem�
 - **A `db:reset` utáni ellenőrzés** (a spec 6. sikerkritériuma: friss adatbázison sem kap `permission denied`-et a `runSql`). **Nem futott.** A `pnpm db:reset` az egész adatbázist eldobja, benne a tudásbázis 1906 sorát és a fenti négy demó-beszélgetést, utána pedig egy fizetős `pnpm knowledge:ingest` kellene az újraépítéshez. A felhasználó döntése volt, hogy ez a kör ne fusson. **Amit ez jelent:** a szerepek grantjeit migráció írja (`<ts>_db_roles`, `<ts>_chat_role`), tehát elvileg egy `migrate deploy` is helyreállítja őket — de ezt **most nem mértük**, és a doksi nem is állítja, hogy zöld.
 - **A C fázis** (orchestrátor-agent, package-agent, `ORCHESTRATION_MODE`, jelző-toolok) és a **D fázis** (voice miniapp, flow-test skill). A kihagyás indoklása a `docs/superpowers/specs/2026-08-22-ora-07-perzisztencia-design.md` 1. döntésénél: a C önmagában nagyobb, mint az A+B együtt, a kódvezetés maga jelöli kiszállási pontnak az A+B végét, és a 08–09. alkalom nem épít rá. A `threads.customer_id` oszlop **helyet tart** ennek a fázisnak, és ebben a körben mindig `null`.
 - **Automatizált e2e** (Playwright) továbbra sincs; a böngésző-oldali ellenőrzés kézi, a fenti 7. pont szerint. A webes specek szándékosan könnyű smoke-tesztek — a felület viselkedését az élő kör méri.
+
+## Utóirat — a PR-review nyomán (2026-08-23)
+
+A #8 PR-en lefuttatott `claude-review` 14 tételéből ötöt **még a merge előtt** javítottunk. A fentiek közül ez kettőt érint: a jogosultsági mátrix egy sorral bővült (`UPDATE messages` → `permission denied`), és a teszt-szám **324 → 336**-ra nőtt (core 224, cli 52, server 31, web 29).
+
+| Tétel | Mi volt | Mi lett |
+| --- | --- | --- |
+| lista-válasz validálatlan | a `/api/threads` hibás JSON-jától a **teljes felület** eltűnt (`threads.length` of `undefined`) | `lib/api-shapes.ts` két tiszta függvénye + 9 új teszt; a regressziós teszt a javítás nélkül **piros** (`TypeError: Cannot read properties of undefined`) |
+| chat-pool a `--thread` hibaágon | a folyamat a hibaüzenet után is élt a pg idle-timeoutjáig — **mérve: 10,6 s** | a betöltés hibaágán zárjuk a pool-t — **mérve: 0,695 s** |
+| `messages` UPDATE-grant | az „append-only" állítást a DB nem támasztotta alá | `<ts>_messages_append_only` migráció + két spec (`UPDATE messages` tiltva, `UPDATE threads` marad) |
+| hiányzó pin | csak a `messages` volt pinnelve a `_ro` ellen | a `threads` is |
+| bennmaradt cast-ok | az `App.tsx` `part as { state: string }`-eket használt, miközben a komment az ellenkezőjét állította | `ToolCardProps.state` opcionális, a cast-ok eltűntek |
+
+**A javítatlanul hagyott tételek** (a review 2., 5., 7. és 8–11., 13–14. pontja) nem tűntek el: külön körben kezelendők, és a döntés a felhasználóé volt.
 
 ## Költség
 

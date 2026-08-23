@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { act, render } from '@testing-library/react';
 import App from './App.js';
 
 /**
@@ -55,6 +55,28 @@ describe('App', () => {
 
     expect(getByRole('button', { name: 'Új beszélgetés' })).toBeTruthy();
     expect(await findByText('Még nincs mentett beszélgetés.')).toBeTruthy();
+  });
+
+  it('a lista HIBÁS válaszától nem omlik össze a felület', async () => {
+    // A #8 PR review 1. tétele: a szerver hibaválasza IS JSON, tehát a `.json()`
+    // sikerrel lefut, és a `threads` mező hiányzik. Amíg ezt validálatlanul engedtük a
+    // state-be, a ThreadList `threads.length`-je dobott — és nem a sáv tűnt el, hanem
+    // az EGÉSZ felület.
+    stubFetch(() => ({ error: 'A beszélgetések listázása nem sikerült.' }));
+
+    const { getByRole } = render(<App />);
+    // A hibás válasz BEÉRKEZÉSÉT ki kell várni: a kezdőállapot üres lista, tehát a
+    // felület a fetch előtt akkor is ép, ha a válasz később elviszi. Az `act` a
+    // .then-láncot és az abból induló újrarenderelést is végigfuttatja — a régi,
+    // validálatlan kóddal itt dobott a ThreadList, és a teszt elhasalt.
+    await act(async () => {
+      for (let i = 0; i < 5; i++) {
+        await Promise.resolve();
+      }
+    });
+
+    expect(getByRole('heading', { name: 'Szobakertész' })).toBeTruthy();
+    expect(getByRole('button', { name: 'Új beszélgetés' })).toBeTruthy();
   });
 
   it('a lista elemei a szerverről jönnek', async () => {

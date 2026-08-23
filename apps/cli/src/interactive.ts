@@ -45,6 +45,37 @@ export interface RunInteractiveOptions {
 }
 
 /**
+ * A folytatott beszélgetés előzménye a TÁRBÓL. A tool-részek itt szöveggé laposodnak
+ * (`partsToText`) — a terminál nem tud kártyát rajzolni, és nem is kell.
+ *
+ * A betöltés a readline elindítása ELŐTT fut, hibás azonosítónál tehát el sem indul a
+ * munkamenet. Épp ezért kell a hibaágon NEKÜNK lezárni a chat-pool-t: a `loadThread` már
+ * megnyitotta, a `close`-eseményre kötött zárás viszont sosem futna le, és a folyamat a
+ * magyar hibaüzenet kiírása után is életben maradna a pg idle-timeoutjáig (mérve: 10,6
+ * másodperc). Ugyanaz az elv, mint az `ask`/`ingest` `finally` blokkjaiban.
+ */
+async function loadHistory(
+  store: ThreadStore,
+  threadId: string,
+): Promise<readonly Message[]> {
+  try {
+    const stored = await store.loadThread(threadId);
+    if (stored === null) {
+      throw new Error(
+        `Nincs ilyen beszélgetés: ${threadId}. Listát a webes felület mutat.`,
+      );
+    }
+    return stored.map((entry) => ({
+      role: entry.role,
+      content: partsToText(entry.parts),
+    })) as readonly Message[];
+  } catch (error) {
+    await closeChatPool();
+    throw error;
+  }
+}
+
+/**
  * Interaktív mód: soronként olvassa a bemenetet (node:readline), minden
  * sort a szobakertész agensnek küld (askAgent), és kiírja a választ.
  * Az `exit` beírására tisztán (exit code 0) kilép.
@@ -106,21 +137,8 @@ export async function runInteractive(
         role: options.role,
       }));
 
-  // A folytatott beszélgetés előzménye a TÁRBÓL jön. A tool-részek itt szöveggé
-  // laposodnak (partsToText) — a terminál nem tud kártyát rajzolni, és nem is kell.
-  // A betöltés a readline elindítása ELŐTT fut: hibás azonosítónál el sem indul a
-  // munkamenet, a hiba a main.ts handleFatalError-jéhez száll fel.
   if (options.threadId !== undefined) {
-    const stored = await store.loadThread(options.threadId);
-    if (stored === null) {
-      throw new Error(
-        `Nincs ilyen beszélgetés: ${options.threadId}. Listát a webes felület mutat.`,
-      );
-    }
-    history = stored.map((entry) => ({
-      role: entry.role,
-      content: partsToText(entry.parts),
-    })) as readonly Message[];
+    history = await loadHistory(store, options.threadId);
   }
 
   return new Promise((resolve) => {

@@ -121,6 +121,15 @@ describe('queryReadonly (real local DB — DATABASE_URL_READONLY)', () => {
     ).rejects.toThrow(/permission denied/i);
   });
 
+  it('a threads táblát SEM látja — a migráció MINDKETTŐT visszaveszi', async () => {
+    // A #8 PR review 6. tétele: eddig csak a `messages` volt pinnelve, pedig a
+    // <ts>_chat_role migráció a `threads`-et is REVOKE-olja. Egy sor, de enélkül a
+    // beszélgetés-címek (az első kérdés szövege!) csendben kiolvashatóvá válhatnának.
+    await expect(
+      queryReadonly('SELECT id FROM threads LIMIT 1'),
+    ).rejects.toThrow(/permission denied/i);
+  });
+
   it('az ügyfeleket viszont LÁTJA — az üzleti adat, nem beszélgetés', async () => {
     const result = await queryReadonly<{ count: string }>(
       'SELECT count(*)::text AS count FROM customers',

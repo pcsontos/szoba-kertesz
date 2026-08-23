@@ -6,7 +6,7 @@ import {
   type FormEvent,
 } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
+import { DefaultChatTransport, type UIMessage } from 'ai';
 import Markdown from 'react-markdown';
 import { ToolCard } from './components/tool-card.js';
 import { ThreadList, type ThreadSummary } from './components/thread-list.js';
@@ -16,6 +16,7 @@ import {
   splitAssistantParts,
   type AssistantPart,
 } from './lib/assistant-parts.js';
+import { toStoredMessages, toThreadSummaries } from './lib/api-shapes.js';
 import { isNearBottom } from './lib/scroll.js';
 
 // App.tsx — a chat streamel, mutatja a tool-lépéseket, és MOST MÁR EMLÉKSZIK.
@@ -107,7 +108,11 @@ export function App() {
     }
     void fetch(`${API_URL}/api/threads`)
       .then((response) => response.json())
-      .then((body: { threads: ThreadSummary[] }) => setThreads(body.threads))
+      // A VÁLASZ ALAKJÁT is ellenőrizzük, nem csak a hálózati hibát: a szerver
+      // hibaválasza is JSON, tehát a `.json()` sikerrel lefut, és a `threads` mező
+      // hiányzik. Validálatlanul ez `setThreads(undefined)` lenne, és a ThreadList
+      // `threads.length`-je az EGÉSZ felületet elvinné (lásd lib/api-shapes.ts).
+      .then((body: unknown) => setThreads(toThreadSummaries(body)))
       .catch(() => setThreads([]));
   }, [status]);
 
@@ -133,20 +138,14 @@ export function App() {
       window.history.replaceState(null, '', `?thread=${id}`);
       void fetch(`${API_URL}/api/threads/${id}`)
         .then((response) => response.json())
-        .then(
-          (body: {
-            messages: { id: number; role: string; parts: unknown[] }[];
-          }) => {
-            setMessages(
-              body.messages.map((entry) => ({
-                id: String(entry.id),
-                role: entry.role,
-                parts: entry.parts,
-              })) as never,
-            );
-            stickToBottom.current = true;
-          },
-        )
+        .then((body: unknown) => {
+          // Ugyanaz a határ, mint a listánál. A cast SZŰK és validált adatra megy —
+          // ugyanaz a minta, mint a szerver `as unknown as UIMessage[]`-je: a
+          // `UIMessage.parts` diszkriminált unió, amit strukturálisan nem lehet
+          // megfeleltetni a tárból jövő `unknown[]`-nek.
+          setMessages(toStoredMessages(body) as unknown as UIMessage[]);
+          stickToBottom.current = true;
+        })
         .catch(() => undefined);
     },
     [setMessages],
@@ -226,9 +225,9 @@ export function App() {
                           <ToolCard
                             key={`${message.id}-tool-${index}`}
                             toolName={part.type.replace('tool-', '')}
-                            state={(part as { state: string }).state}
-                            input={(part as { input?: unknown }).input}
-                            output={(part as { output?: unknown }).output}
+                            state={part.state}
+                            input={part.input}
+                            output={part.output}
                           />
                         ))}
                         {text !== '' && (
