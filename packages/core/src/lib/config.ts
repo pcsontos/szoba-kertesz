@@ -12,6 +12,10 @@ const EnvSchema = z.object({
   // teljesen működik, ezért OPCIONÁLIS, ugyanúgy, mint a READWRITE kapcsolat.
   // A hiányát az embed.ts jelzi, fail-fast, érthető magyar üzenettel.
   OPENAI_API_KEY: z.string().min(1).optional(),
+  // Csak a beszélgetés-tárhoz kell (threads + messages). A szerver és a CLI interaktív
+  // módja megköveteli, az egylövetű `ask` viszont nem — ezért OPCIONÁLIS, mint a
+  // READWRITE és az OPENAI_API_KEY. A hiányát a threads/db-chat.ts jelzi, fail-fast.
+  DATABASE_URL_CHAT: z.string().min(1).optional(),
 });
 
 export interface Config {
@@ -20,6 +24,7 @@ export interface Config {
   readonly databaseUrlReadonly: string;
   readonly databaseUrlReadWrite?: string;
   readonly openaiApiKey?: string;
+  readonly databaseUrlChat?: string;
 }
 
 /**
@@ -31,14 +36,18 @@ export interface Config {
  * vagy hiányzó kötelező érték esetén azonnal, egyértelmű magyar
  * hibaüzenettel dob.
  *
- * HÁROM jogosultsági szint van, és ez a függvény ebből KETTŐT lát:
+ * NÉGY jogosultsági szint van, és ez a függvény ebből HÁRMAT lát:
  *   - `DATABASE_URL_READONLY`  — a `szoba-kertesz_ro` szerep; a query-agent
- *     `runSql`/`listCategories` toolja (`run-sql/db-readonly.ts`). KÖTELEZŐ.
+ *     `runSql`/`listCategories`/`queryCustomers` toolja (`run-sql/db-readonly.ts`).
+ *     KÖTELEZŐ.
  *   - `DATABASE_URL_READWRITE` — a `szoba-kertesz_rw` szerep; KIZÁRÓLAG az
  *     ingest-agent `upsertProduct` útja (`upsert-product/db-readwrite.ts`).
  *     OPCIONÁLIS, mert a kérdés-válasz oldal enélkül is teljesen működik.
+ *   - `DATABASE_URL_CHAT`      — a `szoba-kertesz_chat` szerep; KIZÁRÓLAG a
+ *     beszélgetés-tár (`threads/thread-store.ts`). OPCIONÁLIS, mert az
+ *     egylövetű `ask` nem perzisztál.
  *
- * A harmadik, a `DATABASE_URL` (admin/Prisma) SOSEM kerül ide: ez a függvény
+ * A negyedik, a `DATABASE_URL` (admin/Prisma) SOSEM kerül ide: ez a függvény
  * nem olvassa ki és nem adja vissza — azt kizárólag a Prisma (packages/db)
  * kezeli, és egyik agent sem ír rajta keresztül.
  */
@@ -61,5 +70,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrlReadonly: parsed.data.DATABASE_URL_READONLY,
     databaseUrlReadWrite: parsed.data.DATABASE_URL_READWRITE,
     openaiApiKey: parsed.data.OPENAI_API_KEY,
+    databaseUrlChat: parsed.data.DATABASE_URL_CHAT,
   };
 }

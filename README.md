@@ -26,7 +26,17 @@ A 06. alkalom óta a chat **azt is megmutatja, MIT csinált** az ágens: a tool-
 
 ### Egy mag, több belépési pont
 
-A `packages/core` **framework-független** — nem tud sem a CLI-ről, sem a HTTP-ről. Az `apps/server` (Express 5, Zod-validálás a kérés határán) vékony réteg fölötte: a böngészőből érkező kérdés pontosan ugyanazt az `askAgent`-et hívja, mint az `apps/cli`. A beszélgetés-előzményt a szerver alakítja át a közös loop `history` opciójává.
+A `packages/core` **framework-független** — nem tud sem a CLI-ről, sem a HTTP-ről. Az `apps/server` (Express 5, Zod-validálás a kérés határán) vékony réteg fölötte: a böngészőből érkező kérdés pontosan ugyanazt az `askAgent`-et hívja, mint az `apps/cli`. Az előzményt a szerver tölti be a beszélgetés-tárból, és adja át a közös loop `history` opciójaként.
+
+### A beszélgetés túléli a folyamatot
+
+A 07. alkalom óta minden kérdés-válasz pár egy adatbázis-tárba kerül (`threads` + `messages`), amit **mindkét** belépési pont ugyanúgy használ. Ebből három dolog következik:
+
+- **A beszélgetés megosztható**: a böngészőben minden beszélgetésnek saját `?thread=<uuid>` URL-je van, és a bal oldali sávból bármelyik korábbi visszanyitható — a tool-kártyákkal együtt.
+- **Átjárható a két felület**: a CLI-ben indított beszélgetés megnyílik a böngészőben, a böngészőben indított folytatható a terminálban (`pnpm cli --thread <uuid>`). A **tár egy, a nézet kettő**: a web a teljes `UIMessage.parts`-ot kapja vissza, a terminál a szöveggé lapított változatot.
+- **Az előzményt nem a kliens állítja elő**: a kérés csak az új üzenetet viszi fel, a többit a szerver a DB-ből tölti. Egy felküldött, hamis kedvezmény-ígéretet tartalmazó előzmény így hatástalan — nem azért, mert a prompt tiltja, hanem mert a modell soha nem látja.
+
+A tár **negyedik** DB-szerepen fut (`szoba-kertesz_chat`): csak a `threads`-et és a `messages`-t látja, a `products`-ot, a `customers`-t és a `knowledge_chunks`-ot nem — és fordítva, a katalógust olvasó `_ro` szerep a beszélgetésekhez nem fér hozzá.
 
 ### Két tudásforrás — katalógus és tudásbázis (RAG)
 
@@ -51,7 +61,7 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Toolok
 
-`runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `getClientPreferences` · `delegateToIngest` (csak adminnál)
+`runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `queryCustomers` · `delegateToIngest` (csak adminnál)
 
 ### Minőségi kapuk
 
@@ -89,8 +99,9 @@ Töltsd ki a `.env`-ben:
 | `ANTHROPIC_API_KEY` | az agens LLM-hívásaihoz |
 | `ANTHROPIC_MODEL` | pl. `claude-sonnet-4-6` |
 | `DATABASE_URL` | admin/RW kapcsolat (Prisma: séma, migráció, seed) **és a tudásbázis BETÖLTÉSE** (`pnpm knowledge:ingest` — TRUNCATE + INSERT). Futásidőben az ágensek egyike sem használja |
-| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt használja a query-agent `runSql` / `listCategories` toolja **és a tudásbázis KERESÉSE** (`searchKnowledge`). A vásárlót kiszolgáló szerver így sosem nyit admin kapcsolatot |
+| `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt használja a query-agent `runSql` / `listCategories` / `queryCustomers` toolja **és a tudásbázis KERESÉSE** (`searchKnowledge`). A vásárlót kiszolgáló szerver így sosem nyit admin kapcsolatot |
 | `DATABASE_URL_READWRITE` | RW kapcsolat a `szoba-kertesz_rw` role-lal — kizárólag az ingest-agent `upsertProduct` útja. **Opcionális:** nélküle a kérdés-válasz oldal teljesen működik, csak az `ingest` bukik el, érthető magyar üzenettel |
+| `DATABASE_URL_CHAT` | a `szoba-kertesz_chat` role — **kizárólag** a beszélgetés-tár: SELECT + INSERT a `threads`-en és a `messages`-en, UPDATE **csak a `threads`-en** (az `updated_at` léptetéséhez). Semmi más tábla, DELETE sehol, és a `messages` nem írható át — a beszélgetés-történet append-only, a DB szintjén is. A szerver enélkül **el sem indul** (magyar hibaüzenet, exit 1), és az interaktív CLI-mód is ezt használja; az egylövetű `pnpm cli ask` viszont nem igényli |
 | `OPENAI_API_KEY` | a tudásbázis embedding-modelljéhez (`text-embedding-3-small`) — **a projekt egyetlen nem-Anthropic hívása**, mert embedding-modellt az Anthropic nem ad. **Opcionális:** nélküle a katalógus-oldal (CLI, web, `runSql`, `listCategories`) teljesen működik, csak a `searchKnowledge` és a `knowledge:ingest` bukik el, érthető magyar üzenettel. A HyDE-t és az átrangsorolást NEM érinti: azok Claude Haikun futnak |
 | `POSTGRES_DB`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` | a docker-compose konténer admin hitelesítő adatai |
 
@@ -105,14 +116,18 @@ docker compose up -d
 docker compose ps   # szoba-kertesz-adatbazis legyen "healthy"
 ```
 
-Az `init.sql` a konténer **első** indításakor létrehozza a két agent-role-t (`szoba-kertesz_ro`, `szoba-kertesz_rw`). A jogosultságok **elsődleges forrása** azonban a `<ts>_db_roles` migráció, nem az `init.sql`: az utóbbi csak új konténernél fut le, így egy `prisma migrate reset` után a role-ok megmaradnának, a grantjeik viszont nem. Ezért friss adatbázishoz is elég a `migrate deploy`.
+Az `init.sql` a konténer **első** indításakor létrehozza a három agent-role-t (`szoba-kertesz_ro`, `szoba-kertesz_rw`, `szoba-kertesz_chat`). A jogosultságok **elsődleges forrása** azonban mindig migráció, nem az `init.sql` — a `_ro`/`_rw` grantjei a `<ts>_db_roles`-ban, a `_chat`-éi a `<ts>_chat_role`-ban: az utóbbi csak új konténernél fut le, így egy `prisma migrate reset` után a role-ok megmaradnának, a grantjeik viszont nem. Ezért friss adatbázishoz is elég a `migrate deploy`.
 
-Séma migrálása és a seed-katalógus (~30 növény) betöltése:
+Séma migrálása és a seed-adatok (30 növény + 20 ügyfél) betöltése:
 
 ```bash
-pnpm exec prisma migrate deploy
-pnpm exec prisma db seed
+pnpm db:migrate   # prisma migrate deploy
+pnpm db:seed      # prisma db seed
 ```
+
+Van egy harmadik script is, `pnpm db:reset` (`prisma migrate reset`), ami az egész adatbázist eldobja és a migrációkból újraépíti.
+
+> ⚠️ A `db:reset` **a tudásbázist is eldobja** (`knowledge_chunks`, 1906 sor). Utána `pnpm knowledge:ingest` kell, ami valódi, fizetős OpenAI-hívásokat indít (~0,55 cent). Ezért a script szándékosan **nem** kap `--force`-ot: a Prisma visszakérdez, mielőtt bármit törölne.
 
 A **tudásbázis** (202 gondozási cikk → 1906 vektorizált chunk) külön lépés, mert valódi OpenAI-hívásokat indít:
 
@@ -134,6 +149,8 @@ pnpm serve:web    # Vite    — http://localhost:4200
 ```
 
 Nyisd meg a `http://localhost:4200` címet. A szerver konzolján közben ugyanaz a színes, körről körre növekvő ágens-trace fut, mint a CLI-ben; a böngésző a válasz mellé a **tool-lépéseket** is megkapja (üzenet-stream), és kártyaként jeleníti meg őket.
+
+A 07. alkalom óta a bal oldali sávban ott vannak a **korábbi beszélgetések** (`GET /api/threads`), és minden beszélgetésnek saját URL-je van: az `?thread=<uuid>` cím újratöltés után is — és egy másik fülön is — visszaadja ugyanazt a beszélgetést, a tool-kártyákkal együtt. A kérésben **csak az új üzenet** megy fel; az előzményt a szerver az adatbázisból tölti, ezért a böngészőből felküldött hamis előzmény hatástalan.
 
 A RAG-hoz **debug-végpontok** is tartoznak (élesben nincsenek mountolva):
 
@@ -194,13 +211,23 @@ Commands:
 pnpm cli ask "mitől függ egy növény fényigénye?"
 ```
 
-### Interaktív mód
+### Interaktív mód — és `--thread`
 
 Argumentum nélkül indítva a CLI egy folyamatos kérdés-válasz munkamenetet nyit (a query-agenttel, előzménnyel); az `exit` beírásával lépsz ki:
 
 ```bash
 pnpm cli
 ```
+
+A 07. alkalom óta a munkamenet **perzisztens**: az első kérdésnél nyílik egy beszélgetés (előtte nem — egy azonnal kilépő futás nem hagy üres sort), a CLI kiírja az azonosítóját, és minden kérdés-válasz párt ugyanabba a tárba ment, amibe a webes chat is ír:
+
+```bash
+pnpm cli --thread 8f14e45f-ceea-467a-9b3d-3003931207ec   # egy korábbi beszélgetés folytatása
+```
+
+Ez oda-vissza működik: a terminálban indított beszélgetés megnyitható a böngészőben (`http://localhost:4200/?thread=<uuid>`), a böngészőben indított pedig folytatható a terminálban. A tár ugyanaz, csak a **nézet** más: a web visszakapja a tool-kártyákat is, a terminál a szöveget. Érvénytelen azonosítóra a CLI egyetlen API-hívás előtt, magyar üzenettel áll meg; nem létező beszélgetésre pedig el sem indul a munkamenet.
+
+Az egylövetű `pnpm cli ask` szándékosan **nem** perzisztál — így `DATABASE_URL_CHAT` nélkül is fut.
 
 ### Szerep — `--role`
 

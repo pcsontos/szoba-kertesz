@@ -29,7 +29,8 @@ export * from './lib/tools/run-sql/run-sql-tool.js';
 export * from './lib/tools/run-sql/sql-guard.js';
 export * from './lib/tools/run-sql/db-readonly.js';
 export * from './lib/tools/list-categories/list-categories-tool.js';
-export * from './lib/tools/get-client-preferences/get-client-preferences-tool.js';
+export * from './lib/tools/query-customers/query-customers-tool.js';
+export * from './lib/tools/query-customers/customer-schema.js';
 export * from './lib/tools/search-knowledge/search-knowledge-tool.js';
 export * from './lib/tools/upsert-product/upsert-product-tool.js';
 export * from './lib/tools/upsert-product/product-schema.js';
@@ -38,8 +39,13 @@ export * from './lib/tools/fetch-feed/fetch-feed-tool.js';
 export * from './lib/tools/fetch-feed/shopify-feed.js';
 export * from './lib/tools/delegate-to-ingest/delegate-to-ingest-tool.js';
 
+// threads/ — a BESZÉLGETÉS-TÁR. A szerver ÉS a CLI interaktív módja is ezt hívja:
+// a perzisztencia a tárban van, nem a felületben.
+export * from './lib/threads/db-chat.js';
+export * from './lib/threads/thread-store.js';
+export * from './lib/threads/message-parts.js';
+
 export * from './lib/trace.js';
 export * from './lib/logger.js';
 export * from './lib/config.js';
 export * from './lib/core.js';
-export * from './lib/echo.js';

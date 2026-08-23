@@ -10,8 +10,18 @@ import {
   type ModelMessage,
   type UIMessage,
 } from 'ai';
-import { askAgent, type AskResult, type UserRole } from '@szoba-kertesz/core';
+import {
+  askAgent,
+  defaultThreadStore,
+  toThreadTitle,
+  ThreadIdSchema,
+  type AskResult,
+  type StoredMessage,
+  type ThreadStore,
+  type UserRole,
+} from '@szoba-kertesz/core';
 import { createDebugKnowledgeRouter } from './debug-knowledge.js';
+import { createThreadsRouter } from './threads.js';
 
 // app.ts — VÉKONY HTTP-réteg a core agent fölött. A böngészőből érkező kérdés PONTOSAN
 // ugyanazon az úton megy, mint a CLI-ben: askAgent → a közös agent-loop. A @szoba-kertesz/core
@@ -21,10 +31,10 @@ import { createDebugKnowledgeRouter } from './debug-knowledge.js';
 // körről körre növekvő trace fut le, mint a CLI-ben. A böngésző csak a választ kapja.
 //
 // KLIENS: a web app a Vercel AI SDK useChat hookját használja (DefaultChatTransport),
-// NEM sima fetch-et. A useChat minden hívásnál a TELJES üzenet-előzményt (UIMessage[])
-// elküldi — ebből vágjuk le az utolsó (új) user-üzenetet kérdésnek, a többit
-// convertToModelMessages-szel alakítjuk az askAgent `history` opciójává, így a
-// beszélgetés a szerveren is folytatódik körről körre.
+// NEM sima fetch-et. A 07. alkalom óta a kliens CSAK AZ ÚJ ÜZENETET küldi
+// (`prepareSendMessagesRequest`), az előzményt a szerver a threads/messages táblákból
+// tölti. A DB az igazságforrás — és ez biztonsági javítás is: eddig a böngésző
+// tetszőleges HAMIS előzményt küldhetett fel a nyitott cors() mögött.
 //
 // STREAMING: a válasz AI SDK ÜZENET-STREAMKÉNT megy ki (text/event-stream), nem sima
 // szövegként. A 05. alkalomban még text/plain ment `res.write()`-tal — a váltás oka NEM
@@ -56,6 +66,8 @@ export type AskFn = (
 
 export interface CreateAppOptions {
   readonly ask?: AskFn;
+  /** A beszélgetés-tár. Injektálható, hogy a route-ok DB nélkül tesztelhetők legyenek. */
+  readonly store?: ThreadStore;
 }
 
 // A kérés HATÁRA — Zod-validálás, ahogy minden külvilágból jövő adatnál.
@@ -82,8 +94,13 @@ const UiMessageSchema = z.looseObject({
   parts: z.array(MessagePartSchema),
 });
 
+// A SZERZŐDÉS MEGFORDULT: a kliens már csak az ÚJ üzenetet küldi, az előzményt a
+// szerver a tárból tölti. Ez nemcsak kevesebb hálózati forgalom: eddig a böngésző
+// tetszőleges HAMIS előzményt küldhetett fel a nyitott cors() mögött, és a szerver
+// azt továbbadta a modellnek. Mostantól a szerver csak azt hiszi el, amit ő írt be.
 const ChatRequestSchema = z.object({
-  messages: z.array(UiMessageSchema).min(1),
+  message: UiMessageSchema,
+  threadId: ThreadIdSchema.optional(),
 });
 
 /** A validált üzenet alakja — a sémából LEVEZETVE, nem kézzel újraírva. */
@@ -100,6 +117,7 @@ function extractText(message: ValidatedMessage): string {
 export function createApp(options: CreateAppOptions = {}): Express {
   const ask: AskFn =
     options.ask ?? ((question, opts) => askAgent(question, opts));
+  const store: ThreadStore = options.store ?? defaultThreadStore;
 
   const app = express();
   app.use(cors());
@@ -112,26 +130,72 @@ export function createApp(options: CreateAppOptions = {}): Express {
     app.use('/debug/knowledge', createDebugKnowledgeRouter());
   }
 
+  // A beszélgetés-lista és -betöltés. ÉLESBEN IS mountolva (nem úgy, mint a
+  // /debug/knowledge): nem indít fizetős hívást, és a webes chat alapfunkciója.
+  app.use('/api/threads', createThreadsRouter(store));
+
   app.post('/api/chat', async (req: Request, res: Response) => {
     const parsed = ChatRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error:
-          'A kérés törzsében kötelező a "messages" tömb, benne `role` és `parts` mezővel rendelkező üzenetekkel.',
+          'A kérés törzsében kötelező a "message" mező (egy `role` és `parts` mezőkkel ' +
+          'rendelkező üzenet), a "threadId" pedig — ha megadod — UUID kell legyen.',
       });
       return;
     }
 
-    const uiMessages = parsed.data.messages;
-    const lastMessage = uiMessages[uiMessages.length - 1];
-    const question =
-      lastMessage?.role === 'user' ? extractText(lastMessage).trim() : '';
+    const { message, threadId: requestedThreadId } = parsed.data;
+    const question = message.role === 'user' ? extractText(message).trim() : '';
     if (question === '') {
       res.status(400).json({
-        error: 'Az utolsó üzenetnek felhasználói kérdésnek kell lennie.',
+        error: 'Az üzenetnek felhasználói kérdésnek kell lennie.',
       });
       return;
     }
+
+    // A thread feloldása vagy létrehozása — MINDEN streamelés előtt, hogy a hiba
+    // még rendes JSON státuszkód lehessen, ne `error` rész a stream közepén.
+    let threadId: string;
+    let stored: StoredMessage[];
+    try {
+      if (requestedThreadId) {
+        const loaded = await store.loadThread(requestedThreadId);
+        if (loaded === null) {
+          res
+            .status(404)
+            .json({ error: `Nincs ilyen beszélgetés: ${requestedThreadId}.` });
+          return;
+        }
+        threadId = requestedThreadId;
+        stored = loaded;
+      } else {
+        threadId = await store.createThread(toThreadTitle(question));
+        stored = [];
+      }
+      // A kérdés mentése az agent futása ELŐTT: egy megszakadt futás se veszítse el.
+      await store.appendMessage(threadId, 'user', message.parts);
+    } catch (error: unknown) {
+      const detail = error instanceof Error ? error.message : String(error);
+      res
+        .status(500)
+        .json({ error: `A beszélgetés mentése nem sikerült: ${detail}` });
+      return;
+    }
+
+    // A tárolt üzenetek UIMessage-alakban. A cast SZŰK és SZÁNDÉKOS: a UIMessage.parts
+    // diszkriminált unió, amivel egy `unknown[]` sosem egyezik strukturálisan.
+    const historyUiMessages = [
+      ...stored.map((entry) => ({
+        id: String(entry.id),
+        role: entry.role,
+        parts: entry.parts,
+      })),
+      message,
+    ] as unknown as UIMessage[];
+
+    let sawText = false;
+    let savePromise: Promise<void> = Promise.resolve();
 
     try {
       // ÜZENET-stream, nem szöveg-stream. A böngésző így nemcsak a válasz betűit kapja meg,
@@ -140,22 +204,19 @@ export function createApp(options: CreateAppOptions = {}): Express {
       //
       // Miért createUIMessageStream, és nem a rövidebb result.pipeUIMessageStreamToResponse?
       // Mert a #4-es review 2. tétele (üres futás is válaszol) csak így marad meg: a writerrel
-      // a stream lezárása ELŐTT be tudjuk írni az agent emptyAnswer-ét. A rövidebb úton a
-      // válasz már lezárult volna, mire kiderül, hogy egy delta sem ment ki. (Az a metódus
-      // ráadásul deprecated is: az SDK maga a standalone helpereket ajánlja a result.stream-mel.)
-      let sawText = false;
-
+      // a stream lezárása ELŐTT be tudjuk írni az agent emptyAnswer-ét.
       const stream = createUIMessageStream({
+        // Az onEnd ehhez fűzi hozzá a választ. Enélkül a responseMessage üres lenne.
+        originalMessages: historyUiMessages,
         execute: async ({ writer }) => {
-          // A korábbi körök (a useChat mindig a teljes előzményt küldi) → history.
-          // A validált üzenetek átadása az SDK-nak. A `unknown`-on át vezetett cast
-          // itt SZÁNDÉKOS és a lehető legszűkebb: a UIMessage `parts` mezője
-          // diszkriminált unió, amivel egy szándékosan laza séma sosem fog
-          // strukturálisan egyezni.
+          // A thread azonosítója MÉG AZ AGENT FUTÁSA ELŐTT kimegy, hogy egy elhasalt
+          // futás után is tudja a kliens, melyik beszélgetésről volt szó.
+          writer.write({ type: 'data-thread', data: { threadId } });
+
           // Az `await` NEM elhagyható: a convertToModelMessages ebben az
           // SDK-verzióban Promise-t ad vissza.
           const history = await convertToModelMessages(
-            uiMessages.slice(0, -1) as unknown as UIMessage[],
+            historyUiMessages.slice(0, -1),
           );
 
           const result = await ask(question, {
@@ -163,12 +224,10 @@ export function createApp(options: CreateAppOptions = {}): Express {
             // A SZEREP PINNELVE, nem örökölt. Enélkül a modul-szintű CURRENT_ROLE
             // dönt — miközben a user-role.ts fejkommentje épp azt ajánlja demóhoz,
             // hogy azt a konstanst írd át `admin`-ra. Nyitott cors() mellett a
-            // hitelesítés nélküli végpont így admin-képessé válna (delegateToIngest
-            // → írás a szoba-kertesz_rw szerepen). A szerver SOSEM vesz szerepet a
-            // kérésből, és nem is örököl: itt mondjuk ki.
+            // hitelesítés nélküli végpont így admin-képessé válna.
             role: 'customer',
             history,
-            // Csak JELZŐ: ment-e ki egyáltalán szöveg. A tokeneket az üzenet-stream viszi.
+            // Csak JELZŐ: ment-e ki egyáltalán szöveg.
             onTextDelta: () => {
               sawText = true;
             },
@@ -179,21 +238,41 @@ export function createApp(options: CreateAppOptions = {}): Express {
 
           if (!sawText) {
             // A loop szöveg nélkül állt meg (pl. kimerült a lépéskeret): a végső answer
-            // az agent emptyAnswer-e. Enélkül a böngésző ÜRES buborékot kapna 200-zal,
-            // miközben a CLI ugyanebben a helyzetben látható választ ad.
+            // az agent emptyAnswer-e. Enélkül a böngésző ÜRES buborékot kapna 200-zal.
             const id = 'fallback';
             writer.write({ type: 'text-start', id });
             writer.write({ type: 'text-delta', id, delta: result.answer });
             writer.write({ type: 'text-end', id });
           }
         },
+        // A mentési hook neve onEnd — az onFinish deprecated alias ebben az SDK-ban.
+        onEnd: ({ responseMessage }) => {
+          // A data-thread rész KONTROLL-jel, nem tartalom: kiszűrjük a tárból.
+          const parts = responseMessage.parts.filter(
+            (part) => part.type !== 'data-thread',
+          );
+          // A mentés hibája NEM viheti el a választ — a stream ilyenkor már kiment.
+          // Ugyanaz az elv, mint a Trace és a JSONL függetlenségénél.
+          savePromise = store
+            .appendMessage(threadId, 'assistant', parts)
+            .catch((error: unknown) => {
+              console.error(
+                `A válasz mentése nem sikerült (thread ${threadId}): ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+              );
+            });
+        },
         // Az SDK alapértelmezése ELREJTI a hiba szövegét ("An error occurred."). Nekünk a
-        // magyar, beszédes üzenet kell — ugyanaz, ami eddig az 500-as JSON törzsében ment.
+        // magyar, beszédes üzenet kell.
         onError: (error: unknown) =>
           `Az agent futása megszakadt: ${error instanceof Error ? error.message : String(error)}`,
       });
 
       await pipeUIMessageStreamToResponse({ response: res, stream });
+      // A válasz már kiment; a mentést itt várjuk meg, hogy a tesztek és a
+      // folyamat-leállás determinisztikus legyen. A kliens ebből nem vesz észre semmit.
+      await savePromise;
     } catch (error: unknown) {
       // BUKTATÓ: ha már ment ki darab, a státusz és a fejlécek NEM módosíthatók
       // ("Cannot set headers after they are sent") — ilyenkor csak lezárni lehet.

@@ -3,7 +3,7 @@ import { buildQueryPrompt } from './query-prompt.js';
 import { runAgentLoop, type AskOptions, type AskResult } from '../agent-loop.js';
 import { runSqlTool } from '../../tools/run-sql/run-sql-tool.js';
 import { listCategoriesTool } from '../../tools/list-categories/list-categories-tool.js';
-import { getClientPreferencesTool } from '../../tools/get-client-preferences/get-client-preferences-tool.js';
+import { queryCustomersTool } from '../../tools/query-customers/query-customers-tool.js';
 import { searchKnowledgeTool } from '../../tools/search-knowledge/search-knowledge-tool.js';
 import { delegateToIngestTool } from '../../tools/delegate-to-ingest/delegate-to-ingest-tool.js';
 import {
@@ -15,7 +15,7 @@ import {
 // query-agent.ts — a KÉRDÉS-VÁLASZ agent (a termék "ask" oldala). READ-ONLY: természetes
 // nyelvű kérdésből SQL-t ír, lefuttatja, magyarul válaszol. Egy agent = prompt + toolok + loop:
 //   prompt:  query-prompt.ts (szerep, séma, SQL-szabályok)
-//   toolok:  runSql (read-only SELECT) + listCategories + getClientPreferences +
+//   toolok:  runSql (read-only SELECT) + listCategories + queryCustomers +
 //            searchKnowledge (tudásbázis), adminként PLUSZ delegateToIngest
 //   loop:    a közös agent-loop (../agent-loop.ts)
 //
@@ -67,7 +67,7 @@ export async function askAgent(
       buildTools: (report): ToolSet => ({
         runSql: runSqlTool(report),
         listCategories: listCategoriesTool(report),
-        getClientPreferences: getClientPreferencesTool(report),
+        queryCustomers: queryCustomersTool(report),
         // A MÁSIK tudásforrás: a katalógus TÉNYEI mellé a cikkek TUDÁSA. Hogy melyiket
         // hívja, azt nem mi döntjük el — a modell dönt, a tool leírása alapján.
         searchKnowledge: searchKnowledgeTool(report),

@@ -52,3 +52,62 @@ model Product {
 
   @@map("products")
 }
+
+// customers — a bolt ÜGYFELEI (a lakberendező partnerei). A 03. alkalom kódba égetett
+// CLIENT_PREFERENCES térképének utódja: fix három sor helyett valódi tábla, bővebb profillal.
+// Az expertise_level ÉRTÉKKÉSZLETE SZÁNDÉKOSAN azonos a products.difficulty-ével, így az
+// ajánlás szűrése egy egyszerű egyenlőség — nincs fordítási lépés a modell fejében.
+model Customer {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique // rövid ügyfélkód — az agent ezzel hivatkozik (pl. ACME)
+  name            String // cégnév vagy magánszemély neve
+  contactName     String?  @map("contact_name")
+  email           String
+  city            String
+  customerType    String   @map("customer_type") // magánszemély | iroda | étterem | hotel | üzlet
+  budget          Decimal  @db.Decimal(12, 2) // keret (HUF)
+  expertiseLevel  String   @map("expertise_level") // kezdő | haladó | profi (= products.difficulty)
+  petSafeRequired Boolean  @map("pet_safe_required")
+  kidSafeRequired Boolean  @map("kid_safe_required")
+  notes           String // döntést befolyásoló kontextus (fény, stílus, öntözési hajlandóság)
+  createdAt       DateTime @default(now()) @map("created_at")
+  threads         Thread[]
+
+  @@map("customers")
+}
+
+// threads + messages — a BESZÉLGETÉS-PERZISZTENCIA. A DB az igazságforrás: a kliens csak az
+// új üzenetet küldi, az előzményt a szerver innen tölti. Ugyanezt a két táblát használja a
+// CLI interaktív módja is — a felület más, a tár ugyanaz.
+//
+// A `parts` a TELJES UIMessage.parts JSON: így újratöltéskor a tool-kártyák is
+// visszarajzolódnak, nem csak a szöveg. A CLI egyetlen text-partot ír bele.
+//
+// Az id UUID és nem növekvő szám: a ?thread=7 egy hitelesítés nélküli, nyitott cors()
+// mögötti végponton végigszámolhatóvá tenné mások beszélgetéseit.
+model Thread {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title      String // az első user-üzenet első ~60 karaktere
+  customerId Int?      @map("customer_id") // hely a csomag-flow-nak; ebben a fázisban mindig null
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now()) @map("created_at")
+  // A @default(now()) az @updatedAt MELLETT is kell: a Prisma az @updatedAt-et
+  // KLIENSOLDALON tölti, mi viszont nyers SQL-lel írunk. Enélkül az oszlop NOT NULL
+  // lenne alapérték nélkül, és a kézi INSERT elhasalna rajta.
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at")
+  messages   Message[]
+
+  @@map("threads")
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  threadId  String   @map("thread_id") @db.Uuid
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String // user | assistant
+  parts     Json // a teljes UIMessage.parts
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([threadId])
+  @@map("messages")
+}

@@ -7,13 +7,23 @@
 
 import { PrismaClient } from '../generated/client'
 import { plants } from './plants'
+import { customers } from './customers'
 
 const prisma = new PrismaClient()
 
 async function main() {
   await prisma.product.deleteMany() // idempotens újraseedeléshez
-  const result = await prisma.product.createMany({ data: plants })
-  console.log(`Seed kész: ${result.count} növény betöltve.`)
+  const products = await prisma.product.createMany({ data: plants })
+
+  // A customers a products UTÁN áll, de EGYMÁSTÓL függetlenek: a threads tábla
+  // customer_id-ja `onDelete: SetNull`, tehát egy ügyfél törlése nem visz magával
+  // beszélgetést, és nem is akad el FK-hibán.
+  await prisma.customer.deleteMany()
+  const clients = await prisma.customer.createMany({ data: customers })
+
+  console.log(
+    `Seed kész: ${products.count} növény és ${clients.count} ügyfél betöltve.`
+  )
 }
 
 main()

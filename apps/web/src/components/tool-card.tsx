@@ -44,13 +44,18 @@ const LABELS: Record<string, string> = {
   searchKnowledge: 'tudásbázis keresés',
   runSql: 'katalógus lekérdezés',
   listCategories: 'kategóriák',
-  getClientPreferences: 'ügyfél-preferenciák',
+  queryCustomers: 'ügyfél-lekérdezés',
   delegateToIngest: 'átadás a katalóguskezelőnek',
 };
 
 export interface ToolCardProps {
   toolName: string;
-  state: string;
+  /**
+   * A tool-rész állapota. OPCIONÁLIS, mert a stream közbeni részeken még nincs ott —
+   * és mert így a hívó cast nélkül adhatja tovább (`part.state`). Amíg kötelező volt,
+   * az App.tsx-ben egy `part as { state: string }` cast állt a helyén.
+   */
+  state?: string;
   input: unknown;
   output: unknown;
 }

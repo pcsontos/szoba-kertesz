@@ -3,6 +3,7 @@ import { embedText } from './embed.js';
 import { hypotheticalAnswer } from './hyde.js';
 import { rerankHits, type RerankedHit } from './rerank.js';
 import { searchChunks, type KnowledgeHit } from './knowledge-store.js';
+import { c } from '../ansi.js';
 
 // retrieve.ts — A RAG "R"-je: a KERESÉS teljes folyamata, egy helyen, lépésről lépésre.
 // Ez a fájl a tananyag térképe is: minden sor egy tanítható lépés, és MINDEGYIK kiírja magát
@@ -67,17 +68,17 @@ function logHits(
   label: string,
   hits: readonly KnowledgeHit[],
 ): void {
-  log(`\x1b[36m${label}\x1b[0m`);
+  log(c.cyan(label));
   for (const hit of hits) {
     const distance = hit.distance.toFixed(3);
     const rerankScore = (hit as RerankedHit).score;
     const score =
       typeof rerankScore === 'number' && rerankScore >= 0
-        ? ` \x1b[33mrerank:${rerankScore}/10\x1b[0m`
+        ? ` ${c.yellow(`rerank:${rerankScore}/10`)}`
         : '';
     log(
-      `   \x1b[2m${bar(hit.distance)}\x1b[0m dist=\x1b[32m${distance}\x1b[0m${score} ` +
-        `\x1b[1m${hit.title}\x1b[0m \x1b[2m#${hit.chunkIndex} · ${hit.content.length} kar\x1b[0m`,
+      `   ${c.dim(bar(hit.distance))} dist=${c.green(distance)}${score} ` +
+        `${c.bold(hit.title)} ${c.dim(`#${hit.chunkIndex} · ${hit.content.length} kar`)}`,
     );
   }
 }
@@ -107,14 +108,15 @@ export async function retrieveKnowledge(
       rerankHits(text, hits, keepTop));
   const log = deps.log ?? traceLog;
 
-  log(`\x1b[35m━━ RAG ━━\x1b[0m kérdés: \x1b[1m${question}\x1b[0m`);
+  log(`${c.magenta('━━ RAG ━━')} kérdés: ${c.bold(question)}`);
 
   // (1) HyDE — a kérdés helyett egy kitalált VÁLASZT keresünk (lásd hyde.ts).
   let searchText = question;
   if (useHyde) {
     searchText = await hyde(question);
     log(
-      `\x1b[36m1) HyDE\x1b[0m (claude-haiku-4-5) — ezt keressük a kérdés helyett:\n   \x1b[2m${searchText.replace(/\s+/g, ' ').slice(0, 220)}…\x1b[0m`,
+      `${c.cyan('1) HyDE')} (claude-haiku-4-5) — ezt keressük a kérdés helyett:\n   ` +
+        c.dim(`${searchText.replace(/\s+/g, ' ').slice(0, 220)}…`),
     );
   }
 
@@ -125,7 +127,8 @@ export async function retrieveKnowledge(
     .map((value) => value.toFixed(3))
     .join(', ');
   log(
-    `\x1b[36m2) embedding\x1b[0m — ${queryEmbedding.length} dimenzió: \x1b[2m[${preview}, …]\x1b[0m`,
+    `${c.cyan('2) embedding')} — ${queryEmbedding.length} dimenzió: ` +
+      c.dim(`[${preview}, …]`),
   );
 
   // (3) Vektorkeresés — egy SQL, koszinusz-távolsággal (lásd knowledge-store.ts).
@@ -138,7 +141,7 @@ export async function retrieveKnowledge(
   );
 
   if (hits.length === 0) {
-    log('\x1b[31m   nincs találat — üres a tudásbázis?\x1b[0m');
+    log(c.red('   nincs találat — üres a tudásbázis?'));
     return { hits: [], searchText };
   }
 
@@ -160,7 +163,8 @@ export async function retrieveKnowledge(
   // (5) Ennyi szöveg megy be a nagy modell kontextusába — ez pénz, ezért számoljuk.
   const chars = reranked.reduce((sum, hit) => sum + hit.content.length, 0);
   log(
-    `\x1b[36m5) kontextus\x1b[0m — ${reranked.length} chunk, ${chars} karakter (~${Math.round(chars / 4)} token) megy a modellnek`,
+    `${c.cyan('5) kontextus')} — ${reranked.length} chunk, ${chars} karakter ` +
+      `(~${Math.round(chars / 4)} token) megy a modellnek`,
   );
 
   return { hits: reranked, searchText };
