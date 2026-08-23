@@ -28,9 +28,22 @@ export function splitCliArgs(argv: readonly string[]): CliArgs {
   const values: Record<string, string | undefined> = {};
 
   for (const flag of VALUE_FLAGS) {
-    const index = argv.indexOf(flag);
-    if (index !== -1) {
-      consumed.add(index);
+    // KÉT alak: `--thread <érték>` (két slot) és `--thread=<érték>` (egy slot). Az
+    // utóbbi eddig a commanderhez esett `unknown option`-nel, miközben az
+    // `ask --role=admin` működött — a commander ugyanis érti az `=` alakot. A CLI-nek
+    // nem szabad attól máshogy viselkednie, hogy melyik ágon dolgozza fel a kapcsolót.
+    const inlinePrefix = `${flag}=`;
+    const index = argv.findIndex(
+      (arg) => arg === flag || arg.startsWith(inlinePrefix),
+    );
+    if (index === -1) {
+      continue;
+    }
+    consumed.add(index);
+    const arg = argv[index];
+    if (arg.startsWith(inlinePrefix)) {
+      values[flag] = arg.slice(inlinePrefix.length);
+    } else {
       consumed.add(index + 1);
       // `?? ''`: a kapcsoló JELENLÉTE akkor is látsszon, ha nem adtak neki
       // értéket — így a main.ts validálója hibázik (mint régen a

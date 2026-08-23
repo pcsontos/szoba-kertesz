@@ -131,6 +131,18 @@ export async function loadThread(
     }));
 }
 
+/**
+ * A limit KÉTOLDALT korlátozva. A `Math.min(limit, 50)` átengedte a negatívot és a
+ * `NaN`-t is — ma a szerver konstanssal hív, de ez exportált core-API: egy jövőbeli
+ * `?limit=` végpont Postgres-hibát, azaz 500-at kapna. (#8 PR-review, 11. tétel.)
+ */
+function clampLimit(limit: number): number {
+  if (!Number.isFinite(limit)) {
+    return THREAD_LIST_LIMIT;
+  }
+  return Math.max(1, Math.min(Math.floor(limit), THREAD_LIST_LIMIT));
+}
+
 /** A legutóbb frissített beszélgetések — ez táplálja a webes thread-listát. */
 export async function listThreads(
   limit: number = THREAD_LIST_LIMIT,
@@ -145,7 +157,7 @@ export async function listThreads(
      FROM threads
      ORDER BY updated_at DESC
      LIMIT $1`,
-    [Math.min(limit, THREAD_LIST_LIMIT)],
+    [clampLimit(limit)],
     deps,
   );
 

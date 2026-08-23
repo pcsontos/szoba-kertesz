@@ -65,10 +65,20 @@ async function loadHistory(
         `Nincs ilyen beszélgetés: ${threadId}. Listát a webes felület mutat.`,
       );
     }
-    return stored.map((entry) => ({
-      role: entry.role,
-      content: partsToText(entry.parts),
-    })) as readonly Message[];
+    return (
+      stored
+        .map((entry) => ({
+          role: entry.role,
+          content: partsToText(entry.parts),
+        }))
+        // VÉDŐHÁLÓ a tartalom nélküli sorokra. A szerver már nem ír ilyet (app.ts,
+        // `hasContent`), de egy korábbi verzió írhatott, és a tárba más felület is ír:
+        // egy `content: ''` forduló a modellnek küldve értelmetlen — a szerver oldalán
+        // a `convertToModelMessages` el is dobja, itt viszont nincs, ami eldobja.
+        .filter(
+          (message) => message.content.trim() !== '',
+        ) as readonly Message[]
+    );
   } catch (error) {
     await closeChatPool();
     throw error;

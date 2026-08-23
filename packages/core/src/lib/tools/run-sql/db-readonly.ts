@@ -49,6 +49,18 @@ function resolvePool(deps: DbReadonlyDeps): Pool {
  * ez a második, alkalmazás-szinttől független védelmi vonal (NFR1, lásd
  * `db-readonly.spec.ts` "double protection" tesztje).
  */
+// VALÓDI overloadok, nem csak futásidejű elágazás (a #8 PR-review 8. tétele): így a
+// TÍPUS mondja meg, mit lehet hívni, nem a kommentár. A megvalósítás szignatúrája
+// (lentebb) nem látszik a hívóknak.
+export async function queryReadonly<T extends QueryResultRow = QueryResultRow>(
+  sql: string,
+  deps?: DbReadonlyDeps,
+): Promise<QueryResult<T>>;
+export async function queryReadonly<T extends QueryResultRow = QueryResultRow>(
+  sql: string,
+  values: unknown[],
+  deps?: DbReadonlyDeps,
+): Promise<QueryResult<T>>;
 export async function queryReadonly<T extends QueryResultRow = QueryResultRow>(
   sql: string,
   // A tömb SZÁNDÉKOSAN mutable (nem `readonly`): az `Array.isArray` egy readonly

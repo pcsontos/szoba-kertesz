@@ -150,6 +150,8 @@ pnpm serve:web    # Vite    — http://localhost:4200
 
 Nyisd meg a `http://localhost:4200` címet. A szerver konzolján közben ugyanaz a színes, körről körre növekvő ágens-trace fut, mint a CLI-ben; a böngésző a válasz mellé a **tool-lépéseket** is megkapja (üzenet-stream), és kártyaként jeleníti meg őket.
 
+> ⚠️ **Vállalt korlát:** a thread-végpontok hitelesítés nélkül, nyitott `cors()` mögött futnak — aki eléri a szervert, az **minden** beszélgetést kilistázhat és elolvashat, a bennük tárolt SQL-kimenetekkel együtt. A UUID-azonosító a végigszámolást akadályozza meg, nem a hozzáférést. Tulajdonos-fogalom és hitelesítés a következő fázis dolga.
+
 A 07. alkalom óta a bal oldali sávban ott vannak a **korábbi beszélgetések** (`GET /api/threads`), és minden beszélgetésnek saját URL-je van: az `?thread=<uuid>` cím újratöltés után is — és egy másik fülön is — visszaadja ugyanazt a beszélgetést, a tool-kártyákkal együtt. A kérésben **csak az új üzenet** megy fel; az előzményt a szerver az adatbázisból tölti, ezért a böngészőből felküldött hamis előzmény hatástalan.
 
 A RAG-hoz **debug-végpontok** is tartoznak (élesben nincsenek mountolva):

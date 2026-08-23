@@ -350,6 +350,42 @@ describe('runInteractive — perzisztencia (Task 10)', () => {
     expect(appendedTo).toEqual([threadId, threadId]);
   });
 
+  it('a tárolt ÜRES üzenetet kihagyja az előzményből', async () => {
+    // A #8 PR-review 2. tétele: egy megszakadt futás után üres assistant-sor
+    // maradhatott a tárban. A szerver már nem ír ilyet, de ami benne van, azt a
+    // terminál `content: ''`-ként adná a modellnek — ezt itt szűrjük ki.
+    const store: ThreadStore = {
+      ...silentStore(),
+      loadThread: async () => [
+        {
+          id: 1,
+          role: 'user',
+          parts: [{ type: 'text', text: 'Korábbi kérdés' }],
+        },
+        { id: 2, role: 'assistant', parts: [] },
+      ],
+    };
+    let seenHistory: readonly Message[] = [];
+
+    const done = runInteractive({
+      input,
+      output,
+      print: false,
+      threadId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      store,
+      ask: async (_question, history) => {
+        seenHistory = history;
+        return makeResult('ok');
+      },
+    });
+    input.write('és tovább?\n');
+    await flushAsync();
+    input.write('exit\n');
+    await done;
+
+    expect(seenHistory).toEqual([{ role: 'user', content: 'Korábbi kérdés' }]);
+  });
+
   it('nem létező threadre magyar hibával áll meg, munkamenet nélkül', async () => {
     const store: ThreadStore = {
       ...silentStore(),

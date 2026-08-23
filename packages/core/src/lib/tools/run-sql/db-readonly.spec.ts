@@ -121,6 +121,50 @@ describe('queryReadonly (real local DB — DATABASE_URL_READONLY)', () => {
     ).rejects.toThrow(/permission denied/i);
   });
 
+  it('a paraméteres hívás VALÓBAN átadja az értékeket a poolnak', async () => {
+    // A #8 PR-review 8. tétele: a kétargumentumos (values) ág eddig CSAK valódi DB-vel
+    // futott (query-customers-tool.spec.ts), tehát a DB nélküli CI-ban egyáltalán nem.
+    // Ez a teszt injektált poollal méri, hogy a `values` tömb tényleg a `pool.query`
+    // második argumentumaként megy át — mock nélkül ezt semmi nem őrizte.
+    const calls: { sql: string; values?: unknown[] }[] = [];
+    const fakePool = {
+      query: async (sql: string, values?: unknown[]) => {
+        calls.push({ sql, values });
+        return { rows: [], rowCount: 0 };
+      },
+    } as unknown as Pool;
+
+    await queryReadonly('SELECT $1::int AS x', [42], { pool: fakePool });
+    await queryReadonly('SELECT 1', { pool: fakePool });
+
+    expect(calls[0]).toEqual({ sql: 'SELECT $1::int AS x', values: [42] });
+    // Paraméter nélkül EGYARGUMENTUMOS hívás marad — a meglévő szerződés része.
+    expect(calls[1]).toEqual({ sql: 'SELECT 1', values: undefined });
+  });
+
+  it('ENGEDÉLYLISTA: a _ro pontosan három táblát lát, se többet, se kevesebbet', async () => {
+    // A #8 PR-review 5. tétele. Amíg a `<ts>_db_roles` migráció
+    // `ALTER DEFAULT PRIVILEGES … GRANT SELECT ON TABLES` sora élt, MINDEN új tábla
+    // automatikusan olvasható lett a runSql-lel — a threads/messages REVOKE tehát
+    // egyszeri javítás volt, nem szabály. A `<ts>_ro_explicit_grants` migráció óta a
+    // default privilege vissza van véve, és a három katalógus-tábla EXPLICIT grantot
+    // kapott. Ez a teszt a detektív-kontroll: ha egy új tábla olvashatóvá válik (vagy
+    // egy meglévő elveszti a jogát), itt bukik el — nem élesben derül ki.
+    const result = await queryReadonly<{ tabla: string; olvashato: boolean }>(
+      `SELECT c.relname AS tabla, has_table_privilege(c.oid, 'SELECT') AS olvashato
+         FROM pg_class c
+         JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = 'public' AND c.relkind = 'r'
+        ORDER BY 1`,
+    );
+
+    const olvashato = result.rows
+      .filter((row) => row.olvashato)
+      .map((row) => row.tabla);
+
+    expect(olvashato).toEqual(['customers', 'knowledge_chunks', 'products']);
+  });
+
   it('a threads táblát SEM látja — a migráció MINDKETTŐT visszaveszi', async () => {
     // A #8 PR review 6. tétele: eddig csak a `messages` volt pinnelve, pedig a
     // <ts>_chat_role migráció a `threads`-et is REVOKE-olja. Egy sor, de enélkül a

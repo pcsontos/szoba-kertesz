@@ -567,6 +567,50 @@ describe('POST /api/chat — a DB az igazságforrás (07. alkalom, Task 8)', () 
     expect(types).not.toContain('data-thread');
   });
 
+  it('megszakadt futás után NEM ment tartalom nélküli assistant-üzenetet', async () => {
+    // A #8 PR-review 2. tétele, MÉRVE: ha az agent az első delta előtt hasal el, a
+    // responseMessage `parts`-ja üres, és az onEnd ezt korábban elmentette. A böngésző
+    // visszatöltéskor üres buborékot rajzolt volna belőle, a CLI pedig `content: ''`-t
+    // adna a modellnek. A kérdés MÁR mentve van — a meghiúsult forduló válasz nélkül
+    // marad, és ez a helyes leírása annak, ami történt.
+    const { store, saved } = fakeStore();
+    const url = await start(async () => {
+      throw new Error('API hiba az első körben');
+    }, store);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: uiMessage('user', 'Hány kaktusz van?') }),
+    });
+    await response.text();
+
+    expect(response.status).toBe(200);
+    expect(saved.map((entry) => entry.role)).toEqual(['user']);
+  });
+
+  it('a TOOL-lépést tartalmazó választ viszont MENTI — a szűrés nem túl tág', async () => {
+    // A fenti szűrés nem dobhatja el azt a fordulót, amiben történt valami: egy
+    // tool-hívás akkor is tartalom, ha a szöveg mellette rövid.
+    const { store, saved } = fakeStore();
+    const url = await start(streamingAskWithTool(), store);
+
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: uiMessage('user', 'Miért sárgul?') }),
+    });
+    await response.text();
+
+    const assistant = saved.filter((entry) => entry.role === 'assistant');
+    expect(assistant).toHaveLength(1);
+    expect(
+      assistant[0].parts.some((part) =>
+        String((part as { type?: unknown }).type).startsWith('tool-'),
+      ),
+    ).toBe(true);
+  });
+
   it('a mentés hibája NEM viszi el a választ', async () => {
     const threadId = '66666666-6666-4666-8666-666666666666';
     const { store } = fakeStore({ [threadId]: [] });

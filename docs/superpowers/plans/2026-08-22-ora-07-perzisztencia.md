@@ -3589,6 +3589,46 @@ git add CLAUDE.md README.md docs
 git commit -m "docs: a 07. alkalom A+B fázisának átvezetése és záró ellenőrzése (Task 12)"
 ```
 
+> **Végrehajtva 2026-08-22:** Step 1-6 és 8-9, commit `64402f6` (6 fájl). A **Step 7 (`db:reset`) a
+> felhasználó döntésére KIMARADT** — a záró doksi ezt kiírja, és NEM állítja zöldnek. Ez a Task
+> egyben a kör lezárása: `docs/ora-07-zaro-ellenorzes.md` nyolc szakasza tényleges kimenetekkel.
+>
+> **Mért állapot a Task végén:** 324 teszt (core 221, cli 52, server 31, web 20), 52 spec-fájlban —
+> a HF3-nál 262 futott. `lint` + `typecheck` + `build` mind az öt projektre zöld, cache nélkül. A
+> `SYSTEM_PROMPT` ↔ `docs/system-prompt.md` diff üres. DB a kör végén: 30 termék, 20 ügyfél, 1906
+> chunk, 4 demó-beszélgetés.
+>
+> **A Step 6 két ellenőrzése FIZETŐS, és a terv ezt nem jelezte** (a 4. a hamis előzményhez egy
+> valódi `/api/chat`-hívást, a 6. második fele egy valódi `pnpm cli ask`-ot indít). Külön
+> jóváhagyással futottak; a jövőbeli tervekben ezt a Step-nél jelölni kell, mint a Step 7-nél.
+>
+> **Két buktató, amit a terv parancsai önmagukban nem oldanak meg:**
+> 1. **Az `env -u DATABASE_URL_CHAT` NEM elég** a fail-fast próbához: a `process.loadEnvFile()` a
+>    `.env`-ből visszatölti a változót. A repón KÍVÜLI munkakönyvtárból kell indítani (ahol nincs
+>    `.env` — a hiányát a belépési pont tolerálja), és ott a `pnpm exec` sem működik, tehát
+>    `node_modules/.bin/tsx` abszolút úttal.
+> 2. **A `psql` a `.env` kapcsolati stringjeit nem eszi meg** a `?schema=public` paraméter miatt
+>    (`invalid URI query parameter`), és a konténer portja 5432, nem a hoszté (5433) — a Step 3
+>    parancsai csak ezzel a két igazítással futnak.
+>
+> **Két saját doksi-állítás MÉRVE megdőlt, ezért javítva:** a `customers` sémát emlékezetből írtam
+> le (a valódi `schema.prisma` `expertise_level`, `pet_safe_required`, `customer_type`,
+> `contact_name`, `email` oszlopokat használ), és az `init.sql` **három** agent-szerepet hoz létre,
+> nem négyet (az admin a konténeré). Tanulság: sémát mindig a `schema.prisma`-ból másolj.
+>
+> **Egy hiba, ami csak a PR-review után derült ki:** a `docs/tech-stack.md` szerep-táblázatát a
+> saját, KÉSŐBBI séma-javításom felülírta (a csere egy nagyobb régiót cserélt, mint amekkorát
+> kellett volna), és így ment ki a `64402f6` — a beszámoló viszont azt állította, hogy a táblázat
+> bent van. Pótolva a `728d2ad`-ben. **Ugyanaz a tanulság, mint a Task 11 cast-jainál: a szerkesztés
+> UTÁN az EREDMÉNYT kell megnézni, nem azt, hogy a parancs lefutott.**
+>
+> **A `/docs` prettier-ignorált** (`.prettierignore`), tehát a doksikat nem kell formázni — a
+> `prettier --write` ott no-op.
+>
+> **A Task után jött még egy kör, ami nincs a tervben:** a #8 PR-en lefuttatott `claude-review` 14
+> tételéből ötöt még a merge előtt javítottunk (`728d2ad`), és ezzel a teszt-szám **324 → 336**.
+> A részletek a záró doksi „Utóirat" szakaszában; a nyitva maradt tételek listája is ott van.
+
 ---
 
 ## Önellenőrzés — mit fedtünk le a specből

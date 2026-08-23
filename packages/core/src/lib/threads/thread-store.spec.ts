@@ -130,6 +130,14 @@ describe('thread-store — körút a valódi adatbázison', () => {
     expect(threads[0].title).toBe('lista-teszt');
   });
 
+  it('értelmetlen limitre sem hasal el (negatív, NaN) — a klamp kétoldalt véd', async () => {
+    // A #8 PR-review 11. tétele: a `Math.min(limit, 50)` átengedte a negatívot és a
+    // NaN-t, amiből a Postgres hibája, azaz a hívó felületén 500 lett volna. Ma a
+    // szerver konstanssal hív, de ez exportált core-API.
+    await expect(listThreads(-5)).resolves.toBeInstanceOf(Array);
+    await expect(listThreads(Number.NaN)).resolves.toBeInstanceOf(Array);
+  });
+
   it('nem létező threadre NULL-t ad — ebből lesz a 404', async () => {
     const missing = '00000000-0000-4000-8000-000000000000';
 
