@@ -13,6 +13,12 @@
 # A `packages/db/generated` (Prisma-kliens) gitignorált, tehát a runneren nem
 # létezik. Ellenőrizve: a lint/typecheck/build enélkül is zöld, mert a `core`
 # sosem importálja a Prismát — csak a `prisma/seed.ts`, amit egyik target sem fordít.
+#
+# KIVÉTEL: a `tools/autotest` (a mérőeszköz) specjei TISZTÁK — se DB, se API-kulcs, se
+# böngésző —, ezért CÉLZOTTAN futnak CI-ben. Ez pont az a kód, ami HAMIS ZÖLDET tud
+# jelezni (rossz halmaz- vagy szám-illesztés → „minden rendben" egy hibás válaszra),
+# tehát itt a legfontosabb a regresszió-védelem. A `run-many -t test` továbbra sem jó:
+# az behúzná a `core` DB-s specjeit.
 name: CI
 
 on:
@@ -46,3 +52,5 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm nx run-many -t lint typecheck build
+
+      - run: pnpm nx test autotest
