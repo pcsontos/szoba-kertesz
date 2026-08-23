@@ -23,10 +23,15 @@ Minden alábbi állítás a repóból, a Postgresből vagy a referencia-repóbó
 - **`.claude/skills/` nem létezik** a repóban. A `.claude/` jelenleg csak
   `settings.local.json`-t, `scheduled_tasks.lock`-ot és egy üres `worktrees/`-t tart.
 - A `.claude/skills/autotest/SKILL.md` út **nem gitignore-olt** — commitolható.
-  A `.claude/settings.local.json` viszont **nem a repó `.gitignore`-ja** miatt rejtett,
-  hanem a globális `~/.config/git/ignore` `**/.claude/settings.local.json` sora miatt.
-  Ez a fájl PAT-ot tartalmaz (`docs/pluginok-skillek.md`), tehát friss klónon vagy másik
-  gépen nem védené semmi. **Ebben a körben nem javítjuk**, de rögzítjük.
+- **A `.claude/settings.local.json` védelme menet közben megszűnt, és ebben a körben
+  javítottuk.** A tervezés elején még a globális `~/.config/git/ignore`
+  `**/.claude/settings.local.json` sora fedte; újramérve (2026-08-23) az a fájl **1 bájtra
+  csökkent** (egyetlen sortörés), a `core.excludesFile` nincs beállítva, a `.git/info/exclude`
+  pedig sok `.claude/*` runtime-fájlt fed, de **ezt nem**. A fájl tehát `??`-ként állt a
+  `git status`-ban, holott PAT-ot tartalmaz (`docs/pluginok-skillek.md`).
+  **Igazolva: soha nem került be a history-ba** (`git log --all --diff-filter=A -- '.claude/**'`
+  üres) — szivárgás nem történt. A javítás egy sor a **repó** `.gitignore`-jában, mert az
+  utazik a repóval; a `.git/info/exclude` nem.
 - A `logs/` **gitignore-olt** — a riportok oda mennek, a git-történetbe nem kerülnek.
 - **Playwright sehol nincs** a repóban (se gyökér, se `apps/*`, se `packages/*`).
 - **`docs/adr/` nem létezik.**
@@ -371,8 +376,10 @@ nagyságrend a tervezéshez.
   (11. döntés) — a kettő nem ugyanaz. A címke-indítású kézi battery-futás (a
   `claude-review.yml` mintájára) **tudatosan elhalasztott**, nem elvetett: akkor jön elő,
   ha a battery bizonyította, hogy stabilan ítél.
-- **A `.claude/settings.local.json` ignore-jának javítása.** Valós fragilitás (globális
-  gitignore véd egy PAT-ot tartalmazó fájlt), de nem ennek a körnek a tárgya — rögzítve.
+- **A `docs/pluginok-skillek.md` átírása.** Az a doksi azt állítja, a `settings.local.json`
+  „szándékosan gitignore-olt"; ez mostantól a **repó** `.gitignore`-jára igaz, nem a
+  globálisra. A mondat nem hamis, csak pontatlan — a doksi-szinkron nem ennek a körnek
+  a tárgya.
 - **Orchestráció / eszkaláció mint futó kód.** A lecke címének „eszkaláció" része nálunk
   a battery jailbreak- és grounding-fokán jelenik meg, nem új futási módban.
 

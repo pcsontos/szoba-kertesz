@@ -1,6 +1,10 @@
 .env
 .env.bak
 .mcp.json
+# Claude Code repo-szintű beállításai — GitHub PAT-ot is tartalmaz.
+# NE a globális ~/.config/git/ignore-ra bízd: az nem utazik a repóval,
+# és 2026-08-23-án mérve épp üres volt, tehát a fájl védtelenül állt.
+.claude/settings.local.json
 
 node_modules
 dist
