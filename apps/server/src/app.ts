@@ -114,6 +114,25 @@ function extractText(message: ValidatedMessage): string {
     .join('');
 }
 
+/**
+ * Van-e a válaszban bármi, amit érdemes eltárolni? Tartalom = nem üres SZÖVEG vagy
+ * bármilyen TOOL-rész. A `step-start` önmagában nem az: az csak a lépéshatárt jelöli.
+ *
+ * A #8 PR-review 2. tétele nyomán: e nélkül egy megszakadt futás üres assistant-sort
+ * hagyott a `messages` táblában.
+ */
+function hasContent(parts: readonly { type: string }[]): boolean {
+  return parts.some((part) => {
+    if (part.type.startsWith('tool-')) {
+      return true;
+    }
+    const text = (part as { text?: unknown }).text;
+    return (
+      part.type === 'text' && typeof text === 'string' && text.trim() !== ''
+    );
+  });
+}
+
 export function createApp(options: CreateAppOptions = {}): Express {
   const ask: AskFn =
     options.ask ?? ((question, opts) => askAgent(question, opts));
@@ -251,6 +270,15 @@ export function createApp(options: CreateAppOptions = {}): Express {
           const parts = responseMessage.parts.filter(
             (part) => part.type !== 'data-thread',
           );
+          // TARTALOM NÉLKÜLI választ NEM mentünk. Egy az első delta ELŐTT elhasaló
+          // futás (API-hiba, rate limit) üres `parts`-ot hagyna maga után — mérve —,
+          // amiből a böngésző visszatöltéskor üres buborékot rajzolna, a CLI pedig
+          // `content: ''`-t adna a modellnek. A kérdés ilyenkor MÁR el van mentve
+          // (szándékosan, az agent futása előtt): a meghiúsult forduló egyszerűen
+          // válasz nélkül marad, ami pontosan a történtek leírása.
+          if (!hasContent(parts)) {
+            return;
+          }
           // A mentés hibája NEM viheti el a választ — a stream ilyenkor már kiment.
           // Ugyanaz az elv, mint a Trace és a JSONL függetlenségénél.
           savePromise = store

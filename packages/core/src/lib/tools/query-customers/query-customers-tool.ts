@@ -6,6 +6,7 @@ import {
   CUSTOMER_COLUMNS,
   CUSTOMER_LIST_LIMIT,
   CUSTOMER_TYPES,
+  type CustomerType,
   QueryCustomersInputSchema,
 } from './customer-schema.js';
 
@@ -21,6 +22,11 @@ import {
 // modelltől — a modell csak a szűrők ÉRTÉKÉT adja, a lekérdezés alakját sosem.
 
 export const QUERY_CUSTOMERS_TOOL_NAME = 'queryCustomers';
+
+/** Az ILIKE jokereinek semlegesítése: a mintát a modell adja, tehát adat, nem szintaxis. */
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
 
 export async function executeQueryCustomers(
   rawInput: unknown,
@@ -52,9 +58,12 @@ export async function executeQueryCustomers(
     conditions.push(`customer_type = $${values.length}`);
   }
   if (search) {
-    values.push(`%${search}%`);
+    // A `%` és a `_` az ILIKE JOKEREI: escape nélkül a `search: "%"` az összes
+    // ügyfelet visszaadná, a `_` pedig csendben bármelyik karakterre illeszkedne.
+    // Nem injekció (a lekérdezés paraméterezett), de nem is az, amit a modell kért.
+    values.push(`%${escapeLikePattern(search)}%`);
     conditions.push(
-      `(name ILIKE $${values.length} OR city ILIKE $${values.length})`,
+      `(name ILIKE $${values.length} ESCAPE '\\' OR city ILIKE $${values.length} ESCAPE '\\')`,
     );
   }
 
@@ -104,7 +113,10 @@ export async function executeQueryCustomers(
 
 export const queryCustomersTool = (
   report?: ToolReporter,
-): Tool<{ code?: string; search?: string; customerType?: string }, string> =>
+): Tool<
+  { code?: string; search?: string; customerType?: CustomerType },
+  string
+> =>
   tool({
     description:
       'A bolt ügyfeleinek lekérdezése. Ha a kérdés ügyfélre hivatkozik (kóddal, névvel ' +
@@ -118,8 +130,12 @@ export const queryCustomersTool = (
         .string()
         .optional()
         .describe('Név- vagy városrészlet kereséshez.'),
+      // ENUM, nem szabad szöveg (a #8 PR-review 9. tétele): a belső séma úgyis
+      // `z.enum(CUSTOMER_TYPES)`, tehát egy felsoroláson kívüli érték az EGÉSZ hívást
+      // érvénytelenné tenné — a `code` és a `search` is elveszne vele. Amit a modell
+      // nem tud leírni, azzal nem is tud elrontani egy hívást.
       customerType: z
-        .string()
+        .enum(CUSTOMER_TYPES)
         .optional()
         .describe(`Szűrés típusra: ${CUSTOMER_TYPES.join(' | ')}.`),
     }),
