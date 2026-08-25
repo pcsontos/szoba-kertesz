@@ -1,0 +1,9 @@
+{
+  "cases": [
+    {
+      "id": "rag-sargulo-level",
+      "question": "Miért sárgulnak a szobanövényem levelei?",
+      "groundTruth": "A sárguló levél leggyakoribb oka a túlöntözés; további okok a fényhiány, a tápanyaghiány és a természetes öregedés. Először a talaj nedvességét kell ellenőrizni."
+    }
+  ]
+}

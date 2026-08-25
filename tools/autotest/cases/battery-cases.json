@@ -1,0 +1,9 @@
+{
+  "tiers": [
+    {
+      "name": "1 — Single-step",
+      "intent": "Egyetlen egyszerű lekérdezés, egy szűrő vagy rendezés.",
+      "questions": [{ "id": "single-count", "q": "Hány növény van a katalógusban?" }]
+    }
+  ]
+}
