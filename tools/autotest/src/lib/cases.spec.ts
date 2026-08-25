@@ -121,6 +121,22 @@ describe('a VALÓDI cases-fájlok', () => {
     expect(loadRagCases().length).toBeGreaterThan(0);
   });
 
+  it('7 RAG-esetet tart, és háromnál a kérdés MEGEGYEZIK a golden setével', () => {
+    const cases = loadRagCases();
+    expect(cases).toHaveLength(7);
+    // A spec 9. döntése: a szándékos átfedés teszi a két mérést összeolvashatóvá.
+    // A kérdés SZÖVEGÉRE illesztünk, mert a tools/autotest nem importálhat az apps/cli-ből;
+    // ha a golden set kérdése változna, ez a spec bukik, és az figyelmeztet a szinkron-vesztésre.
+    const shared = [
+      'Miért sárgulnak a szobanövényem levelei?',
+      'Milyen gyakran öntözzem a kígyónövényt?',
+      'Túlöntöztem a monsterámat, mit tegyek?',
+    ];
+    for (const question of shared) {
+      expect(cases.map((ragCase) => ragCase.question)).toContain(question);
+    }
+  });
+
   it('minden eset-azonosító egyedi a battery-ben', () => {
     const ids = loadBatteryCases().flatMap((tier) => [
       ...(tier.questions ?? []).map((question) => question.id),
