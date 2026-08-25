@@ -22,6 +22,7 @@ import { type BatteryResult, type BatteryRun, summarize } from './lib/battery-re
 import { closeAdminPool, countMessages, deleteThreads, queryNames } from './lib/db-admin.js';
 import { costUsd, formatUsd } from './lib/cost.js';
 import { readUsageSince } from './lib/server-usage.js';
+import { renderBatteryMarkdown } from './lib/battery-markdown.js';
 
 try {
   process.loadEnvFile();
@@ -42,6 +43,110 @@ const MSG = '[data-testid="message"]';
 const ASSISTANT_TEXT = '[data-testid="assistant-text"]';
 const TOOL_CARD = '[data-testid="tool-card"]';
 
+// ── Kapcsolók ───────────────────────────────────────────────────────────────
+const HUD_ENABLED = !process.argv.includes('--no-hud');
+const HUD_PAUSE_MS = HUD_ENABLED ? 900 : 0;
+// A consistency ALAPBÓL KI (a kurzusnál alapból be): nálunk minden futás valódi pénz,
+// tehát az alapértelmezés legyen az olcsó.
+const WITH_CONSISTENCY = process.argv.includes('--consistency');
+const CONSISTENCY_IDS = ['trap-most-expensive', 'trap-avg-price', 'sql-under3000'];
+const CONSISTENCY_RUNS = 3;
+
+/** `--only "single,buktató"` — a fok NEVÉRE szűr, kisbetűsen, részlet-egyezéssel. */
+const ONLY = ((): string[] => {
+  const inline = process.argv.find((arg) => arg.startsWith('--only='));
+  const index = process.argv.indexOf('--only');
+  const raw = inline
+    ? inline.slice('--only='.length)
+    : index >= 0
+      ? (process.argv[index + 1] ?? '')
+      : '';
+  return raw
+    .split(',')
+    .map((part) => part.trim().toLowerCase())
+    .filter((part) => part !== '');
+})();
+
+// ── Szemléltető HUD ─────────────────────────────────────────────────────────
+let hudLabel = '';
+let hudSub = '';
+
+function hudEscape(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').slice(0, 200);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * A HUD-hoz használt DOM-felület, MINIMÁLISAN leírva.
+ *
+ * Miért nem a `DOM` lib? Mert ez a csomag Node-os (`types: ["node"]`), és a teljes DOM-lib
+ * megnyitásával egy tiszta lib-modul is hivatkozhatna `document`-re — fordulna, majd
+ * futásidőben bukna. A `page.evaluate` visszahívása a BÖNGÉSZŐBEN fut, a fordító viszont
+ * Node-kontextusban látja; ez a shim köti össze a kettőt, láthatóan.
+ */
+interface HudDocument {
+  getElementById(id: string): HudElement | null;
+  createElement(tag: string): HudElement;
+  readonly body: { appendChild(node: HudElement): void };
+}
+interface HudElement {
+  id: string;
+  innerHTML: string;
+  setAttribute(name: string, value: string): void;
+}
+
+/**
+ * Playwright-injektált doboz a jobb alsó sarokban, ami mutatja, épp mi fut. NEM az app része —
+ * minden `goto` törli, ezért fázisonként újrarajzoljuk. `--no-hud` kikapcsolja (a demó-szünettel
+ * együtt); CI-ben így futtasd.
+ */
+async function setHud(
+  page: Page,
+  phase: string,
+  tone: 'run' | 'ok' | 'fail' = 'run',
+): Promise<void> {
+  if (!HUD_ENABLED) {
+    return;
+  }
+  const color = tone === 'ok' ? '#4bbd8a' : tone === 'fail' ? '#f06a6a' : '#e0a94b';
+  try {
+    await page.evaluate(
+      (data: { label: string; sub: string; phase: string; color: string }) => {
+        const doc = (globalThis as unknown as { document: HudDocument }).document;
+        let box = doc.getElementById('__autotest_hud');
+        if (box === null) {
+          box = doc.createElement('div');
+          box.id = '__autotest_hud';
+          doc.body.appendChild(box);
+        }
+        box.setAttribute(
+          'style',
+          'position:fixed;bottom:18px;right:18px;z-index:2147483647;width:340px;' +
+            "font:13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
+            'background:rgba(15,21,18,.96);color:#e6efe9;border:1px solid ' +
+            data.color +
+            ';border-radius:12px;padding:12px 15px;box-shadow:0 10px 34px rgba(0,0,0,.45);' +
+            'pointer-events:none;',
+        );
+        box.innerHTML =
+          '<div style="font-size:11px;letter-spacing:.05em;text-transform:uppercase;' +
+          'color:#93a49b;margin-bottom:5px">🎬 autotest · Playwright</div>' +
+          `<div style="font-weight:700;margin-bottom:3px">${data.label}</div>` +
+          (data.sub === ''
+            ? ''
+            : `<div style="color:#b9c7bf;font-size:12px;margin-bottom:7px">${data.sub}</div>`) +
+          `<div style="color:${data.color};font-weight:600">${data.phase}</div>`;
+      },
+      { label: hudEscape(hudLabel), sub: hudEscape(hudSub), phase, color },
+    );
+  } catch {
+    // Navigáció közben nincs body — nem kritikus.
+  }
+}
+
 interface TurnMeasurement {
   readonly answer: string;
   readonly ttfcMs: number | null;
@@ -60,7 +165,9 @@ async function sendAndMeasure(page: Page, message: string): Promise<TurnMeasurem
   const started = Date.now();
 
   await page.getByPlaceholder('Írd ide a kérdésed…').fill(message);
+  await setHud(page, '✍️ kérdés beírása…');
   await page.keyboard.press('Enter');
+  await setHud(page, '⏳ várakozás a válaszra…');
 
   const lastAssistantText = () =>
     page.locator(`${MSG}[data-role="assistant"]`).last().locator(ASSISTANT_TEXT);
@@ -73,6 +180,7 @@ async function sendAndMeasure(page: Page, message: string): Promise<TurnMeasurem
         .catch(() => '');
       if (text.trim().length > 0) {
         ttfcMs = Date.now() - started;
+        await setHud(page, `💬 első karakter ${(ttfcMs / 1000).toFixed(1)} s`);
         break;
       }
     }
@@ -195,6 +303,14 @@ async function askOne(page: Page, question: BatteryQuestion): Promise<BatteryRes
       : { accepted: flags.length === 0, reason: sqlVerdictReason };
 
   await rememberThread(page);
+  await setHud(
+    page,
+    verdict.accepted ? '✓ ELFOGADVA' : '✗ ELUTASÍTVA',
+    verdict.accepted ? 'ok' : 'fail',
+  );
+  if (HUD_PAUSE_MS > 0) {
+    await sleep(HUD_PAUSE_MS);
+  }
 
   const model = loadConfig().anthropicModel;
   const cost = usage === null ? null : costUsd(model, usage.inputTokens, usage.outputTokens);
@@ -315,6 +431,11 @@ async function askConversation(
     ? `ELFOGADVA — ${(notes.length > 0 ? notes : ['nem üres válaszok, nincs jelzés']).join('; ')}.`
     : `ELUTASÍTVA — ${flags.join('; ')}.${truth === undefined ? '' : ` Helyes: ${truth}`}`;
 
+  await setHud(page, accepted ? '✓ ELFOGADVA' : '✗ ELUTASÍTVA', accepted ? 'ok' : 'fail');
+  if (HUD_PAUSE_MS > 0) {
+    await sleep(HUD_PAUSE_MS);
+  }
+
   const model = loadConfig().anthropicModel;
   const cost = usage === null ? null : costUsd(model, usage.inputTokens, usage.outputTokens);
 
@@ -367,6 +488,34 @@ function writeRun(run: BatteryRun): string {
 
 async function main(): Promise<void> {
   const tiers = loadBatteryCases();
+
+  // A séma-igazolás INGYENES: se böngésző, se modell-hívás. Ezért van a legelején.
+  if (process.argv.includes('--dump-cases')) {
+    process.stdout.write(`${JSON.stringify({ tiers }, null, 2)}\n`);
+    return;
+  }
+
+  // A szűrés is a böngésző ELŐTT dől el: egy nem illeszkedő --only ne indítson böngészőt.
+  const tiersToRun =
+    ONLY.length === 0
+      ? tiers
+      : tiers.filter((tier) => ONLY.some((needle) => tier.name.toLowerCase().includes(needle)));
+  if (ONLY.length > 0) {
+    console.log(
+      `(--only szűrő: ${tiersToRun.map((tier) => tier.name).join(' | ') || 'NINCS TALÁLAT'})`,
+    );
+  }
+  if (tiersToRun.length === 0) {
+    console.log('Nincs futtatható fok (a --only szűrő nem talált egyet sem). Kilépés.');
+    return;
+  }
+
+  const totalCases = tiersToRun.reduce(
+    (sum, tier) => sum + (tier.questions?.length ?? 0) + (tier.conversations?.length ?? 0),
+    0,
+  );
+  let caseIndex = 0;
+
   const browser = await chromium.launch({ headless: false });
   const page = await browser.newPage();
 
@@ -381,12 +530,16 @@ async function main(): Promise<void> {
 
   const startedAt = new Date().toISOString();
   const results: BatteryResult[] = [];
+  const consistency: BatteryRun['consistency'] = [];
 
   try {
-    for (const tier of tiers) {
+    for (const tier of tiersToRun) {
       console.log(`\n=== ${tier.name} — ${tier.intent} ===`);
       for (const conversation of tier.conversations ?? []) {
         console.log(`\n[💬] ${conversation.title} (${conversation.steps.length} kör)`);
+        caseIndex++;
+        hudLabel = `[${caseIndex}/${totalCases}] ${tier.name}`;
+        hudSub = conversation.title;
         const result = await askConversation(page, conversation);
         results.push({ ...result, tier: tier.name });
         const mark = result.flags.length > 0 ? `⚠️ ${result.flags.join('; ')}` : 'ok';
@@ -394,10 +547,52 @@ async function main(): Promise<void> {
       }
       for (const question of tier.questions ?? []) {
         console.log(`\n[?] ${question.q}`);
+        caseIndex++;
+        hudLabel = `[${caseIndex}/${totalCases}] ${tier.name}`;
+        hudSub = question.q;
         const result = await askOne(page, question);
         results.push({ ...result, tier: tier.name });
         const mark = result.flags.length > 0 ? `⚠️ ${result.flags.join('; ')}` : 'ok';
         console.log(`[${(result.ms / 1000).toFixed(1)}s ${mark}]`);
+      }
+    }
+
+    // ── Konzisztencia: az LLM nem-determinizmusának SZÁMSZERŰSÍTÉSE ──────────
+    // Alapból KI: háromszoros futás háromszoros pénz. A `--consistency` kapcsolja be.
+    if (!WITH_CONSISTENCY) {
+      console.log('\n(konzisztencia kihagyva — kapcsold be a --consistency flaggel)');
+    } else {
+      const allQuestions = tiersToRun.flatMap((tier) => tier.questions ?? []);
+      console.log(
+        `\n=== Konzisztencia — ${CONSISTENCY_IDS.length} eset × ${CONSISTENCY_RUNS} futás ===`,
+      );
+      for (const id of CONSISTENCY_IDS) {
+        const question = allQuestions.find((entry) => entry.id === id);
+        if (question === undefined) {
+          continue;
+        }
+        const runs: { accepted: boolean; answer: string }[] = [];
+        for (let attempt = 0; attempt < CONSISTENCY_RUNS; attempt++) {
+          hudLabel = `Konzisztencia · ${id}`;
+          hudSub = `${attempt + 1}/${CONSISTENCY_RUNS}. futás`;
+          const repeat = await askOne(page, question);
+          runs.push({ accepted: repeat.verdict.accepted, answer: repeat.answer });
+        }
+        const acceptedCount = runs.filter((entry) => entry.accepted).length;
+        const majority = acceptedCount >= runs.length / 2;
+        const stable = acceptedCount === 0 || acceptedCount === runs.length;
+        consistency.push({
+          id,
+          question: question.q,
+          runs: runs.length,
+          acceptedCount,
+          agreement: runs.filter((entry) => entry.accepted === majority).length / runs.length,
+          stable,
+          answers: runs.map((entry) => entry.answer),
+        });
+        console.log(
+          `  ${id}: ${acceptedCount}/${runs.length} elfogadva — ${stable ? 'STABIL' : 'INGADOZIK'}`,
+        );
       }
     }
   } finally {
@@ -407,8 +602,10 @@ async function main(): Promise<void> {
     await closeAdminPool();
   }
 
-  const run: BatteryRun = { startedAt, web: WEB, results, consistency: [] };
+  const run: BatteryRun = { startedAt, web: WEB, results, consistency };
   const path = writeRun(run);
+  const markdownPath = path.replace(/\.json$/, '.md');
+  writeFileSync(markdownPath, `${renderBatteryMarkdown(run)}\n`, 'utf8');
   const summary = summarize(results);
   console.log(
     `\nKész: ${summary.total} eset, ${summary.failed} bukott, ` +
