@@ -7,7 +7,9 @@
     "name": "autotest"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.39",
     "@szoba-kertesz/core": "workspace:*",
+    "ai": "^7.0.66",
     "pg": "^8.22.0",
     "playwright": "^1.62.1",
     "tslib": "^2.3.0",

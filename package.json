@@ -12,6 +12,7 @@
     "golden:run": "tsx --conditions=@szoba-kertesz/source apps/cli/src/golden-run.ts",
     "autotest:battery": "tsx --conditions=@szoba-kertesz/source tools/autotest/src/battery.ts",
     "autotest:report": "tsx --conditions=@szoba-kertesz/source tools/autotest/src/report-html.ts",
+    "autotest:rag": "tsx --conditions=@szoba-kertesz/source tools/autotest/src/rag-eval.ts",
     "szobakertesz": "nx run cli:build && node apps/cli/dist/main.js",
     "szobakertesz:debug": "nx run cli:build:development && node --inspect apps/cli/dist/main.js --show-prompt",
     "serve:api": "nx serve server",

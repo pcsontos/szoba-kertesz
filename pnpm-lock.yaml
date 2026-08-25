@@ -270,9 +270,15 @@ importers:
 
   tools/autotest:
     dependencies:
+      '@ai-sdk/anthropic':
+        specifier: ^4.0.39
+        version: 4.0.39(zod@4.4.3)
       '@szoba-kertesz/core':
         specifier: workspace:*
         version: link:../../packages/core
+      ai:
+        specifier: ^7.0.66
+        version: 7.0.66(zod@4.4.3)
       pg:
         specifier: ^8.22.0
         version: 8.22.0
