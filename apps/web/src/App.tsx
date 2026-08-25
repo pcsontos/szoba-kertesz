@@ -192,9 +192,14 @@ export function App() {
       <div className="flex min-w-0 flex-1 flex-col gap-4">
         <h1 className="text-xl font-semibold text-emerald-900">Szobakertész</h1>
 
+        {/* A `data-testid`-ek a Playwright-battery fogódzói (tools/autotest, 08. alkalom).
+            A buborékoknak nincs más stabil horgja — csak Tailwind-osztályok —, és egy törött
+            selector NÉMÁN ZÖLDET adna: a battery üres szöveget olvasna, és nem találna
+            redFlaget ott, ahol nem is olvas. Az `App.testids.spec.tsx` pinneli őket. */}
         <div
           ref={viewRef}
           onScroll={handleScroll}
+          data-testid="message-list"
           className="flex-1 space-y-3 overflow-y-auto rounded-lg border border-neutral-200 p-4"
         >
           {messages.length === 0 && (
@@ -206,6 +211,8 @@ export function App() {
           {messages.map((message) => (
             <div
               key={message.id}
+              data-testid="message"
+              data-role={message.role}
               className={
                 message.role === 'user'
                   ? 'ml-auto max-w-[80%] rounded-lg bg-emerald-700 px-3 py-2 text-sm text-white'
@@ -231,7 +238,10 @@ export function App() {
                           />
                         ))}
                         {text !== '' && (
-                          <div className="prose-sm space-y-2 [&_li]:ml-4 [&_li]:list-disc">
+                          <div
+                            data-testid="assistant-text"
+                            className="prose-sm space-y-2 [&_li]:ml-4 [&_li]:list-disc"
+                          >
                             <Markdown>{text}</Markdown>
                           </div>
                         )}

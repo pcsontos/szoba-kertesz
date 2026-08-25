@@ -64,7 +64,13 @@ export function ToolCard({ toolName, state, input, output }: ToolCardProps) {
   const running = state !== 'output-available';
 
   return (
-    <div className="my-2 rounded-lg border border-neutral-200 px-3 py-2 text-xs">
+    // A `data-tool` a battery fogódzója: abból derül ki, MELYIK tool futott (a RAG-grounding
+    // fok azt méri, hogy gondozási kérdésre tényleg a searchKnowledge fut-e).
+    <div
+      data-testid="tool-card"
+      data-tool={toolName}
+      className="my-2 rounded-lg border border-neutral-200 px-3 py-2 text-xs"
+    >
       <div className="flex items-center gap-2 font-medium text-neutral-600">
         {running && (
           <span

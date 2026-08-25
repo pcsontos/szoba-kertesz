@@ -4865,6 +4865,30 @@ Várakozás: `curl -sf http://localhost:4200 >/dev/null` és
 **Fizetős parancsot mindig `env -u OPENAI_API_KEY` előtaggal** indíts: a shell-környezet
 árnyékolhatja a `.env` kulcsát.
 
+**PORT-ÜTKÖZÉS — mérve a fejlesztői gépen (2026-08-25).** A 3000-es porton az **Obsidian** is
+figyel (REST-plugin), a `127.0.0.1:3000`-en. A mi szerverünk `::`-re köt, ezért elférnek
+egymás mellett, és a `localhost` feloldása dönt:
+
+| Cím | Ki válaszol |
+|---|---|
+| `http://127.0.0.1:3000` | **az Obsidian → 404** |
+| `http://[::1]:3000` · `http://localhost:3000` | a mi szerverünk → 200 |
+
+A Chrome `::1`-re oldja fel, tehát **most működik** — de ha a `/api/threads` váratlanul 404-et
+ad, EZ az ok, nem a mi kódunk. Diagnózis: `lsof -nP -i :3000`. Kiút, ha kell:
+
+```bash
+# gyökér .env-be:        PORT=3100
+# apps/web/.env-be:      VITE_API_URL=http://localhost:3100
+```
+
+A két változó **külön fájlba** megy: a szerver a gyökér `.env`-et tölti
+(`process.loadEnvFile()`), a Vite viszont az `envDir` alapértelmezése miatt az
+`apps/web/.env`-et nézi (`root: import.meta.dirname`). Mindkettő gitignore-olt (a `.env` sor
+kezdő perjel nélkül bármely mélységben illeszkedik). **Csak ütközés esetén állítsd át** — a
+3000 be van égetve a `CLAUDE.md`-be és a `docs/`-ba, és a portváltás szétvinné a dokumentált
+állapotot a valóditól.
+
 ## 1. Futtatás
 
 ```bash
