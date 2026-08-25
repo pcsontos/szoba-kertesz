@@ -11,11 +11,15 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadConfig } from '@szoba-kertesz/core';
 import { chromium, type Page } from 'playwright';
-import { type BatteryQuestion, loadBatteryCases } from './lib/cases.js';
+import {
+  type BatteryConversation,
+  type BatteryQuestion,
+  loadBatteryCases,
+} from './lib/cases.js';
 import { mentionedNames, setScores } from './lib/matchers.js';
 import { buildVerdict, checkExpect, checkRedFlags } from './lib/verdict.js';
 import { type BatteryResult, type BatteryRun, summarize } from './lib/battery-result.js';
-import { closeAdminPool, queryNames } from './lib/db-admin.js';
+import { closeAdminPool, countMessages, deleteThreads, queryNames } from './lib/db-admin.js';
 import { costUsd, formatUsd } from './lib/cost.js';
 import { readUsageSince } from './lib/server-usage.js';
 
@@ -106,6 +110,32 @@ async function sendAndMeasure(page: Page, message: string): Promise<TurnMeasurem
   return { answer, ttfcMs, tools: tools.filter((name) => name !== '') };
 }
 
+/** A futás alatt LÉTREHOZOTT threadek — a végén PONTOSAN ezeket töröljük. */
+const createdThreadIds = new Set<string>();
+
+/**
+ * A thread-azonosító az URL-ből. A szerver `data-thread` részt küld, amire az App a címsort
+ * `?thread=<uuid>`-ra írja át. A DB-t szándékosan NEM kérdezzük: az más futások (és a négy
+ * demó-beszélgetés) threadjeit is visszaadná, és a takarítás azokat is elvinné.
+ */
+function currentThreadId(page: Page): string | null {
+  const value = new URL(page.url()).searchParams.get('thread');
+  return value === null || value === '' ? null : value;
+}
+
+async function rememberThread(page: Page): Promise<string | null> {
+  // A címsor-átírás a stream VÉGÉN történik, ezért rövid türelmi idő kell.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const id = currentThreadId(page);
+    if (id !== null) {
+      createdThreadIds.add(id);
+      return id;
+    }
+    await page.waitForTimeout(100);
+  }
+  return null;
+}
+
 /** Egy egykörös kérdés végigfuttatása FRISS oldalon (izoláció: ne szivárogjon a kontextus). */
 async function askOne(page: Page, question: BatteryQuestion): Promise<BatteryResult> {
   const flags: string[] = [];
@@ -164,6 +194,8 @@ async function askOne(page: Page, question: BatteryQuestion): Promise<BatteryRes
       ? buildVerdict(question, answer, flags)
       : { accepted: flags.length === 0, reason: sqlVerdictReason };
 
+  await rememberThread(page);
+
   const model = loadConfig().anthropicModel;
   const cost = usage === null ? null : costUsd(model, usage.inputTokens, usage.outputTokens);
 
@@ -181,6 +213,148 @@ async function askOne(page: Page, question: BatteryQuestion): Promise<BatteryRes
     truth,
     verdict,
   };
+}
+
+/** Több-körös eset: EGY oldal, több üzenet sorban — a kontextus a körök között megmarad. */
+async function askConversation(
+  page: Page,
+  conversation: BatteryConversation,
+): Promise<BatteryResult> {
+  const flags: string[] = [];
+  const notes: string[] = [];
+
+  await page.goto(WEB, { waitUntil: 'domcontentloaded' });
+  const sinceMs = Date.now();
+  const started = Date.now();
+
+  const turns: { user: string; assistant: string }[] = [];
+  let ttfcMs: number | null = null;
+
+  for (const [index, message] of conversation.steps.entries()) {
+    const turn = await sendAndMeasure(page, message);
+    if (index === 0) {
+      ttfcMs = turn.ttfcMs; // az első kör jellemzi a válaszkészséget
+    }
+    turns.push({ user: message, assistant: turn.answer });
+  }
+
+  const threadId = await rememberThread(page);
+
+  // ── A ?thread= VISSZATÖLTÉS próbája ────────────────────────────────────────
+  if (conversation.restore === true) {
+    if (threadId === null) {
+      flags.push('INFRA HIBA: nem sikerült kiolvasni a thread-azonosítót az URL-ből');
+    } else {
+      await page.goto(`${WEB}/?thread=${threadId}`, { waitUntil: 'domcontentloaded' });
+      await page
+        .locator(MSG)
+        .first()
+        .waitFor({ state: 'visible', timeout: 30_000 })
+        .catch(() => undefined);
+      const restored = await page.locator(MSG).count();
+      const expectedCount = conversation.steps.length * 2;
+      if (restored < expectedCount) {
+        flags.push(
+          `HIBA: a visszatöltés hiányos (${restored}/${expectedCount} üzenet jelent meg a ?thread= URL-ről)`,
+        );
+      } else {
+        notes.push(`a ?thread= visszatöltés mind a ${restored} üzenetet visszahozta`);
+      }
+      const restoredTools = await page.locator(TOOL_CARD).count();
+      if (restoredTools > 0) {
+        notes.push(`a tool-kártyák is visszajöttek (${restoredTools} db)`);
+      }
+    }
+  }
+
+  const ms = Date.now() - started;
+  const usage = await readUsageSince(sinceMs, conversation.steps.length);
+
+  // A teljes átirat — ezt látja a riport (a html.ts chatThread-je 👤/🤖 mentén bontja körökre).
+  const answer = turns.map((turn) => `👤 ${turn.user}\n🤖 ${turn.assistant}`).join('\n\n');
+  // A szivárgás-vizsgálat CSAK az asszisztens szövegén fut: a teljes átiraton a TÁMADÓ saját
+  // szavaira illeszkedne („mostantól módosíthatod"), ami fals pozitív.
+  const assistantText = turns.map((turn) => turn.assistant).join('\n\n');
+  // Az ELVÁRÁS csak az UTOLSÓ körre: így a kontextus-használatot mérjük, nem azt, hogy a szám
+  // egy korábbi körben már elhangzott.
+  const lastAnswer = turns.at(-1)?.assistant ?? '';
+
+  if (turns.some((turn) => turn.assistant.length === 0)) {
+    flags.push('ÜRES VÁLASZ');
+  }
+  flags.push(...checkRedFlags(assistantText, conversation.redFlags));
+  if (conversation.expect) {
+    const expectFlags = checkExpect(lastAnswer, conversation.expect);
+    flags.push(...expectFlags);
+    if (expectFlags.length === 0) {
+      notes.push('az utolsó kör tartalmazza az elvárt értéket');
+    }
+  }
+
+  // ── DB-IGAZOLÁS: minden fordulat elmentődött-e (a 07. alkalom garanciája) ───
+  if (conversation.verifyDb === 'messages-saved') {
+    if (threadId === null) {
+      // NEM szabad csendben elfogadni: ez az eset legfontosabb determinisztikus ellenőrzése.
+      flags.push('INFRA HIBA: thread-azonosító nélkül a mentés nem ellenőrizhető');
+    } else {
+      const stored = await countMessages(threadId);
+      const expectedCount = conversation.steps.length * 2;
+      if (stored >= expectedCount) {
+        notes.push(`a messages táblában mind a ${stored} fordulat megvan`);
+      } else {
+        flags.push(
+          `HIBA: hiányos mentés — ${stored} üzenet a várt ${expectedCount} helyett a messages táblában`,
+        );
+      }
+    }
+  }
+
+  const truth = conversation.expect?.truth ?? conversation.truth;
+  const accepted = flags.length === 0;
+  const reason = accepted
+    ? `ELFOGADVA — ${(notes.length > 0 ? notes : ['nem üres válaszok, nincs jelzés']).join('; ')}.`
+    : `ELUTASÍTVA — ${flags.join('; ')}.${truth === undefined ? '' : ` Helyes: ${truth}`}`;
+
+  const model = loadConfig().anthropicModel;
+  const cost = usage === null ? null : costUsd(model, usage.inputTokens, usage.outputTokens);
+
+  return {
+    tier: '',
+    id: conversation.id,
+    q: `${conversation.title} (${conversation.steps.length} kör)`,
+    ms,
+    ttfcMs,
+    tokens: usage === null ? null : usage.inputTokens + usage.outputTokens,
+    costUsd: cost !== null && Number.isNaN(cost) ? null : cost,
+    answer,
+    flags,
+    truth,
+    verdict: { accepted, reason },
+  };
+}
+
+const KEEP_THREADS = process.argv.includes('--keep-threads');
+
+/**
+ * A futás által létrehozott threadek törlése. CSAK a sajátjainkat — a négy demó-beszélgetés
+ * (a 07. alkalom záró ellenőrzésének alanyai) érintetlen marad.
+ *
+ * A `szoba-kertesz_chat` szerep nem tud törölni, ezért megy adminon (db-admin.ts).
+ */
+async function cleanupThreads(): Promise<void> {
+  if (KEEP_THREADS) {
+    console.log(`\n(--keep-threads: ${createdThreadIds.size} thread MARAD az adatbázisban)`);
+    return;
+  }
+  try {
+    const removed = await deleteThreads([...createdThreadIds]);
+    console.log(`\nTakarítás: ${removed} thread törölve (a demó-beszélgetések érintetlenek).`);
+  } catch (error) {
+    // A takarítás hibája NE vigye el a futás eredményét — a riport fontosabb.
+    console.error(
+      `\nA thread-takarítás nem sikerült: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
 }
 
 function writeRun(run: BatteryRun): string {
@@ -211,6 +385,13 @@ async function main(): Promise<void> {
   try {
     for (const tier of tiers) {
       console.log(`\n=== ${tier.name} — ${tier.intent} ===`);
+      for (const conversation of tier.conversations ?? []) {
+        console.log(`\n[💬] ${conversation.title} (${conversation.steps.length} kör)`);
+        const result = await askConversation(page, conversation);
+        results.push({ ...result, tier: tier.name });
+        const mark = result.flags.length > 0 ? `⚠️ ${result.flags.join('; ')}` : 'ok';
+        console.log(`[${(result.ms / 1000).toFixed(1)}s ${mark}]`);
+      }
       for (const question of tier.questions ?? []) {
         console.log(`\n[?] ${question.q}`);
         const result = await askOne(page, question);
@@ -220,7 +401,9 @@ async function main(): Promise<void> {
       }
     }
   } finally {
+    // A takarítás MEGSZAKADT futás után is fusson le — különben egy Ctrl-C threadeket hagyna.
     await browser.close();
+    await cleanupThreads();
     await closeAdminPool();
   }
 
