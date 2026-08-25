@@ -9,6 +9,10 @@
     "types": ["node"]
   },
   "include": ["src/**/*.ts"],
-  "references": [],
+  "references": [
+    {
+      "path": "../../packages/core/tsconfig.lib.json"
+    }
+  ],
   "exclude": ["vitest.config.ts", "src/**/*.spec.ts"]
 }
