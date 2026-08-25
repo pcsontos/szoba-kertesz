@@ -128,4 +128,25 @@ describe('a VALÓDI cases-fájlok', () => {
     ]);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('11 fokot és 29 esetet tart', () => {
+    // A szám pinnelve: egy eset véletlen törlése némán szűkítené a mérést.
+    const tiers = loadBatteryCases();
+    expect(tiers).toHaveLength(11);
+    const cases = tiers.flatMap((tier) => [
+      ...(tier.questions ?? []),
+      ...(tier.conversations ?? []),
+    ]);
+    expect(cases).toHaveLength(29);
+  });
+
+  it('minden expect-hez tartozik truth (a riport enélkül nem tud mit mutatni)', () => {
+    for (const tier of loadBatteryCases()) {
+      for (const question of tier.questions ?? []) {
+        if (question.expect) {
+          expect(question.expect.truth.length).toBeGreaterThan(10);
+        }
+      }
+    }
+  });
 });
