@@ -34,9 +34,22 @@ futás háromszoros költség.
 docker start szoba-kertesz-adatbazis 2>/dev/null || docker compose up -d
 
 # Szerver (3000) és web (4200) háttérben.
-pnpm serve:api > logs/autotest-server.log 2>&1 &
+# A `env -u OPENAI_API_KEY` a SZERVEREN IS KELL, nem csak a battery-n: a searchKnowledge
+# embedding-hívása a SZERVER folyamatában fut, és a `process.loadEnvFile()` NEM írja felül a
+# shellből örökölt (rossz) kulcsot. Mérve 2026-08-26-án: enélkül a teljes RAG-grounding fok
+# „Incorrect API key"-jel futott, és KÉT eset HAMIS ZÖLDET adott.
+env -u OPENAI_API_KEY pnpm serve:api > logs/autotest-server.log 2>&1 &
 pnpm serve:web > logs/autotest-web.log 2>&1 &
 ```
+
+**A futás után ellenőrizd a szerver logját**, mielőtt a riportnak hinnél:
+
+```bash
+grep -ciE "incorrect api key|invalid_api_key|authentication_error" logs/autotest-server.log   # 0
+```
+
+A minta **szándékosan szűk**: egy `401`-re illesztő grep a trace `dist=0.401` értékeire is
+ráugrik, és hamis riasztást ad — mérve.
 
 Várakozás, amíg **mindkettő** válaszol (~15 s):
 
