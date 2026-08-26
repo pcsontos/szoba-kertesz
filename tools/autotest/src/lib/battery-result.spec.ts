@@ -39,9 +39,16 @@ describe('summarize', () => {
     expect(summarize([result({ ttfcMs: null })]).avgTtfcMs).toBeNull();
   });
 
-  it('a költséget összegzi, a nem mért értéket kihagyja', () => {
+  it('a költséget összegzi, a nem mért értéket kihagyja — DE MEGSZÁMOLJA', () => {
+    // A #10 PR-review 11. tétele: a null-ok 0-ként összegződnek, ezért a "$0.0000" olvasható
+    // úgy is, hogy a futás ingyen volt. A costUnknown teszi láthatóvá a különbséget.
     const summary = summarize([result({ costUsd: 0.02 }), result({ costUsd: null })]);
     expect(summary.totalCostUsd).toBeCloseTo(0.02, 6);
+    expect(summary.costUnknown).toBe(1);
+  });
+
+  it('minden költség mérve → costUnknown 0', () => {
+    expect(summarize([result(), result()]).costUnknown).toBe(0);
   });
 
   it('üres listára nem oszt nullával', () => {

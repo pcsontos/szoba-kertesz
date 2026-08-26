@@ -5,8 +5,9 @@
 //
 // Az input és az output KÜLÖN marad (a kurzus összeadta): a Sonnet output-ára 5× az inputénak,
 // összeadva a költségbecslés értelmét vesztené.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export interface Usage {
   readonly inputTokens: number;
@@ -19,7 +20,30 @@ export interface UsageDeps {
   readonly sleep?: (ms: number) => Promise<void>;
 }
 
-const LOG_DIR = 'logs';
+/**
+ * A `logs/` a REPÓ GYÖKERÉHEZ képest, nem a cwd-hez. A #10 PR-review 11. tétele: relatív úttal
+ * egy másik könyvtárból indított futásnál a `readdirSync` dob → `usage = null` → `costUsd: null`
+ * → a `summarize` 0-ként összegzi, és a riport „$0.0000"-t ír egy FIZETŐS futás után.
+ *
+ * Ugyanaz a probléma, amire az `apps/cli/src/lib/repo-root.ts` a `findRepoPath`-t adja; ott
+ * `import.meta.url` nem használható (CJS build), itt igen (ESM, sosem bundle-özzük).
+ */
+function findLogDir(): string {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let depth = 0; depth < 8; depth++) {
+    if (existsSync(join(dir, 'pnpm-workspace.yaml'))) {
+      return join(dir, 'logs');
+    }
+    const parent = resolve(dir, '..');
+    if (parent === dir) {
+      break;
+    }
+    dir = parent;
+  }
+  return 'logs'; // végső esély: a régi, cwd-relatív viselkedés
+}
+
+const LOG_DIR = findLogDir();
 const MAX_ATTEMPTS = 25;
 const POLL_MS = 200;
 

@@ -101,6 +101,27 @@ export const METRIC_LABELS: readonly { readonly key: MetricName; readonly label:
   },
 ];
 
+export interface Judged {
+  readonly flag: boolean;
+  readonly reason: string;
+}
+
+/**
+ * Ítéletek aránya. A `null` VÉGIGMEGY: ha a judge nem adott értékelhető választ, a metrika
+ * `null`, nem 0.
+ *
+ * **Üres tömbre is `null`** (#10 PR-review, 8. tétel): ha a `splitClaims` semmit nem talált
+ * (rövid válasz, csupa ≤15 karakteres mondat), a régi `0` faithfulness-t és `1 - 0 = 1.00`
+ * noise sensitivityt adott — a lehető legrosszabb értékeket, MÉRÉSI EREDMÉNYKÉNT. Nulla állítás
+ * nem rossz eredmény, hanem hiányzó mérés.
+ */
+export function judgedRatio(judged: readonly Judged[] | null): number | null {
+  if (judged === null || judged.length === 0) {
+    return null;
+  }
+  return judged.filter((entry) => entry.flag).length / judged.length;
+}
+
 /** Egy metrika átlaga a NEM-NULL eseteken. NULL, ha egyet sem sikerült megmérni. */
 export function averageMetric(run: RagRun, metric: MetricName): number | null {
   const values = run.cases

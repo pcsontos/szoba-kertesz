@@ -36,6 +36,28 @@ describe('queryNames', () => {
   });
 });
 
+describe('a szerep-szétválasztás', () => {
+  it('a queryNames a READONLY változóra köt, a takarítás az adminra', async () => {
+    // A #10 PR-review 4. tétele: a referencia-SQL csak SELECT, tehát nem való admin
+    // kapcsolatra — egy bemásolt DELETE adminként lefutott volna. Ugyanaz a minta, mint a
+    // core rag/knowledge-store.ts-ében: keresés _ro-n, írás adminon.
+    const source = await import('node:fs').then((fs) =>
+      fs.readFileSync(new URL('./db-admin.ts', import.meta.url), 'utf8'),
+    );
+    const readonlyBlock = source.slice(
+      source.indexOf('function readonlyPool'),
+      source.indexOf('function queryOn'),
+    );
+    expect(readonlyBlock).toContain('DATABASE_URL_READONLY');
+    const namesBlock = source.slice(
+      source.indexOf('export async function queryNames'),
+      source.indexOf('export async function listThreadIds'),
+    );
+    expect(namesBlock).toContain('queryOn(readonlyPool');
+    expect(namesBlock).not.toContain('adminPool');
+  });
+});
+
 describe('deleteThreads', () => {
   it('üres listánál NEM kérdez az adatbázistól', async () => {
     const query = fakeQuery([]);

@@ -16,13 +16,23 @@ const PRICES: Readonly<Record<string, Price>> = {
   'claude-haiku-4-5': { input: 1, output: 5 },
 };
 
-/** Ismeretlen modellnél NaN — a hívó dolga láthatóvá tenni, nem elrejteni. */
+/**
+ * Ismeretlen modellnél NaN — a hívó dolga láthatóvá tenni, nem elrejteni.
+ *
+ * PREFIX-illesztés, nem pontos egyezés: egy dátumos id (`claude-sonnet-4-6-20251114`) vagy egy
+ * `ANTHROPIC_MODEL`-override különben minden költséget `n/a`-ra vinne, miközben a futás
+ * sikeresnek látszik (#10 PR-review, 12. tétel). A leghosszabb illeszkedő kulcs nyer, hogy egy
+ * jövőbeli `claude-haiku-4-5-mini` ne a rövidebb kulcsra essen.
+ */
 export function costUsd(
   model: string,
   inputTokens: number,
   outputTokens: number,
 ): number {
-  const price = PRICES[model];
+  const key = Object.keys(PRICES)
+    .filter((candidate) => model.startsWith(candidate))
+    .sort((a, b) => b.length - a.length)[0];
+  const price = key === undefined ? undefined : PRICES[key];
   if (price === undefined) {
     return Number.NaN;
   }

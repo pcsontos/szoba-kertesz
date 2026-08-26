@@ -17,12 +17,13 @@ import {
   loadBatteryCases,
 } from './lib/cases.js';
 import { mentionedNames, setScores } from './lib/matchers.js';
-import { buildVerdict, checkExpect, checkRedFlags } from './lib/verdict.js';
+import { buildVerdict, checkExpect, checkRedFlags, checkSqlSet } from './lib/verdict.js';
 import { type BatteryResult, type BatteryRun, summarize } from './lib/battery-result.js';
 import { closeAdminPool, countMessages, deleteThreads, queryNames } from './lib/db-admin.js';
 import { costUsd, formatUsd } from './lib/cost.js';
 import { readUsageSince } from './lib/server-usage.js';
 import { renderBatteryMarkdown } from './lib/battery-markdown.js';
+import { Hud } from './lib/hud.js';
 
 try {
   process.loadEnvFile();
@@ -44,113 +45,40 @@ const ASSISTANT_TEXT = '[data-testid="assistant-text"]';
 const TOOL_CARD = '[data-testid="tool-card"]';
 
 // ── Kapcsolók ───────────────────────────────────────────────────────────────
-const HUD_ENABLED = !process.argv.includes('--no-hud');
-const HUD_PAUSE_MS = HUD_ENABLED ? 900 : 0;
+const hud = new Hud(!process.argv.includes('--no-hud'));
 // A consistency ALAPBÓL KI (a kurzusnál alapból be): nálunk minden futás valódi pénz,
 // tehát az alapértelmezés legyen az olcsó.
 const WITH_CONSISTENCY = process.argv.includes('--consistency');
 const CONSISTENCY_IDS = ['trap-most-expensive', 'trap-avg-price', 'sql-under3000'];
 const CONSISTENCY_RUNS = 3;
 
-/** `--only "single,buktató"` — a fok NEVÉRE szűr, kisbetűsen, részlet-egyezéssel. */
-const ONLY = ((): string[] => {
+/**
+ * `--only "single,buktató"` — a fok NEVÉRE szűr, kisbetűsen, részlet-egyezéssel.
+ *
+ * A kapcsoló JELENLÉTÉT megkülönböztetjük az értékétől: `null` = nincs `--only`, `[]` = van,
+ * de üres. A #10 PR-review 7. tétele szerint az érték nélküli `--only` korábban a TELJES,
+ * ~$0,9-es battery-t indította el, egy szó figyelmeztetés nélkül. Ugyanaz a hibaosztály, amit
+ * a CLAUDE.md a `splitCliArgs`-nál kimond: a switch jelenlétét kell jelenteni, nem `undefined`-et.
+ */
+const ONLY = ((): string[] | null => {
   const inline = process.argv.find((arg) => arg.startsWith('--only='));
   const index = process.argv.indexOf('--only');
-  const raw = inline
-    ? inline.slice('--only='.length)
-    : index >= 0
-      ? (process.argv[index + 1] ?? '')
-      : '';
+  if (inline === undefined && index < 0) {
+    return null;
+  }
+  const raw = inline !== undefined ? inline.slice('--only='.length) : (process.argv[index + 1] ?? '');
   return raw
     .split(',')
     .map((part) => part.trim().toLowerCase())
     .filter((part) => part !== '');
 })();
 
-// ── Szemléltető HUD ─────────────────────────────────────────────────────────
-let hudLabel = '';
-let hudSub = '';
-
-function hudEscape(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').slice(0, 200);
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * A HUD-hoz használt DOM-felület, MINIMÁLISAN leírva.
- *
- * Miért nem a `DOM` lib? Mert ez a csomag Node-os (`types: ["node"]`), és a teljes DOM-lib
- * megnyitásával egy tiszta lib-modul is hivatkozhatna `document`-re — fordulna, majd
- * futásidőben bukna. A `page.evaluate` visszahívása a BÖNGÉSZŐBEN fut, a fordító viszont
- * Node-kontextusban látja; ez a shim köti össze a kettőt, láthatóan.
- */
-interface HudDocument {
-  getElementById(id: string): HudElement | null;
-  createElement(tag: string): HudElement;
-  readonly body: { appendChild(node: HudElement): void };
-}
-interface HudElement {
-  id: string;
-  innerHTML: string;
-  setAttribute(name: string, value: string): void;
-}
-
-/**
- * Playwright-injektált doboz a jobb alsó sarokban, ami mutatja, épp mi fut. NEM az app része —
- * minden `goto` törli, ezért fázisonként újrarajzoljuk. `--no-hud` kikapcsolja (a demó-szünettel
- * együtt); CI-ben így futtasd.
- */
-async function setHud(
-  page: Page,
-  phase: string,
-  tone: 'run' | 'ok' | 'fail' = 'run',
-): Promise<void> {
-  if (!HUD_ENABLED) {
-    return;
-  }
-  const color = tone === 'ok' ? '#4bbd8a' : tone === 'fail' ? '#f06a6a' : '#e0a94b';
-  try {
-    await page.evaluate(
-      (data: { label: string; sub: string; phase: string; color: string }) => {
-        const doc = (globalThis as unknown as { document: HudDocument }).document;
-        let box = doc.getElementById('__autotest_hud');
-        if (box === null) {
-          box = doc.createElement('div');
-          box.id = '__autotest_hud';
-          doc.body.appendChild(box);
-        }
-        box.setAttribute(
-          'style',
-          'position:fixed;bottom:18px;right:18px;z-index:2147483647;width:340px;' +
-            "font:13px/1.45 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;" +
-            'background:rgba(15,21,18,.96);color:#e6efe9;border:1px solid ' +
-            data.color +
-            ';border-radius:12px;padding:12px 15px;box-shadow:0 10px 34px rgba(0,0,0,.45);' +
-            'pointer-events:none;',
-        );
-        box.innerHTML =
-          '<div style="font-size:11px;letter-spacing:.05em;text-transform:uppercase;' +
-          'color:#93a49b;margin-bottom:5px">🎬 autotest · Playwright</div>' +
-          `<div style="font-weight:700;margin-bottom:3px">${data.label}</div>` +
-          (data.sub === ''
-            ? ''
-            : `<div style="color:#b9c7bf;font-size:12px;margin-bottom:7px">${data.sub}</div>`) +
-          `<div style="color:${data.color};font-weight:600">${data.phase}</div>`;
-      },
-      { label: hudEscape(hudLabel), sub: hudEscape(hudSub), phase, color },
-    );
-  } catch {
-    // Navigáció közben nincs body — nem kritikus.
-  }
-}
-
 interface TurnMeasurement {
   readonly answer: string;
   readonly ttfcMs: number | null;
   readonly tools: string[];
+  /** Amelyik tool HIBÁVAL tért vissza (`data-tool-error`). Infra-hiba, nem agent-hiba. */
+  readonly failedTools: string[];
 }
 
 /**
@@ -161,26 +89,37 @@ interface TurnMeasurement {
  * viselkedése, nem teszt-célú kiegészítés. Élőben mérve: TTFC 4386 ms, teljes 5385 ms.
  */
 async function sendAndMeasure(page: Page, message: string): Promise<TurnMeasurement> {
-  const before = await page.locator(MSG).count();
+  const assistantBubbles = page.locator(`${MSG}[data-role="assistant"]`);
+  // CSAK az asszisztens-buborékokat számoljuk (#10 PR-review, 13. tétel). A teljes `MSG`
+  // számláló a SAJÁT user-buborékunk megjelenésétől nagyobb lett, ezért a 2. körtől a
+  // TTFC-ciklus azonnal kilépett a KORÁBBI kör szövegén — és a `checkExpect` elavult
+  // válaszon futott, azaz a többkörös fok mérése érvénytelen volt.
+  const before = await assistantBubbles.count();
   const started = Date.now();
 
   await page.getByPlaceholder('Írd ide a kérdésed…').fill(message);
-  await setHud(page, '✍️ kérdés beírása…');
+  await hud.show(page, '✍️ kérdés beírása…');
   await page.keyboard.press('Enter');
-  await setHud(page, '⏳ várakozás a válaszra…');
+  await hud.show(page, '⏳ várakozás a válaszra…');
 
-  const lastAssistantText = () =>
-    page.locator(`${MSG}[data-role="assistant"]`).last().locator(ASSISTANT_TEXT);
+  // ELŐBB az „Állj" gombot várjuk meg: enélkül a „Küldés"-re várás azonnal feloldódhat, mert a
+  // `status` még nem váltott `submitted`-re — és az `answer` az ELŐZŐ kör válasza lenne.
+  await page
+    .getByRole('button', { name: 'Állj' })
+    .waitFor({ state: 'visible', timeout: 15_000 })
+    .catch(() => undefined);
+
+  const lastAssistantText = () => assistantBubbles.last().locator(ASSISTANT_TEXT);
 
   let ttfcMs: number | null = null; // null = nem érkezett szöveg — SOHA nem 0
   while (Date.now() - started < ANSWER_TIMEOUT_MS) {
-    if ((await page.locator(MSG).count()) > before) {
+    if ((await assistantBubbles.count()) > before) {
       const text = await lastAssistantText()
         .innerText()
         .catch(() => '');
       if (text.trim().length > 0) {
         ttfcMs = Date.now() - started;
-        await setHud(page, `💬 első karakter ${(ttfcMs / 1000).toFixed(1)} s`);
+        await hud.show(page, `💬 első karakter ${(ttfcMs / 1000).toFixed(1)} s`);
         break;
       }
     }
@@ -201,21 +140,29 @@ async function sendAndMeasure(page: Page, message: string): Promise<TurnMeasurem
 
   // A `dataset`-et STRUKTURÁLISAN tipizáljuk: ez a csomag Node-os (`types: ["node"]`), nem
   // tölti be a DOM-libet, és egyetlen attribútum-olvasásért nem is érdemes.
-  const tools = await page
+  //
+  // A `data-tool-error` a DETERMINISZTIKUS jel arról, hogy a tool HIBÁVAL tért vissza. Enélkül
+  // a battery csak azt tudta, hogy a tool FUTOTT — és egy infra-hiba a modell magyar
+  // parafrázisán át hamis zöldet adott (#10 PR-review, 2. tétel).
+  const cards = await page
     .locator(`${MSG}[data-role="assistant"]`)
     .last()
     .locator(TOOL_CARD)
     .evaluateAll((nodes) =>
-      nodes.map(
-        (node) =>
-          (node as unknown as { dataset?: Record<string, string | undefined> }).dataset?.[
-            'tool'
-          ] ?? '',
-      ),
+      nodes.map((node) => {
+        const data =
+          (node as unknown as { dataset?: Record<string, string | undefined> }).dataset ?? {};
+        return { name: data['tool'] ?? '', failed: data['toolError'] === 'true' };
+      }),
     )
-    .catch(() => [] as string[]);
+    .catch(() => [] as { name: string; failed: boolean }[]);
 
-  return { answer, ttfcMs, tools: tools.filter((name) => name !== '') };
+  return {
+    answer,
+    ttfcMs,
+    tools: cards.filter((card) => card.name !== '').map((card) => card.name),
+    failedTools: cards.filter((card) => card.failed && card.name !== '').map((card) => card.name),
+  };
 }
 
 /** A futás alatt LÉTREHOZOTT threadek — a végén PONTOSAN ezeket töröljük. */
@@ -251,12 +198,16 @@ async function askOne(page: Page, question: BatteryQuestion): Promise<BatteryRes
 
   const sinceMs = Date.now();
   const started = Date.now();
-  const { answer, ttfcMs, tools } = await sendAndMeasure(page, question.q);
+  const { answer, ttfcMs, tools, failedTools } = await sendAndMeasure(page, question.q);
   const ms = Date.now() - started;
   const usage = await readUsageSince(sinceMs, 1);
 
   if (answer.length === 0) {
     flags.push('ÜRES VÁLASZ');
+  }
+  if (failedTools.length > 0) {
+    // A mérés ÉRVÉNYTELEN, nem az agent hibázott — de zölden sem mehet el.
+    flags.push(`INFRA HIBA: hibával tért vissza a(z) ${failedTools.join(', ')} tool`);
   }
   flags.push(...checkRedFlags(answer, question.redFlags));
   if (question.expect) {
@@ -269,48 +220,25 @@ async function askOne(page: Page, question: BatteryQuestion): Promise<BatteryRes
   }
 
   let truth = question.expect?.truth;
-  let sqlVerdictReason: string | null = null;
 
   if (question.sqlCheck) {
     const expected = await queryNames(question.sqlCheck.sql);
     const allNames = await queryNames('SELECT name FROM products');
-    if (expected === null || allNames === null || allNames.length === 0) {
-      // INFRA-hiba, NEM agent-hiba: nem szabad se zölden elfogadni, se pirosan az agentre kenni.
-      truth =
-        'SQL execution accuracy KIHAGYVA — a szoba-kertesz-adatbazis konténer nem elérhető ' +
-        '(indítsd: docker compose up -d).';
-      sqlVerdictReason = `KIHAGYVA — ${truth}`;
-    } else {
-      const mentioned = mentionedNames(answer, allNames);
-      const scores = setScores(expected, mentioned);
-      truth =
-        `Elvárt halmaz (${expected.length}): ${expected.join(', ')}. ` +
-        `precision=${scores.precision.toFixed(2)} recall=${scores.recall.toFixed(2)} ` +
-        `F1=${scores.f1.toFixed(2)}.`;
-      if (scores.f1 < 0.8) {
-        flags.push(
-          `HIBA: SQL-halmaz eltérés (F1=${scores.f1.toFixed(2)}; ` +
-            `hiányzik: ${scores.missing.slice(0, 5).join(', ') || '—'}; ` +
-            `többlet: ${scores.extra.slice(0, 5).join(', ') || '—'})`,
-        );
-      }
-    }
+    const usable = expected !== null && allNames !== null && allNames.length > 0;
+    const mentioned = usable ? mentionedNames(answer, allNames) : null;
+    const outcome = checkSqlSet(
+      expected,
+      mentioned,
+      mentioned === null || expected === null ? null : setScores(expected, mentioned),
+    );
+    flags.push(...outcome.flags);
+    truth = outcome.truth;
   }
 
-  const verdict =
-    sqlVerdictReason === null
-      ? buildVerdict(question, answer, flags)
-      : { accepted: flags.length === 0, reason: sqlVerdictReason };
+  const verdict = buildVerdict(question, answer, flags);
 
   await rememberThread(page);
-  await setHud(
-    page,
-    verdict.accepted ? '✓ ELFOGADVA' : '✗ ELUTASÍTVA',
-    verdict.accepted ? 'ok' : 'fail',
-  );
-  if (HUD_PAUSE_MS > 0) {
-    await sleep(HUD_PAUSE_MS);
-  }
+  await hud.verdict(page, verdict.accepted);
 
   const model = loadConfig().anthropicModel;
   const cost = usage === null ? null : costUsd(model, usage.inputTokens, usage.outputTokens);
@@ -350,6 +278,11 @@ async function askConversation(
     const turn = await sendAndMeasure(page, message);
     if (index === 0) {
       ttfcMs = turn.ttfcMs; // az első kör jellemzi a válaszkészséget
+    }
+    if (turn.failedTools.length > 0) {
+      flags.push(
+        `INFRA HIBA: a(z) ${index + 1}. körben hibával tért vissza a(z) ${turn.failedTools.join(', ')} tool`,
+      );
     }
     turns.push({ user: message, assistant: turn.answer });
   }
@@ -431,10 +364,7 @@ async function askConversation(
     ? `ELFOGADVA — ${(notes.length > 0 ? notes : ['nem üres válaszok, nincs jelzés']).join('; ')}.`
     : `ELUTASÍTVA — ${flags.join('; ')}.${truth === undefined ? '' : ` Helyes: ${truth}`}`;
 
-  await setHud(page, accepted ? '✓ ELFOGADVA' : '✗ ELUTASÍTVA', accepted ? 'ok' : 'fail');
-  if (HUD_PAUSE_MS > 0) {
-    await sleep(HUD_PAUSE_MS);
-  }
+  await hud.verdict(page, accepted);
 
   const model = loadConfig().anthropicModel;
   const cost = usage === null ? null : costUsd(model, usage.inputTokens, usage.outputTokens);
@@ -496,11 +426,18 @@ async function main(): Promise<void> {
   }
 
   // A szűrés is a böngésző ELŐTT dől el: egy nem illeszkedő --only ne indítson böngészőt.
+  if (ONLY !== null && ONLY.length === 0) {
+    // Fizetős parancs: az érték nélküli kapcsoló NEM futtathatja le csendben mind a 11 fokot.
+    throw new Error(
+      'A --only kapcsoló érték nélkül áll. Adj meg legalább egy fok-név-részletet, ' +
+        'pl. --only "Single-step". A teljes futáshoz hagyd el a kapcsolót.',
+    );
+  }
   const tiersToRun =
-    ONLY.length === 0
+    ONLY === null
       ? tiers
       : tiers.filter((tier) => ONLY.some((needle) => tier.name.toLowerCase().includes(needle)));
-  if (ONLY.length > 0) {
+  if (ONLY !== null) {
     console.log(
       `(--only szűrő: ${tiersToRun.map((tier) => tier.name).join(' | ') || 'NINCS TALÁLAT'})`,
     );
@@ -538,8 +475,7 @@ async function main(): Promise<void> {
       for (const conversation of tier.conversations ?? []) {
         console.log(`\n[💬] ${conversation.title} (${conversation.steps.length} kör)`);
         caseIndex++;
-        hudLabel = `[${caseIndex}/${totalCases}] ${tier.name}`;
-        hudSub = conversation.title;
+        hud.setCase(`[${caseIndex}/${totalCases}] ${tier.name}`, conversation.title);
         const result = await askConversation(page, conversation);
         results.push({ ...result, tier: tier.name });
         const mark = result.flags.length > 0 ? `⚠️ ${result.flags.join('; ')}` : 'ok';
@@ -548,8 +484,7 @@ async function main(): Promise<void> {
       for (const question of tier.questions ?? []) {
         console.log(`\n[?] ${question.q}`);
         caseIndex++;
-        hudLabel = `[${caseIndex}/${totalCases}] ${tier.name}`;
-        hudSub = question.q;
+        hud.setCase(`[${caseIndex}/${totalCases}] ${tier.name}`, question.q);
         const result = await askOne(page, question);
         results.push({ ...result, tier: tier.name });
         const mark = result.flags.length > 0 ? `⚠️ ${result.flags.join('; ')}` : 'ok';
@@ -573,8 +508,7 @@ async function main(): Promise<void> {
         }
         const runs: { accepted: boolean; answer: string }[] = [];
         for (let attempt = 0; attempt < CONSISTENCY_RUNS; attempt++) {
-          hudLabel = `Konzisztencia · ${id}`;
-          hudSub = `${attempt + 1}/${CONSISTENCY_RUNS}. futás`;
+          hud.setCase(`Konzisztencia · ${id}`, `${attempt + 1}/${CONSISTENCY_RUNS}. futás`);
           const repeat = await askOne(page, question);
           runs.push({ accepted: repeat.verdict.accepted, answer: repeat.answer });
         }
@@ -596,22 +530,32 @@ async function main(): Promise<void> {
       }
     }
   } finally {
+    // A MÉRÉS KIÍRÁSA IS IDE TARTOZIK. A #10 PR-review 6. tétele: amíg a writeRun a try/finally
+    // UTÁN állt, egy félbeszakadt futás (Playwright-timeout, DB-hiba) minden MÁR KIFIZETETT
+    // eredményt elvesztett. Ugyanaz az invariáns, amit a CLAUDE.md a JSONL-naplóra kimond:
+    // egy elbukott futás is hagyjon nyomot, különben a költségbecslés némán alulszámol.
+    if (results.length > 0) {
+      const run: BatteryRun = { startedAt, web: WEB, results, consistency };
+      const path = writeRun(run);
+      writeFileSync(
+        path.replace(/\.json$/, '.md'),
+        `${renderBatteryMarkdown(run)}\n`,
+        'utf8',
+      );
+      const summary = summarize(results);
+      console.log(
+        `\nKész: ${summary.total} eset, ${summary.failed} bukott, ` +
+          `átlag ${(summary.avgMs / 1000).toFixed(1)} s, ` +
+          `becsült költség ${formatUsd(summary.totalCostUsd)}` +
+          `${summary.costUnknown > 0 ? ` (${summary.costUnknown} esetnél NEM MÉRHETŐ)` : ''}` +
+          `\n${path}`,
+      );
+    }
     // A takarítás MEGSZAKADT futás után is fusson le — különben egy Ctrl-C threadeket hagyna.
     await browser.close();
     await cleanupThreads();
     await closeAdminPool();
   }
-
-  const run: BatteryRun = { startedAt, web: WEB, results, consistency };
-  const path = writeRun(run);
-  const markdownPath = path.replace(/\.json$/, '.md');
-  writeFileSync(markdownPath, `${renderBatteryMarkdown(run)}\n`, 'utf8');
-  const summary = summarize(results);
-  console.log(
-    `\nKész: ${summary.total} eset, ${summary.failed} bukott, ` +
-      `átlag ${(summary.avgMs / 1000).toFixed(1)} s, ` +
-      `becsült költség ${formatUsd(summary.totalCostUsd)}\n${path}`,
-  );
 }
 
 await main();

@@ -57,6 +57,12 @@ export interface Summary {
   readonly avgTtfcMs: number | null;
   readonly ttfcAvailable: number;
   readonly totalCostUsd: number;
+  /**
+   * Hány esetnél NEM sikerült költséget mérni. A `totalCostUsd` ezeket 0-ként kezeli, tehát
+   * enélkül a „becsült költség $0.0000" olvasható úgy is, hogy a futás ingyen volt — pedig
+   * csak a mérés hiányzott (#10 PR-review, 11. tétel).
+   */
+  readonly costUnknown: number;
 }
 
 export function summarize(results: readonly BatteryResult[]): Summary {
@@ -81,5 +87,17 @@ export function summarize(results: readonly BatteryResult[]): Summary {
     0,
   );
 
-  return { total, failed, avgMs, avgTtfcMs, ttfcAvailable: ttfcValues.length, totalCostUsd };
+  const costUnknown = results.filter(
+    (entry) => entry.costUsd === null || Number.isNaN(entry.costUsd),
+  ).length;
+
+  return {
+    total,
+    failed,
+    avgMs,
+    avgTtfcMs,
+    ttfcAvailable: ttfcValues.length,
+    totalCostUsd,
+    costUnknown,
+  };
 }

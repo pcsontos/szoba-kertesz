@@ -20,12 +20,15 @@ import { join } from 'node:path';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { embedBatch, loadConfig, retrieveKnowledge } from '@szoba-kertesz/core';
 import { generateText, type LanguageModel } from 'ai';
+import { z } from 'zod';
 import { loadRagCases, type RagCase } from './lib/cases.js';
 import { coerceArray, parseJsonLoose } from './lib/json-loose.js';
 import {
   averageMetric,
   contextPrecisionScore,
   cosineSim,
+  type Judged,
+  judgedRatio,
   METRIC_LABELS,
   type RagCaseResult,
   type RagChunk,
@@ -56,6 +59,11 @@ const DISTRACTORS = [
   'A tökéletes carbonara alapja a tojássárgája, a pecorino sajt és a guanciale; tejszín semmiképp nem kerül bele.',
 ];
 
+/** A judge visszagenerált kérdései — rendszerhatár, tehát validált, nem castolt. */
+const GeneratedQuestionsSchema = z.object({
+  questions: z.array(z.string().min(1)).min(1),
+});
+
 const config = loadConfig();
 const anthropic = createAnthropic({ apiKey: config.anthropicApiKey });
 const answerModel = anthropic(config.anthropicModel);
@@ -76,10 +84,13 @@ async function generate(model: LanguageModel, prompt: string): Promise<string> {
  * NEM üres tömb, mert abból csendes 0 faithfulness / 1.0 noise lenne, ami MÉRÉSI EREDMÉNYNEK
  * látszik, holott parse-hiba.
  */
-async function judgeArray<T>(prompt: string): Promise<T[] | null> {
+async function judgeArray<T>(prompt: string, expectedLength: number): Promise<T[] | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     const parsed = coerceArray<T>(parseJsonLoose(await generate(judgeModel, prompt)));
-    if (parsed.length > 0) {
+    // A HOSSZ IS SZÁMÍT (#10 PR-review, 9. tétel): rövidebb tömbnél a hiányzó elemek
+    // `false`/„nem fedett" lettek, tehát egy JUDGE-hiba RETRIEVAL-hibának látszott (leeső
+    // precision/recall). Ugyanaz a szabály, mint a parse-hibára: retry, majd `null`.
+    if (parsed.length === expectedLength) {
       return parsed;
     }
   }
@@ -105,11 +116,6 @@ async function answerFromContext(question: string, contexts: string[]): Promise<
   return text.trim();
 }
 
-interface Judged {
-  readonly flag: boolean;
-  readonly reason: string;
-}
-
 /** LLM-judge: releváns-e minden visszakapott chunk a kérdéshez (a context precision alapja). */
 async function judgeChunkRelevance(
   question: string,
@@ -120,6 +126,7 @@ async function judgeChunkRelevance(
       'megválaszolásához. Szigorú JSON tömb, a forrásokkal AZONOS sorrendben: ' +
       '[{"relevant": true, "reason": "rövid magyar indok"}].\n\n' +
       `KÉRDÉS: ${question}\n\nFORRÁSOK:\n${sourceList(contexts)}`,
+    contexts.length,
   );
   if (result === null) {
     return null;
@@ -140,6 +147,7 @@ async function judgeRecall(
       'Szigorú JSON tömb, az állításokkal AZONOS sorrendben: ' +
       '[{"covered": true, "reason": "rövid magyar indok"}].\n\n' +
       `FORRÁSOK:\n${sourceList(contexts)}\n\nELVÁRT ÁLLÍTÁSOK:\n${numberedList(referenceClaims)}`,
+    referenceClaims.length,
   );
   if (result === null) {
     return null;
@@ -157,7 +165,9 @@ async function judgeFaithfulness(
 ): Promise<Judged[] | null> {
   const claims = splitClaims(answer).slice(0, 6);
   if (claims.length === 0) {
-    return [];
+    // NULL, nem `[]`: a `judgedRatio` az üresre is `null`-t ad, de itt is kimondjuk, hogy
+    // NEM MÉRTÜNK — nulla állítás nem nulla faithfulness.
+    return null;
   }
   const result = await judgeArray<{ supported?: boolean; reason?: string }>(
     'Egy RAG-válasz állításait kell ellenőrizned a FORRÁSOK alapján. Minden állításról döntsd ' +
@@ -165,6 +175,7 @@ async function judgeFaithfulness(
       'Csak a forrásokra támaszkodj, ne a saját tudásodra. Szigorú JSON tömb, az állításokkal ' +
       'AZONOS sorrendben: [{"supported": true, "reason": "rövid magyar indok"}].\n\n' +
       `FORRÁSOK:\n${sourceList(contexts)}\n\nÁLLÍTÁSOK:\n${numberedList(claims)}`,
+    claims.length,
   );
   if (result === null) {
     return null;
@@ -175,32 +186,27 @@ async function judgeFaithfulness(
   }));
 }
 
-/** Az arány a NEM-NULL ítéletekből. `null` be → `null` ki (a nem mért nem nulla). */
-function ratio(judged: Judged[] | null): number | null {
-  if (judged === null) {
-    return null;
-  }
-  return judged.length === 0 ? 0 : judged.filter((entry) => entry.flag).length / judged.length;
-}
-
 /**
  * Answer relevancy DETERMINISZTIKUSAN: a válaszból visszagenerált kérdések koszinusz-hasonlósága
  * az eredetihez. Itt embedding dönt, nem LLM — és a szám kiíródik.
  */
 async function answerRelevancy(answer: string, questionEmbedding: number[]): Promise<number | null> {
-  const generated = parseJsonLoose(
-    await generate(
-      judgeModel,
-      'Az alábbi VÁLASZ alapján fogalmazz meg 2 kérdést, amelyekre ez a válasz pontosan ' +
-        'felelne, magyarul. Szigorú JSON: {"questions": ["...", "..."]}.\n\n' +
-        `VÁLASZ:\n${answer}`,
+  // ZOD, nem cast (#10 PR-review, 10. tétel): a `konvenciók.md` a rendszerhatáron Zodot ír elő,
+  // és egy nem-string elemű tömb enélkül egyenesen az `embedBatch`-be menne.
+  const parsed = GeneratedQuestionsSchema.safeParse(
+    parseJsonLoose(
+      await generate(
+        judgeModel,
+        'Az alábbi VÁLASZ alapján fogalmazz meg 2 kérdést, amelyekre ez a válasz pontosan ' +
+          'felelne, magyarul. Szigorú JSON: {"questions": ["...", "..."]}.\n\n' +
+          `VÁLASZ:\n${answer}`,
+      ),
     ),
-  ) as { questions?: string[] } | null;
-
-  const questions = generated?.questions?.slice(0, 2) ?? [];
-  if (questions.length === 0) {
+  );
+  if (!parsed.success) {
     return null;
   }
+  const questions = parsed.data.questions.slice(0, 2);
   const embeddings = await embedBatch(questions);
   const sims = questions.map((_, index) =>
     cosineSim(questionEmbedding, embeddings[index] ?? []),
@@ -219,7 +225,7 @@ async function noiseSensitivity(
 ): Promise<number | null> {
   const noisyAnswer = await answerFromContext(question, [...cleanContexts, ...DISTRACTORS]);
   const claims = await judgeFaithfulness(noisyAnswer, cleanContexts);
-  const supported = ratio(claims);
+  const supported = judgedRatio(claims);
   return supported === null ? null : 1 - supported;
 }
 
@@ -268,8 +274,8 @@ async function evalCase(ragCase: RagCase): Promise<RagCaseResult> {
     metrics: {
       contextPrecision:
         relevance === null ? null : contextPrecisionScore(relevance.map((entry) => entry.flag)),
-      contextRecall: ratio(recallClaims),
-      faithfulness: ratio(faithClaims),
+      contextRecall: judgedRatio(recallClaims),
+      faithfulness: judgedRatio(faithClaims),
       answerRelevancy: relevancy,
       answerCorrectness: cosineSim(correctnessPair[0] ?? [], correctnessPair[1] ?? []),
       noiseSensitivity: noise,
@@ -334,10 +340,10 @@ async function main(): Promise<void> {
     console.log(`  ${label}: ${format(averageMetric(run, key))}`);
   }
 
-  // A judge Haikun fut, a válasz a termék modelljén — a költséget külön becsüljük.
-  const cost =
-    costUsd(config.anthropicModel, totalInput, totalOutput) +
-    costUsd(JUDGE_MODEL, 0, 0);
+  // FELSŐ KORLÁT: a judge Haikun fut (olcsóbb), de a tokeneket nem választjuk szét modellenként,
+  // ezért mindet a DRÁGÁBB modell árán számoljuk. A korábbi `+ costUsd(JUDGE_MODEL, 0, 0)` tag
+  // mindig 0-t adott — holt kód, ami azt sugallta, hogy a judge külön van mérve (#10 review, 12.).
+  const cost = costUsd(config.anthropicModel, totalInput, totalOutput);
   console.log(
     `\n${jsonPath}\n${htmlPath}\nBecsült költség (felső korlát, a drágább modell árán): ${formatUsd(cost)}`,
   );

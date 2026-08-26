@@ -29,27 +29,53 @@ const EnvSchema = z.object({
       1,
       'A DATABASE_URL (admin kapcsolat) hiányzik — enélkül a battery nem tud takarítani a threadek után.',
     ),
+  DATABASE_URL_READONLY: z
+    .string()
+    .min(1, 'A DATABASE_URL_READONLY hiányzik — a referencia-SQL ezen a szerepen fut.'),
 });
 
-let pool: Pool | null = null;
+let adminPoolRef: Pool | null = null;
+let readonlyPoolRef: Pool | null = null;
 
 function adminPool(): Pool {
-  if (pool === null) {
-    const env = EnvSchema.parse(process.env);
-    pool = new Pool({ connectionString: env.DATABASE_URL, max: 2 });
+  if (adminPoolRef === null) {
+    adminPoolRef = new Pool({
+      connectionString: EnvSchema.parse(process.env).DATABASE_URL,
+      max: 2,
+    });
   }
-  return pool;
+  return adminPoolRef;
 }
 
-function resolveQuery(deps: AdminDeps): AdminQuery {
+/**
+ * A referencia-SQL SZEREPE. A #10 PR-review 4. tétele: a `queryNames` csak SELECT-et hajt
+ * végre, mégis adminon futott — egy bemásolt `DELETE`/`TRUNCATE` a `battery-cases.json`-ban
+ * adminként lefutott volna, és a riportban „nem elérhető konténer"-ként jelent volna meg.
+ *
+ * A repó saját mintája ez (`rag/knowledge-store.ts`): keresés `_ro`-n, írás adminon. Az admin
+ * pool mostantól KIZÁRÓLAG a thread-takarításé.
+ */
+function readonlyPool(): Pool {
+  if (readonlyPoolRef === null) {
+    readonlyPoolRef = new Pool({
+      connectionString: EnvSchema.parse(process.env).DATABASE_URL_READONLY,
+      max: 2,
+    });
+  }
+  return readonlyPoolRef;
+}
+
+function queryOn(pick: () => Pool, deps: AdminDeps): AdminQuery {
   return (
     deps.query ??
     (async (sql, params) => {
-      const result = await adminPool().query(sql, params as unknown[]);
+      const result = await pick().query(sql, params as unknown[]);
       return { rows: result.rows as Record<string, unknown>[] };
     })
   );
 }
+
+const resolveQuery = (deps: AdminDeps): AdminQuery => queryOn(adminPool, deps);
 
 /**
  * Egy referencia-SQL név-halmaza. DB-hiba esetén NULL — NEM üres tömb: a `[]` azt hazudná,
@@ -61,7 +87,8 @@ export async function queryNames(
   deps: AdminDeps = {},
 ): Promise<string[] | null> {
   try {
-    const { rows } = await resolveQuery(deps)(sql);
+    // READONLY szerep — lásd a `readonlyPool` kommentjét.
+    const { rows } = await queryOn(readonlyPool, deps)(sql);
     return rows
       .map((row) => row['name'])
       .filter((name): name is string => typeof name === 'string');
@@ -106,8 +133,12 @@ export async function countMessages(
 }
 
 export async function closeAdminPool(): Promise<void> {
-  if (pool !== null) {
-    await pool.end();
-    pool = null;
+  if (adminPoolRef !== null) {
+    await adminPoolRef.end();
+    adminPoolRef = null;
+  }
+  if (readonlyPoolRef !== null) {
+    await readonlyPoolRef.end();
+    readonlyPoolRef = null;
   }
 }

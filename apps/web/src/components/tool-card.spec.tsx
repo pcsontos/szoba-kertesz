@@ -93,5 +93,48 @@ describe('ToolCard', () => {
 
     expect(getByText('DELETE FROM products')).toBeTruthy();
     expect(queryByText(/sor$/)).toBeNull();
+    // A hibaszöveg LÁTSZIK — a kártya mellett, nem helyette.
+    expect(getByText('SQL elutasítva: csak SELECT futtatható.')).toBeTruthy();
+  });
+
+  /**
+   * A #10 PR-review 2. tétele: a tool-hiba eddig SEHOL nem látszott gépből. A battery csak a
+   * `data-tool`-t olvasta (a tool FUTOTT), azt nem, hogy SIKERÜLT-e — ezért egy „Tudásbázis-hiba"
+   * a modell magyar parafrázisán át HAMIS ZÖLDET adott a RAG-grounding fokon.
+   */
+  it('hibás kimenetnél data-tool-error attribútumot tesz ki', () => {
+    const { getByTestId } = render(
+      <ToolCard
+        toolName="searchKnowledge"
+        state="output-available"
+        input={{ question: 'Hogyan gondozzam?' }}
+        output={'Tudásbázis-hiba: Incorrect API key provided.'}
+      />,
+    );
+
+    const card = getByTestId('tool-card');
+    expect(card.dataset['toolError']).toBe('true');
+    expect(card.textContent).toContain('Tudásbázis-hiba');
+  });
+
+  it('SIKERES kimenetnél NINCS data-tool-error', () => {
+    const { getByTestId } = render(
+      <ToolCard
+        toolName="searchKnowledge"
+        state="output-available"
+        input={{ question: 'Hogyan gondozzam?' }}
+        output={'{"results":[]}'}
+      />,
+    );
+
+    expect(getByTestId('tool-card').dataset['toolError']).toBeUndefined();
+  });
+
+  it('FUTÁS közben nincs hibajelzés (még nincs kimenet)', () => {
+    const { getByTestId } = render(
+      <ToolCard toolName="searchKnowledge" state="input-available" input={{}} output={undefined} />,
+    );
+
+    expect(getByTestId('tool-card').dataset['toolError']).toBeUndefined();
   });
 });

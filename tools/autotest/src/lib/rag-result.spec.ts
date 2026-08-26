@@ -3,6 +3,7 @@ import {
   averageMetric,
   contextPrecisionScore,
   cosineSim,
+  judgedRatio,
   RagRunSchema,
   splitClaims,
   type RagRun,
@@ -105,6 +106,27 @@ describe('RagRunSchema', () => {
     const broken = runWith({}) as unknown as { cases: { metrics: Record<string, unknown> }[] };
     delete broken.cases[0]!.metrics['faithfulness'];
     expect(() => RagRunSchema.parse(broken)).toThrow();
+  });
+});
+
+describe('judgedRatio', () => {
+  it('a true-k arányát adja', () => {
+    expect(
+      judgedRatio([
+        { flag: true, reason: '' },
+        { flag: false, reason: '' },
+      ]),
+    ).toBe(0.5);
+  });
+
+  it('null be → null ki', () => {
+    expect(judgedRatio(null)).toBeNull();
+  });
+
+  it('ÜRES tömbre NULL, nem 0', () => {
+    // A #10 PR-review 8. tétele: nulla állításnál a 0 faithfulness-t és 1.00 noise-t adott —
+    // a legrosszabb értékeket, MÉRÉSI EREDMÉNYKÉNT. Nulla állítás hiányzó mérés, nem rossz.
+    expect(judgedRatio([])).toBeNull();
   });
 });
 
