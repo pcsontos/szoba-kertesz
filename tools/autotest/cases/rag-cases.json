@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "id": "rag-sargulo-level",
+      "question": "Miért sárgulnak a szobanövényem levelei?",
+      "groundTruth": "A sárguló levél leggyakoribb oka a túlöntözés: a túl nedves talajban a gyökér nem jut levegőhöz. További okok a fényhiány, a tápanyaghiány, a hirtelen hőmérséklet-változás és a legalsó levelek természetes öregedése. Először a talaj nedvességét kell ellenőrizni."
+    },
+    {
+      "id": "rag-kigyonoveny-ontozes",
+      "question": "Milyen gyakran öntözzem a kígyónövényt?",
+      "groundTruth": "A kígyónövény (anyósnyelv) pozsgás jellegű, a leveleiben tárol vizet, ezért ritkán kell öntözni: csak akkor, ha a föld teljesen kiszáradt, jellemzően két-három hetente, télen még ritkábban. A túlöntözés gyökérrothadást okoz, ez a leggyakoribb pusztulási ok."
+    },
+    {
+      "id": "rag-tulontozott-monstera",
+      "question": "Túlöntöztem a monsterámat, mit tegyek?",
+      "groundTruth": "A túlöntözés jelei: sárguló, puha levelek, hervadás nedves föld mellett, penész a talaj tetején, kellemetlen szag. Teendő: hagyd kiszáradni a földet, ne öntözz; súlyos esetben vedd ki a növényt, vágd le a barna, puha gyökereket, és ültesd át friss, jól vízáteresztő közegbe."
+    },
+    {
+      "id": "rag-lowlight",
+      "question": "Melyik szobanövény bírja jól a kevés fényt?",
+      "groundTruth": "Több szobanövény tolerálja az alacsony fényt, például a zamiokulkász (ZZ növény), a kígyónövény (anyósnyelv), a filodendron és a pothos. Kevés fény mellett is elélnek, de lassabban nőnek, és ilyenkor kevesebb vizet igényelnek."
+    },
+    {
+      "id": "rag-repotting",
+      "question": "Mikor és hogyan ültessem át a szobanövényt?",
+      "groundTruth": "Akkor kell átültetni, ha a gyökér kinőtte a cserepet (a vízelvezető lyukon kilóg) vagy a növekedés lelassul; a legjobb időszak a tavasz. Egy mérettel nagyobb cserepet válassz, óvatosan lazítsd meg a gyökereket, friss, jól vízáteresztő földbe tedd, és alaposan öntözd be."
+    },
+    {
+      "id": "rag-humidity",
+      "question": "Hogyan növeljem a páratartalmat a szobanövényeimnek?",
+      "groundTruth": "A páratartalom növelhető párásítóval, a növények csoportba állításával, kavicsos víztálcával (a cserép ne álljon vízben), vagy párásabb helyiségbe költöztetéssel, például fürdőszobába. A permetezés csak átmeneti hatású."
+    },
+    {
+      "id": "rag-propagation",
+      "question": "Hogyan szaporítsak szobanövényt dugványról?",
+      "groundTruth": "Vágj le egy egészséges hajtást közvetlenül egy nódusz (levélcsomó) alatt, távolítsd el az alsó leveleket, és tedd vízbe vagy nedves közegbe, amíg gyökeret nem ereszt. Világos, indirekt fényen tartsd, cseréld rendszeresen a vizet, és a gyökerek megjelenése után ültesd földbe."
+    }
+  ]
+}

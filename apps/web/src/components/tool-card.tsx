@@ -60,11 +60,40 @@ export interface ToolCardProps {
   output: unknown;
 }
 
+/**
+ * A tool HIBÁVAL tért-e vissza? A toolok szöveget adnak a modellnek (`ToolOutcome.content`),
+ * a sikeres kimenet JSON, a hibás pedig egy magyar mondat („Tudásbázis-hiba: …",
+ * „SQL elutasítva: …"). Ez a különbség eddig SEHOL nem látszott a felületen.
+ */
+function isToolError(output: unknown): boolean {
+  if (typeof output !== 'string' || output === '') {
+    return false;
+  }
+  try {
+    JSON.parse(output);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 export function ToolCard({ toolName, state, input, output }: ToolCardProps) {
   const running = state !== 'output-available';
+  const failed = !running && isToolError(output);
 
   return (
-    <div className="my-2 rounded-lg border border-neutral-200 px-3 py-2 text-xs">
+    // A `data-tool` a battery fogódzója: abból derül ki, MELYIK tool futott (a RAG-grounding
+    // fok azt méri, hogy gondozási kérdésre tényleg a searchKnowledge fut-e).
+    //
+    // A `data-tool-error` azt mondja meg, hogy SIKERÜLT-e. Enélkül a battery csak a modell
+    // magyar parafrázisára tudott illeszteni („nem elérhető"), ami futásonként változhat — és
+    // egy infra-hiba HAMIS ZÖLDET adott a RAG-grounding fokon (#10 PR-review, 2. tétel).
+    <div
+      data-testid="tool-card"
+      data-tool={toolName}
+      {...(failed ? { 'data-tool-error': 'true' } : {})}
+      className="my-2 rounded-lg border border-neutral-200 px-3 py-2 text-xs"
+    >
       <div className="flex items-center gap-2 font-medium text-neutral-600">
         {running && (
           <span
@@ -80,6 +109,10 @@ export function ToolCard({ toolName, state, input, output }: ToolCardProps) {
         <KnowledgeCard input={input} output={output} running={running} />
       )}
       {toolName === 'runSql' && <SqlCard input={input} output={output} />}
+
+      {/* A hibaszöveg a kártya MELLÉ kerül, nem helyette: látszania kell, MIT próbált a tool
+          (a lekérdezés vagy a keresett kérdés), különben a hiba nem visszakereshető. */}
+      {failed && <p className="mt-2 text-rose-700">{String(output)}</p>}
     </div>
   );
 }

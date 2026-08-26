@@ -1,0 +1,21 @@
+{
+  "name": "@szoba-kertesz/autotest",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "nx": {
+    "name": "autotest"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.39",
+    "@szoba-kertesz/core": "workspace:*",
+    "ai": "^7.0.66",
+    "pg": "^8.22.0",
+    "playwright": "^1.62.1",
+    "tslib": "^2.3.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0"
+  }
+}
