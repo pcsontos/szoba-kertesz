@@ -5252,3 +5252,87 @@ Az önellenőrzés **két rést talált és javított**: a Task 12 és a Task 13
 - A Task 11 és 12 élő ellenőrzése ideiglenes kód-módosítást kér (`tiers.slice`), mert az
   `--only` csak a Task 13-ban készül el. Ez tudatos sorrend: a szűrő nélkül is mérhető legyen
   egy fok, a szűrő pedig már kész funkcióra épüljön.
+
+
+---
+
+## Végrehajtási jegyzet (2026-08-25/26)
+
+A terv 17 Taskja végigfutott. Az alábbiak **eltérések vagy terv-hibák**, amiket a végrehajtás
+talált — a jövőbeli olvasó ezeket ne írja vissza.
+
+### Terv-hibák, amiket a végrehajtás javított
+
+1. **A gyökér `tsconfig.json` `references` tömbje** (Task 1) — a terv nem említette; enélkül a
+   csomag kimarad a TypeScript solution-buildből.
+2. **A `package.json` függőségeit nem lehet előre deklarálni** (Task 1) — a `@nx/dependency-checks`
+   ESLint-szabály jogosan bukik használatlan függőségre. A függőségek ahhoz a Taskhoz kerültek,
+   amelyik először importálja őket: `zod` → 5, `pg` → 9, `playwright` + `core` → 11, `ai` +
+   `@ai-sdk/anthropic` → 15.
+3. **A `playwright` `dependencies`-be való, nem `devDependencies`-be** (Task 11) — a `src`
+   importálja, tehát runtime-függőség az Nx szabálya szerint.
+4. **A terv `rag-tool-boundary` esete `truth` mezőt kapott a KÉRDÉS szintjén** (Task 6) — a
+   `QuestionSchema` `strict()`, ott nincs ilyen mező (csak az `expect`-en belül). Elhagyva.
+5. **A web-spec a repó meglévő `stubFetch` mintáját követi** (Task 8), nem a terv
+   `vi.stubGlobal`-ját, és a válasz alakja `{ threads: [] }`, nem `[]`.
+6. **A `htmlDocument` „a címet a lapra is kiteszi" tesztje kimaradt** (Task 4) — a váz csak
+   `<title>`-t ad, a `<h1>`-et a hívó teszi be; a terv itt önmagával került volna ellentmondásba.
+7. **DOM-típusok** (Task 11, 13): a csomag Node-os (`types: ["node"]`), ezért az `HTMLElement`
+   nem elérhető. A `dataset`-olvasás strukturálisan tipizált, a HUD pedig egy **minimális
+   `HudDocument`/`HudElement` shimet** kapott — a teljes DOM-lib megnyitásával egy tiszta
+   lib-modul is hivatkozhatna `document`-re, lefordulna, majd futásidőben bukna.
+8. **A `rag-report-html.ts` külön belépő nem készült el** (Task 15) — a `rag-eval.ts` maga írja a
+   HTML-t, mert a batteryvel ellentétben itt nincs köztes agent-lépés (nem kell javaslat-fájlt
+   beolvasni két futtatás között). Egy fájllal kevesebb, ugyanaz a funkció.
+
+### Terven felüli javítás, MÉRT hiba miatt
+
+**A `mentionedNames` magyar tővég-nyúlást kezel** (`á`→`a`, `é`→`e`). A tárgyrag megnyújtja a
+tővégi magánhangzót („Kínai pénzfa" → „pénzfát"), ezért a puszta substring-illesztés elveszíti
+az `-a`/`-e` végű neveket. **Mérve a valódi katalóguson**, tárgyesetes felsorolással: a kurzus
+implementációja **5/10** találatot adott, F1=**0,67** — a 0,8-as küszöb alatt, azaz `HIBA`-flag
+egy **helyes** válaszra. Javítva 10/10-re. A 3000 Ft alatti 10 termékből négy ilyen végű.
+**A kurzus implementációja ugyanezt a hibát hordozza.**
+
+### Mért költségek (a terv becslései mellett)
+
+| Lépés | Terv | Mért |
+|---|---|---|
+| Task 8 élő ellenőrzés | ~3 cent | ~3 cent |
+| Task 11 (1. fok, 3 kérdés) | ~8 cent | **$0,0876** |
+| Task 12 (4. fok, 2 beszélgetés) | ~15 cent | **$0,1094** |
+| Task 15 (RAG-eval, 7 eset) | $0,5–1 | **$0,3786** |
+
+A becslések jók voltak, a RAG-eval a becsült sáv alatt maradt.
+
+### Amit a mérőeszköz azonnal talált
+
+- **`rag-tulontozott-monstera`: context recall 0,00** jó chunkok mellett (precision 0,95) — a
+  kurált referencia és a korpusz eltérése. Ez a tool első valódi találata.
+- **A `sim` értékek 0,04–0,17** a 0,33–0,43-as távolságok mellett: a magyar kérdés és az angol
+  korpusz a nyers vektortérben szinte merőleges, a találat mégis jó, mert a **HyDE** angolra
+  fordítja a keresést. A `docs/golden-set.md` állításának független megerősítése, a RAGAS-oldalról.
+
+### A záró kör két HAMIS ZÖLDET talált (Task 17)
+
+A teljes futás 29/29 zöld lett, de a **RAG-grounding fok három esete érvénytelen mérés volt**:
+a szervert `env -u OPENAI_API_KEY` NÉLKÜL indítottam, így az a shellből örökölte a rossz kulcsot
+(`process.loadEnvFile()` nem ír felül már beállított változót). A `searchKnowledge` végig
+hibázott (8 „Incorrect API key" a szerver logjában), és **két eset mégis átment**:
+
+- `rag-care-source` a **„forrásalapú"** szóra illeszkedett egy hibaüzenetben,
+- `rag-negative-grounding` a **„nem tudok"**-ra az API-hiba szövegében.
+
+A hibaüzenet és a helyes válasz ugyanazokat a szavakat használta. **Javítva három helyen:**
+(1) a két esethez `excludesAll: ["nem elérhető", "API-hiba", "háttérrendszer"]` került;
+(2) a `SKILL.md` infra-szakaszában a **szerver is** `env -u OPENAI_API_KEY`-jel indul, és a
+skill a futás után kötelezően megnézi a szerver logját; (3) a log-ellenőrző grep mintája
+szűkítve, mert az első változatom `401`-re illesztett, ami a trace `dist=0.401` értékeire is
+ráugrott — **maga az ellenőrzés adott volna hamis riasztást**.
+
+Az érvényes újramérés (`--only "RAG-grounding"`, $0,1123) után mindhárom eset valódi: konkrét
+öntözési intervallumok a tudásbázisból, mindkét forrás használata a határ-esetnél, és a helyes
+„erről nincs információm a tudásbázisban" a negatív esetnél.
+
+**Tanulság a tervhez:** a `expect.includesAny` önmagában nem elég olyan esethez, ahol a HELYES
+válasz és az INFRA-HIBA hasonló szavakat használ. Ilyenkor kell `excludesAll` is.
