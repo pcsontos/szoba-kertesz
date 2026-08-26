@@ -151,6 +151,15 @@ Project-agnostic TypeScript conventions (full detail in the doc). Highlights tha
 - Files ~200-400 lines (max 800), organized by feature/domain, not by type.
 - **Prompts the product sends to the LLM** (system prompt, `askAgent` messages) are structured with XML-like tags (`<role>`, `<schema>`, `<rules>`, `<examples>`, ...) to reduce hallucination. This does **not** apply to prompts written for Claude Code itself, which stay natural language.
 
+## Döntési napló (`docs/adr/`)
+
+Ismétlődő mérési/review-körök döntéseit ADR rögzíti (`docs/adr/`, sablon: `_template.md`, index:
+`README.md`). **Egy ADR = egy döntési alkalom, nem egy javaslat.** A megfontolt alternatívákat,
+köztük az **ELVETETTEKET** is fel kell sorolni, az elvetés indokával — az elfogadott döntés a
+kódból kiderül, az elvetett csak innen. Az `autotest` skill 5. lépése kötelezően ír egyet minden
+mérési kör után. A nagy, fejlesztési kör szintű döntések maradnak a specek „Döntések"
+táblázatában (`docs/superpowers/specs/`); az ADR a köröken ÁTÍVELŐ, ismétlődő döntéseké.
+
 ## Git workflow (`docs/dev-workflow.md`)
 
 - `main` is always green/deployable — never commit directly to it.
