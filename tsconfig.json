@@ -16,6 +16,9 @@
       "path": "./apps/web"
     },
     {
+      "path": "./apps/mcp"
+    },
+    {
       "path": "./tools/autotest"
     }
   ]
