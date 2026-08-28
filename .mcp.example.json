@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "szoba-kertesz": {
+      "type": "stdio",
+      "command": "pnpm",
+      "args": ["mcp"],
+      "env": {}
+    }
+  }
+}

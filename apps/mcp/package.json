@@ -1,0 +1,14 @@
+{
+  "name": "@szoba-kertesz/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "nx": {
+    "name": "mcp"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@szoba-kertesz/core": "workspace:*",
+    "zod": "^4.4.3"
+  }
+}
