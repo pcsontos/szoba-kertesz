@@ -1,6 +1,8 @@
+import { z } from 'zod';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { TOOL_NAMES } from './szoba-kertesz-server.js';
+import { errorMessage } from './lib/error-message.js';
 
 // smoke.ts — DEV-eszköz, NEM a szerver része. Elindítja a saját MCP-szerverünket egy VALÓDI
 // MCP-kliensen keresztül (subprocess, `pnpm mcp`), listázza a tooljait, és lefuttat egy olcsó
@@ -11,6 +13,17 @@ import { TOOL_NAMES } from './szoba-kertesz-server.js';
 //      előtt.
 //
 // Modellt NEM hív (az ask_szobakertesz-t szándékosan kihagyja), tehát nem kerül tokenbe.
+
+/**
+ * A tool-válasz KÜLSŐ adat (egy másik folyamattól jön), tehát Zod-dal olvassuk, nem cast-tal —
+ * `konvenciók.md`: `unknown` a nem-megbízható bemenetre (a #11 review 10. tétele).
+ */
+const ContentSchema = z.array(z.object({ text: z.string().optional() }).loose());
+
+function firstText(content: unknown): string {
+  const parsed = ContentSchema.safeParse(content);
+  return parsed.success ? (parsed.data[0]?.text ?? 'ismeretlen') : 'ismeretlen';
+}
 
 async function main(): Promise<void> {
   const transport = new StdioClientTransport({
@@ -37,8 +50,7 @@ async function main(): Promise<void> {
     arguments: { limit: 1 },
   });
   if (probe.isError === true) {
-    const [first] = probe.content as { text?: string }[];
-    throw new Error(`a search_plants hibázott: ${first?.text ?? 'ismeretlen'}`);
+    throw new Error(`a search_plants hibázott: ${firstText(probe.content)}`);
   }
 
   process.stdout.write(`→ MCP rendben — toolok: ${names.join(', ')}\n`);
@@ -47,7 +59,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`→ MCP ELLENŐRZÉS BUKOTT: ${message}\n`);
+  process.stderr.write(`→ MCP ELLENŐRZÉS BUKOTT: ${errorMessage(error)}\n`);
   process.exit(1);
 });

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { guardSql } from '@szoba-kertesz/core';
-import { buildPlantSearchSql, PlantSearchSchema } from './plant-search-sql.js';
+import {
+  buildPlantSearchSql,
+  escapeLikeWildcards,
+  MAX_LIMIT,
+  PlantSearchSchema,
+  validatePlantSearch,
+} from './plant-search-sql.js';
 
 // A determinisztikus kereső tesztje. Az agent-as-tool (ask_szobakertesz) így NEM
 // tesztelhető — az modellt hív. Ez a különbség a két MCP-tool-stílus ára és haszna.
@@ -32,6 +38,15 @@ describe('buildPlantSearchSql', () => {
 
     expect(sql).not.toContain('DROP');
     expect(params[0]).toBe("%'; DROP TABLE products; --%");
+  });
+
+  it('az ILIKE-jokereket escapeli, hogy a keresés SZÖVEGET keressen, ne mintát', () => {
+    const { sql, params } = buildPlantSearchSql({ keres: 'ficus_benjamina 50%' });
+
+    // A _ és a % escapelve megy a paraméterbe…
+    expect(params[0]).toBe('%ficus\\_benjamina 50\\%%');
+    // …és a Postgres tudja, mi az escape-karakter.
+    expect(sql).toContain("ESCAPE '\\'");
   });
 
   it('a boolean szűrők fix feltételek, nem paraméterek', () => {
@@ -106,6 +121,46 @@ describe('buildPlantSearchSql', () => {
   });
 });
 
+describe('escapeLikeWildcards', () => {
+  it('a backslash-t ELSŐKÉNT escapeli, különben a saját escape-jeinket rontaná el', () => {
+    expect(escapeLikeWildcards('a\\b')).toBe('a\\\\b');
+    expect(escapeLikeWildcards('100%_x')).toBe('100\\%\\_x');
+  });
+
+  it('a hétköznapi keresőszót változatlanul hagyja', () => {
+    expect(escapeLikeWildcards('monstera deliciosa')).toBe('monstera deliciosa');
+  });
+});
+
+describe('validatePlantSearch', () => {
+  it('a fordított ársávot kimondja, nem néma üres eredményt hagy', () => {
+    expect(validatePlantSearch({ minAr: 20000, maxAr: 5000 })).toContain('20000');
+  });
+
+  it('a helyes ársávot átengedi', () => {
+    expect(validatePlantSearch({ minAr: 1000, maxAr: 5000 })).toBeNull();
+    expect(validatePlantSearch({ maxAr: 5000 })).toBeNull();
+    expect(validatePlantSearch({})).toBeNull();
+  });
+});
+
+describe('MAX_LIMIT és a core guard viszonya', () => {
+  it('a MAX_LIMIT-tel kért sorszámot a guard külső LIMIT-je NEM vágja le', () => {
+    // A guard a saját SQL-ünket egy külső `… AS _q LIMIT <n>`-be csomagolja. Ha a MAX_LIMIT
+    // valaha a guard limitje fölé nőne, a hívó többet kérne és NÉMÁN kevesebbet kapna.
+    // A guard konstansa nincs exportálva — ezért mérjük, nem feltételezzük (#11 review 5.).
+    const { sql } = buildPlantSearchSql({ limit: MAX_LIMIT });
+    const guard = guardSql(sql);
+
+    expect(guard.allowed).toBe(true);
+    const outerLimit = guard.allowed
+      ? Number(/LIMIT (\d+)\s*$/.exec(guard.sql)?.[1] ?? 0)
+      : 0;
+
+    expect(outerLimit).toBeGreaterThanOrEqual(MAX_LIMIT);
+  });
+});
+
 describe('PlantSearchSchema', () => {
   it('elutasítja az ismeretlen enum-értéket', () => {
     expect(PlantSearchSchema.safeParse({ kategoria: 'bonszaj' }).success).toBe(
@@ -115,6 +170,20 @@ describe('PlantSearchSchema', () => {
 
   it('elutasítja a limit fölötti kérést', () => {
     expect(PlantSearchSchema.safeParse({ limit: 500 }).success).toBe(false);
+  });
+
+  it('a "csak ezt mutasd" szűrőknél a false-t ELUTASÍTJA (nem néma no-op)', () => {
+    // Amíg z.boolean() volt, a `petSafe: false` átment és SZŰRETLEN listát adott —
+    // a hívó modell a rossz halmazról nyilatkozott volna magabiztosan (#11 review 3.).
+    expect(PlantSearchSchema.safeParse({ petSafe: false }).success).toBe(false);
+    expect(PlantSearchSchema.safeParse({ kidSafe: false }).success).toBe(false);
+    expect(PlantSearchSchema.safeParse({ legtisztito: false }).success).toBe(false);
+    expect(PlantSearchSchema.safeParse({ csakRaktaron: false }).success).toBe(false);
+  });
+
+  it('a `true` viszont átmegy, és a mező elhagyása is érvényes', () => {
+    expect(PlantSearchSchema.safeParse({ petSafe: true }).success).toBe(true);
+    expect(PlantSearchSchema.safeParse({}).success).toBe(true);
   });
 
   it('átengedi az érvényes, teljes szűrő-kombinációt', () => {

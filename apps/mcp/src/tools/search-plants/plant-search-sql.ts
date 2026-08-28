@@ -14,6 +14,19 @@ import { CATEGORY, LOCATION, LIGHT, WATERING, DIFFICULTY } from '@szoba-kertesz/
 
 export const SORT_KEYS = ['ár', '-ár', 'értékelés', 'készlet', 'név'] as const;
 
+/**
+ * ILIKE-jokerek semlegesítése (a #11 review 6. tétele). A `%` és a `_` az ILIKE-ban
+ * MINTA-karakter, nem szöveg: escape nélkül a „ficus_benjamina" keresés a `_` helyén BÁRMILYEN
+ * karaktert elfogadna, tehát némán MÁST találna, mint amit a hívó kért. Nem biztonsági rés
+ * (az érték paraméterként megy), hanem HELYESSÉGI kérdés — és a némán rossz találat egy idegen
+ * host modelljénél pont olyan rossz, mint a hiba.
+ *
+ * A backslash-t is escapelni kell, ELSŐKÉNT, különben a saját escape-karakterünket rontanánk el.
+ */
+export function escapeLikeWildcards(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
+}
+
 const SORT_COLUMNS: Record<(typeof SORT_KEYS)[number], string> = {
   ár: 'COALESCE(sale_price, price) ASC',
   '-ár': 'COALESCE(sale_price, price) DESC',
@@ -22,8 +35,25 @@ const SORT_COLUMNS: Record<(typeof SORT_KEYS)[number], string> = {
   név: 'name ASC',
 };
 
+/**
+ * A hívó által kérhető legtöbb sor. NÉMÁN CSATOLVA a core `sql-guard.ts` `DEFAULT_LIMIT`-jéhez
+ * (a #11 review 5. tétele): a guard a mi SELECT-ünket egy külső `… LIMIT 50`-be csomagolja,
+ * tehát ha ez a szám valaha a guardé fölé nőne, a hívó többet kérne és némán kevesebbet kapna.
+ * A guard konstansa nincs exportálva, tehát típussal nem kényszeríthető ki — ezért egy SPEC
+ * méri a viszonyt (`plant-search-sql.spec.ts`), a repo szokása szerint.
+ */
 export const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 10;
+
+/**
+ * A „csak ezt mutasd" szűrők SZÁNDÉKOSAN `literal(true)`-k, nem `boolean`-ok (a #11 review 3.
+ * tétele). Amíg `z.boolean()` volt, a hívó modell teljes joggal küldhetett `petSafe: false`-t
+ * abban a hitben, hogy a NEM pet-safe növényekre szűr — a kód viszont csak a `true` ágat
+ * kezelte, tehát SZŰRETLEN listát adott vissza, hibajelzés nélkül. A séma többet ígért, mint
+ * amit a kód tudott. Így a `false` már a validáción fennakad, és a modell hibát KAP, nem néma
+ * rossz halmazt.
+ */
+const onlyTrue = (description: string) => z.literal(true).optional().describe(description);
 
 export const PlantSearchSchema = z.object({
   keres: z
@@ -31,7 +61,10 @@ export const PlantSearchSchema = z.object({
     .trim()
     .min(1)
     .optional()
-    .describe('Szabad szöveg: a magyar névben, a latin névben és a leírásban keres.'),
+    .describe(
+      'Szabad szöveg: a magyar névben, a latin névben és a leírásban keres. A % és a _ ' +
+        'karakter sima szövegként keresődik, nem mintaként.',
+    ),
   kategoria: z.enum(CATEGORY).optional(),
   hely: z
     .enum(LOCATION)
@@ -43,17 +76,34 @@ export const PlantSearchSchema = z.object({
   feny: z.enum(LIGHT).optional(),
   ontozes: z.enum(WATERING).optional(),
   nehezseg: z.enum(DIFFICULTY).optional(),
-  minAr: z.number().int().nonnegative().optional(),
+  minAr: z
+    .number()
+    .int()
+    .nonnegative()
+    .optional()
+    .describe('Alsó árhatár HUF-ban (akciós árral számol); nem lehet nagyobb a maxAr-nál.'),
   maxAr: z
     .number()
     .int()
     .positive()
     .optional()
     .describe('Felső árhatár HUF-ban (akciós árral számol).'),
-  petSafe: z.boolean().optional().describe('Csak háziállatra biztonságos növények.'),
-  kidSafe: z.boolean().optional(),
-  legtisztito: z.boolean().optional().describe('Csak légtisztító hatású növények.'),
-  csakRaktaron: z.boolean().optional().describe('Csak a raktáron lévő tételek (stock > 0).'),
+  petSafe: onlyTrue(
+    'Csak háziállatra biztonságos növények. Kizárólag `true` adható meg — a szűrő ' +
+      'kikapcsolásához hagyd el a mezőt.',
+  ),
+  kidSafe: onlyTrue(
+    'Csak gyerekre biztonságos növények. Kizárólag `true` adható meg — a szűrő ' +
+      'kikapcsolásához hagyd el a mezőt.',
+  ),
+  legtisztito: onlyTrue(
+    'Csak légtisztító hatású növények. Kizárólag `true` adható meg — a szűrő ' +
+      'kikapcsolásához hagyd el a mezőt.',
+  ),
+  csakRaktaron: onlyTrue(
+    'Csak a raktáron lévő tételek (stock > 0). Kizárólag `true` adható meg — a szűrő ' +
+      'kikapcsolásához hagyd el a mezőt.',
+  ),
   maxMagassagCm: z
     .number()
     .int()
@@ -75,6 +125,21 @@ export type PlantSearch = z.infer<typeof PlantSearchSchema>;
 export interface PreparedQuery {
   readonly sql: string;
   readonly params: unknown[];
+}
+
+/**
+ * Mezők KÖZÖTTI ellenőrzés, magyar hibaüzenettel — vagy `null`, ha rendben van.
+ *
+ * Miért nem `.refine()` a sémán? Mert az MCP SDK `registerTool`-ja `ZodRawShape`-et vár, és a
+ * `.shape`-ből SAJÁT `z.object()`-et épít: egy `.refine()` a mi sémánkon soha nem futna le egy
+ * valódi MCP-híváskor (ráadásul a `ZodEffects`-nek nincs is `.shape`-je). Ezért a keresztszabály
+ * a tool kezelőjében fut le, explicit hívással.
+ */
+export function validatePlantSearch(filters: PlantSearch): string | null {
+  if (filters.minAr !== undefined && filters.maxAr !== undefined && filters.minAr > filters.maxAr) {
+    return `Az alsó árhatár (${filters.minAr}) nagyobb a felsőnél (${filters.maxAr}) — így egyetlen termék sem felelhet meg.`;
+  }
+  return null;
 }
 
 const SELECTED_COLUMNS = [
@@ -111,9 +176,13 @@ export function buildPlantSearchSql(filters: PlantSearch): PreparedQuery {
   };
 
   if (filters.keres !== undefined) {
+    // Az ESCAPE '\' a három ILIKE MINDEGYIKÉHEZ kell: a jokerek semlegesítése (escapeLikeWildcards)
+    // csak akkor ér valamit, ha a Postgres tudja, mi az escape-karakter.
     where(
-      (p) => `(name ILIKE ${p} OR latin_name ILIKE ${p} OR description ILIKE ${p})`,
-      `%${filters.keres}%`,
+      (p) =>
+        `(name ILIKE ${p} ESCAPE '\\' OR latin_name ILIKE ${p} ESCAPE '\\' ` +
+        `OR description ILIKE ${p} ESCAPE '\\')`,
+      `%${escapeLikeWildcards(filters.keres)}%`,
     );
   }
   if (filters.kategoria !== undefined) {

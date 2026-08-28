@@ -1,7 +1,13 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { buildSzobaKerteszServer, TOOL_NAMES } from './szoba-kertesz-server.js';
+import {
+  buildSzobaKerteszServer,
+  SERVER_VERSION,
+  TOOL_NAMES,
+} from './szoba-kertesz-server.js';
 
 describe('buildSzobaKerteszServer', () => {
   it('pontosan három toolt regisztrál, a TOOL_NAMES-szel megegyező névvel', async () => {
@@ -25,5 +31,14 @@ describe('buildSzobaKerteszServer', () => {
 
     await client.close();
     await server.close();
+  });
+
+  it('a SERVER_VERSION megegyezik a package.json-beli verzióval', () => {
+    // A hostnak hirdetett verzió és a csomag verziója két külön hely — a #11 review 10. tétele
+    // pont azt találta meg, hogy elcsúsztak (0.1.0 vs 0.0.1). Ez a spec őrzi a párost.
+    const packageJson = readFileSync(join(__dirname, '..', 'package.json'), 'utf8');
+    const { version } = JSON.parse(packageJson) as { version: string };
+
+    expect(SERVER_VERSION).toBe(version);
   });
 });

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { executeSearchKnowledge } from '@szoba-kertesz/core';
+import { executeSearchKnowledge, type SearchKnowledgeOptions } from '@szoba-kertesz/core';
 
 // search_knowledge — a HARMADIK stílus: nem új logika, hanem egy MEGLÉVŐ core-tool átkötése
 // MCP-re. A core-ban a tool két részre van vágva (lásd tool-outcome.ts): az
@@ -17,7 +17,18 @@ import { executeSearchKnowledge } from '@szoba-kertesz/core';
 
 export const SEARCH_KNOWLEDGE_TOOL_NAME = 'search_knowledge';
 
-export function registerSearchKnowledge(server: McpServer): void {
+/**
+ * A core `executeSearchKnowledge` MÁSODIK paramétere a `retrieve` teszt-szeam. Átvezetjük, hogy
+ * ennek a fájlnak az EGYETLEN saját logikája — a `ToolOutcome` → MCP `content`/`isError`
+ * fordítás — API-hívás és DB nélkül mérhető legyen (a #11 review 1. tétele: a szeam már készen
+ * állt a core-ban, csak nem használtuk).
+ */
+export type RegisterSearchKnowledgeOptions = SearchKnowledgeOptions;
+
+export function registerSearchKnowledge(
+  server: McpServer,
+  options: RegisterSearchKnowledgeOptions = {},
+): void {
   server.registerTool(
     SEARCH_KNOWLEDGE_TOOL_NAME,
     {
@@ -42,7 +53,7 @@ export function registerSearchKnowledge(server: McpServer): void {
     async ({ kerdes }) => {
       // A core execute-ja SOHA nem dob: hibát is ToolOutcome-ként ad vissza. Csak az alakot
       // kell MCP-re fordítani (content-tömb + isError).
-      const outcome = await executeSearchKnowledge({ question: kerdes });
+      const outcome = await executeSearchKnowledge({ question: kerdes }, options);
 
       return {
         isError: outcome.isError,

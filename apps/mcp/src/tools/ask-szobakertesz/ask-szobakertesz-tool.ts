@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { askAgent, type AskAgentOptions, type AskResult } from '@szoba-kertesz/core';
+import { errorMessage } from '../../lib/error-message.js';
 
 // ask_szobakertesz — az AGENT-AS-TOOL. A hívó host (Claude Code / Claude Desktop) számára ez
 // egy sima tool-hívás, de mögötte a MI teljes agent-loopunk fut: saját system prompt, saját
@@ -85,11 +86,15 @@ export function registerAskSzobakertesz(
           ],
         };
       } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : String(error);
+        // Az `errorMessage` az AggregateError-t is kicsomagolja (a #11 review 4. tétele):
+        // DB-leállásnál különben ÜRES szöveg menne vissza a hívó modellnek.
         return {
           isError: true,
           content: [
-            { type: 'text' as const, text: `A szoba-kertész agent hibára futott: ${message}` },
+            {
+              type: 'text' as const,
+              text: `A szoba-kertész agent hibára futott: ${errorMessage(error)}`,
+            },
           ],
         };
       }
