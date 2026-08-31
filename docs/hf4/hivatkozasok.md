@@ -166,3 +166,25 @@ készült szexuális tartalmat. A sor azért marad benne, hogy az időbeli hatá
 4. **Két forrás nem hivatalos kiadó** (`AIA`, `GDPR-INFO`). A szövegüket betűhűnek találtam ott,
    ahol a Bizottság Service Deskjével összevetettem (6., 50. cikk), de aki jogi tanácsadásra
    használná ezt a jegyzéket, a hiteles szöveget az `EUR-Lex`-en ellenőrizze.
+
+---
+
+## A. melléklet — az Annex III nyolc területének tételes kizárása
+
+Ez a melléklet **nem hivatkozás-jegyzék**, hanem a `docs/hf4-ai-act.md` 2.2 pontjának levezetése:
+a jobb oldali oszlop **érvelés**, nem forrás. A hivatkozott Annex III-pontok forrása a fenti
+1. táblázatban van. Azért itt áll és nem a fődokumentumban, mert a fődokumentum terjedelmi
+korlátja kötött, a levezetés teljességét viszont nem akartam feláldozni érte.
+
+A vizsgált rendszer: a szoba-kertész MI-asszisztens a **ma működő** állapotában.
+
+| Annex III terület | Miért nem áll rá a szoba-kertész |
+|---|---|
+| 1. Biometrikus azonosítás | nem dolgoz fel biometrikus adatot; a bemenet a felhasználó által beírt szöveg. A határeset (érzelemfelismerés) a fődokumentum 2.5/3. pontjában |
+| 2. Kritikus infrastruktúra | nem irányít és nem felügyel közlekedést, vízellátást, energiaellátást vagy digitális infrastruktúrát |
+| 3. Oktatás és szakképzés | nem dönt felvételről, nem oszt be képzésre, nem értékel tanulmányi eredményt és nem felügyel vizsgát |
+| 4. Foglalkoztatás, munkavállalók irányítása | nem toboroz és nem szűr pályázatot (**Annex III 4(a)**); a bolt munkatársai eszközként használják, de a rendszer nem hoz és nem készít elő róluk munkaviszonyt érintő döntést |
+| 5. Alapvető magán- és közszolgáltatások | a négy alpont tételesen a fődokumentum 2.2 pontjában — ez a legközelebbi terület, ezért ott marad |
+| 6. Bűnüldözés | nincs bűnüldözési rendeltetés; nem értékel bizonyítékot, nem profiloz gyanúsítottat |
+| 7. Migráció, menekültügy, határigazgatás | nincs ilyen rendeltetés; nem vizsgál kérelmet és nem értékel kockázatot személyekre |
+| 8. Igazságszolgáltatás és demokratikus folyamatok | nem segít jogértelmezésben vagy tényállás megállapításában, és nem befolyásol választási magatartást |
