@@ -265,3 +265,18 @@ laikus nem tud ellenőrizni. **Ki felel, ha az ágens hibázik?** Az, aki a kime
 a felelősség csak akkor viselhető, ha a **levezetés** ellenőrizhető, nem csak a következtetés.
 
 ## 6. Válasz a jogi csapatnak
+
+A válaszlevél is külön fájlban él — **`docs/hf4/valasz-jogi-csapatnak.md`**. A keret az, hogy a
+besorolást **nem tárgyalja újra**: a tervezett panaszkezelő és kompenzációs bővítésre a magas
+kockázatú követelményekkel készülünk, egyetlen írásban rögzítendő hatókör-észrevétellel. A hét
+kötelezettség (**9., 10., 12., 14., 15., 26., 27. cikk**) mindegyikéhez tartozik **intézkedés és
+auditkori bizonyíték** is — a levél attól kétnyelvű, hogy a jogász a kötelezettséget látja benne,
+a mérnök a backlogot. A legerősebb állítása a 14. cikknél van: az emberi felügyeletet nem
+prompt-tiltás adja, hanem **elvett képesség** — ami nincs az eszközkészletben, azt a modell akkor
+sem hívja meg, ha rábeszélik.
+
+A levél külön szakaszban sorolja azt is, **amit ma nem tudunk**: az 50. cikkes tájékoztatás
+hiányát, a hitelesítés nélküli beszélgetés-listázót — amit a bővítés **blokkoló feltételének**
+nevez —, a megőrzési idő hiányát és a még el nem készült dokumentumokat. A határidőt kimondja: az
+Annex III szerinti kötelezettségek **2027. december 2-től** alkalmazandók, az 50. cikkes
+tájékoztatás viszont **már ma esedékes**.
