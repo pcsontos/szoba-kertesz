@@ -180,8 +180,80 @@ jegyzék **B. mellékletében** van.
 
 ## 5. A kapott use case: QueueGenius
 
+A brief: az ágens nem hoz hiteldöntést, csak beolvassa a hitelkérelmek dokumentumait, teljességi
+pontszámot ad, és ez alapján rendezi az ügyintézők munkalistáját. Amerikai SaaS-ra épül, a bank
+saját márkaneve alatt fut, és „mi csak a promptokat és a szabályokat konfiguráljuk".
+
 ### 5.1 Saját elemzés
 
+**Érvek a nem-magas-kockázat mellett.** A rendszer nem hoz hiteldöntést és nem értékel
+hitelképességet, tehát nem esik az **Annex III 5(b)** alá. Ha mégis annak tekintenénk, állna a
+**6. cikk (3) a)** (szűk eljárási feladat) és **d)** (előkészítő feladat) derogációja, és a döntést
+végig ember hozza.
+
+**Érvek a magas kockázat mellett.** A sorrend nem semleges: a „gördülékeny" ügyek előresorolása azt
+jelenti, hogy a rendezetlenebb dossziéval érkezők — jellemzően a kevésbé iskolázott, kevésbé
+rutinos, kiszolgáltatottabb kérelmezők — **rendszeresen hátrébb kerülnek**. Hitelkérelemnél a
+késedelem önmagában hátrány: határidők csúsznak, ajánlati kötöttség jár le. A hatás a
+**hozzáférést** érinti, még ha a döntést nem is. És itt a döntő rendelkezés, amit a brief szövege
+elfed: a **6. cikk (3) utolsó albekezdése** szerint a rendszer **mindig** magas kockázatú, ha
+természetes személyek **profilalkotását** végzi.
+
+**Az állásfoglalásom feltételekhez kötött, nem kategorikus.**
+
+- **Magas kockázatúnak sorolnám, HA** a teljességi pontszám az azonosított kérelmezőhöz tapad, és a
+  sorrendet ez alakítja — ez a személy jellemzőinek automatizált értékelése a sorsát befolyásoló
+  következménnyel, azaz profilalkotás.
+- **Kifér a derogáció alá, HA** a pontszám tisztán dokumentum-szintű, a személytől elválasztott, és
+  nem mutatható ki rendszeres hátrány.
+- **És akkor is marad kötelezettség:** a **6. cikk (4)** dokumentálás és a **49. cikk (2)**
+  regisztráció. A derogáció nem mentesség.
+
+**A mérés, amivel eldönthető:** a várakozási idő és a sorrend eloszlása kérelmezői csoportok
+szerint, a teljességi pontszámmal összevetve. Ha a pontszám és a védett tulajdonságok proxyi
+(életkor, iskolázottság, lakóhely) együttmozognak, a rendszer **de facto profiloz**, függetlenül
+attól, minek nevezzük a termékdokumentációban.
+
+**Szerepek.** Az amerikai SaaS-cég a **szolgáltató**; uniós letelepedés híján a **22. cikk**
+szerinti meghatalmazott képviselőt kell kijelölnie. A bank **üzembe helyező** (**3. cikk 4. pont**),
+és a saját márkanév miatt a **25. cikk (1) a)** alapján szolgáltatóvá is válik — **feltéve hogy a
+rendszer magas kockázatú**, mert a felütés ezt köti ki. A „mi csak a promptokat és a szabályokat
+konfiguráljuk" a brief legveszélyesebb mondata: ha a konfiguráció megváltoztatja a rendeltetést
+vagy lényegesen módosítja a rendszert, a **25. cikk (1) b)–c)** **önmagában** szolgáltatói státuszt
+keletkeztet.
+
 ### 5.2 LLM-teszt és összevetés
+
+A nyers átirat a `docs/hf4/llm-teszt-atirat.md`-ben van. **Módszertan:** más gyártó modellje
+(Gemini), friss beszélgetés, rendszer-prompt nélkül, nem sugalmazó kérdéssel — a saját elemzést
+Claude írta, és azonos modellcsaládnál a triviális egyetértés lenne a valószínű kimenet.
+
+**Egyetértés:** a végkövetkeztetés (nem magas kockázatú), és hogy a bank a saját márkanév miatt
+szolgáltatóvá válik.
+
+**Négy hibás hivatkozás:** az **Annex III 5(a)** és **5(b)** felcserélése; az előkészítő feladat
+**6. cikk (3) c)**-ként hivatkozása a **d)** helyett; a szolgáltatói átminősülés **elsődlegesen az
+50. cikk (1)-re** alapítása (a helyes 25. cikk (1) a) nála csak zárójelben); és a regisztrációs
+kötelezettség **feltétel nélküli** tagadása, holott a modell maga nyitotta meg a derogációs ágat,
+ahol a 6. cikk (4) és a 49. cikk (2) fennáll. Mind a négy a modell **szó szerinti mondatával**
+szemben, az átirat sorszámával a jegyzék **C. mellékletében**.
+
+**Egy belső ellentmondás:** kimondja, hogy a rendszer nem magas kockázatú, majd mégis alkalmazza rá
+a **25. cikk (1) a)**-t, amelynek felütése magas kockázatú rendszerekről szól — a saját besorolása
+alól húzza ki a szerep-elemzés talaját.
+
+**A döntő hiány:** a **6. cikk (3) utolsó albekezdését**, a profilalkotási szabályt **meg sem
+említi**, pedig a derogációt egyébként részletesen kifejti. Épp az a rendelkezés marad ki, amin az
+eset billeg. A **22. cikk** sem kerül elő, pedig az amerikai szolgáltatót helyesen azonosítja.
+
+**Amit átveszek tőle:** a **4. cikk** szerinti MI-jártassági kötelezettséget, amely kockázati
+szinttől **függetlenül** fennáll — ezt a saját elemzésem nem emelte ki. A teszt tehát nemcsak hibát
+talált, hiányt is pótolt.
+
+**A tanulság.** A modell **végkövetkeztetése védhető, a levezetése négy ponton hibás** — ez a
+veszélyesebb hibaforma. Egy magabiztos, formázott, cikkszámokkal teli levezetést egy nem jogász
+további ellenőrzés nélkül bemásolna egy megfelelési memóba, és a hibák pont ott vannak, ahol a
+laikus nem tud ellenőrizni. **Ki felel, ha az ágens hibázik?** Az, aki a kimenetét felhasználja — és
+a felelősség csak akkor viselhető, ha a **levezetés** ellenőrizhető, nem csak a következtetés.
 
 ## 6. Válasz a jogi csapatnak

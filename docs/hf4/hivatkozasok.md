@@ -203,3 +203,29 @@ szabályozás nem áll ránk, még végig kell gondolni, hogy miért nem.
 | **DORA — (EU) 2022/2554** | nem vagyunk pénzügyi szervezet (nem hitelintézet, pénzforgalmi szolgáltató, befektetési vállalkozás, biztosító, kereskedési helyszín), és nem is nyújtunk IKT-szolgáltatást ilyen szervezetnek. A rendelet hatálya alanyi körhöz kötött, nem a technológiához — attól, hogy pénzügyi adat (a `budget` mező) van a rendszerben, nem kerülünk a hatálya alá |
 | **MDR — (EU) 2017/745** | a 2. cikk (1) a szoftvert csak akkor tekinti eszköznek, ha a **gyártó orvosi rendeltetéssel** szánja. A gondozási tanács növényre vonatkozik, nem emberre. **Határeset, ami visszamutat a 2.5-re:** ha a tudásbázisból egészségügyi állítás lenne („ez a növény enyhíti az asztmát"), a rendeltetés megváltozna, és a besorolás megnyílna — ugyanaz a mechanizmus, mint az Annex III 5(b)-nél: nem az adat dönt, hanem a rendeltetés |
 | **NIS2 — (EU) 2022/2555** | sem ágazat, sem méret alapján nem tartozunk az érintett szervezetek körébe: a dísznövény-kiskereskedelem nincs a felsorolt ágazatok között, és a méretküszöböt (legalább középvállalkozás) sem érjük el. A tagállami külön kijelölés elvi lehetősége fennáll, de arra semmilyen jel nem utal |
+
+---
+
+## C. melléklet — az LLM-teszt hibás hivatkozásai, tételesen
+
+A `docs/hf4-ai-act.md` 5.2 pontjához. A bal oszlop a modell **szó szerinti** mondata, a
+`docs/hf4/llm-teszt-atirat.md` sorszámával, hogy visszakereshető legyen; a jobb oszlop a helyes
+tartalom a fenti 1. táblázat szerint. Az átirat **nem módosult** az elemzés kedvéért.
+
+| A modell mondata (átirat sora) | A helyes |
+|---|---|
+| „a III. melléklet (Annex III) **5. pontjának (a) alpontja** szerint magas kockázatúnak minősülnek azok … amelyeket *»természetes személyek hitelképességének értékelésére (credit scoring) vagy hitelpontszámuk megállapítására«* használnak" *(51. sor)* | A hitelképesség az **Annex III 5(b)**. Az **5(a)** a hatóság által végzett, közszolgáltatási juttatásokra való jogosultság értékelése. A modell **helyesen idézi az 5(b) szövegét, de 5(a)-ként hivatkozza** — a betű téved, nem a tartalom |
+| „pusztán **előkészítő feladatot** végez egy emberi döntéshez (*6. cikk (3) c)*)" *(63. sor)* | Az előkészítő feladat a **6. cikk (3) d)**. A **c)** a döntési mintázatok vagy azoktól való eltérések észlelése — más tényállás |
+| „Az **50. cikk (1) bekezdése** (illetve a 25. cikk (1) bekezdésének a) pontja) alapján, ha egy entitás a saját neve vagy védjegye alatt hoz forgalomba … átveszi a szolgáltatói státuszt" *(75. sor)* | A védjegy alatti forgalomba hozatal a **25. cikk (1) a)**; az **50. cikk (1)** az átláthatóság (tájékoztatás az MI-interakcióról), a szolgáltatói státuszhoz semmi köze. **Pontosítás a méltányosság kedvéért:** a helyes cikket a modell zárójelben megadja — a hiba az, hogy a **rossz cikket teszi elsődlegessé** |
+| „**Nincs szükség** előzetes megfelelőségértékelésre, EU-adatbázisba történő regisztrációra vagy formális kockázatkezelési rendszerre" *(87. sor)* | Feltétel nélkül igaz **nem** lehet: a modell maga nyitotta meg a 6. cikk (3) derogációs ágat, ahol a **6. cikk (4)** dokumentálási és a **49. cikk (2)** regisztrációs kötelezettség (a **71. cikk** szerinti uniós adatbázisba) fennáll. Ha a rendszer kívül esik az Annex III-on, a mondat igaz; a derogációs ágon nem |
+
+**Egy belső ellentmondás** *(46. és 75. sor)*: a válasz kimondja, hogy a rendszer „nem magas
+kockázatú", majd alkalmazza rá a 25. cikk (1) a)-t, amelynek felütése kifejezetten **magas
+kockázatú** rendszerekről szól.
+
+**Két hiány:** a **6. cikk (3) utolsó albekezdése** (profilalkotás → mindig magas kockázatú) meg sem
+jelenik, pedig a derogációt egyébként részletesen kifejti; és a **22. cikk** (meghatalmazott
+képviselő) sem, pedig az amerikai szolgáltatót helyesen azonosítja.
+
+**Egy találat a javára:** a **4. cikk** szerinti MI-jártassági kötelezettséget behozza *(88. sor)* —
+ezt a saját elemzésem nem emelte ki, és átvettem tőle.
