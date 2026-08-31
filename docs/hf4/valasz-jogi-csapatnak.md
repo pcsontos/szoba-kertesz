@@ -43,10 +43,11 @@ Egy megfelelési válasz, amelyik csak erősségeket sorol, használhatatlan. N�
 1. **A felület nem tájékoztat az MI-használatról.** Ez nem a bővítéshez kötődik: az AI Act
    50. cikk (1) bekezdése szerinti kötelezettség a **jelenlegi** rendszerre már fennáll, és nem
    teljesítjük. Javítás tervezve; a felirat szövegére külön levélben kértünk jóváhagyást.
-2. **A beszélgetéseket listázó végpont hitelesítés nélküli.** Ma bárki, aki eléri a szervert,
-   kilistázhatja az összes beszélgetést. A bővítéssel ide **ügyfélpanasz-adat** is kerülne. Ezt
-   **a bővítés blokkoló feltételének** tekintjük: amíg nincs hitelesítés és jogosultságkezelés,
-   a kompenzációs modul nem élesíthető.
+2. **A beszélgetéseket listázó végpont hitelesítés nélküli.** Konkrétan a `GET /api/threads` és a
+   `GET /api/threads/:id`: ma bárki, aki eléri a szervert, kilistázhatja és elolvashatja az összes
+   beszélgetést. A bővítéssel ide **ügyfélpanasz-adat** is kerülne. Ezt **a bővítés blokkoló
+   feltételének** tekintjük: amíg nincs hitelesítés és jogosultságkezelés, a kompenzációs modul
+   nem élesíthető.
 3. **A beszélgetés-tárnak nincs megőrzési ideje.** Nem törlünk — a tároló szerepnek jelenleg
    nincs is törlési joga. Ehhez tőletek kérünk időtartamot.
 4. **A 9., 26. és 27. cikk szerinti dokumentumok még nem készültek el.** Nem tervezzük őket a

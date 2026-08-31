@@ -13,8 +13,7 @@ lakberendező-perszónájú MI-asszisztens: magyar kérdésekből csak olvasó S
 növénykatalógus fölé, és egy 202 cikkes gondozási tudásbázisból válaszol (RAG). A vásárló a
 böngészőben chatel vele, a bolt munkatársai ugyanezt és egy CLI-t használják; a katalógus írása
 külön, korlátozott jogosultságú ágensen fut. **A besorolás a ma működő állapotra vonatkozik, nem
-tervekre** — ahol egy bővítés megváltoztatná, azt a 2.5 tárgyalja. A laikusnak szóló bemutatás a
-jogi csapatnak írt levélben van, ahogy a feladat előírja.
+tervekre** — ahol egy bővítés megváltoztatná, azt a 2.5 tárgyalja.
 
 ## 2. Besorolás az AI Act szerint
 
@@ -45,10 +44,8 @@ maga sem ilyen termék. A két feltétel konjunktív, már az első sem áll; ha
 megfelelőségértékelés fel sem merül.
 
 **Második útvonal — 6. cikk (2), Annex III.** Végigvettem **mind a nyolc területet**, és egyik sem
-áll ránk: nem dolgozunk fel biometrikus adatot, nem irányítunk kritikus infrastruktúrát, nem
-döntünk oktatásról, nem toborzunk és nem szűrünk pályázatot (**Annex III 4(a)**), és nincs
-bűnüldözési, migrációs vagy igazságszolgáltatási rendeltetésünk. A területenkénti indoklás a
-jegyzék **A. mellékletében** van.
+áll ránk — a biometrikustól az igazságszolgáltatásig, beleértve a toborzást (**Annex III 4(a)**).
+A területenkénti indoklás a jegyzék **A. mellékletében** van.
 
 Az **5. terület** tételesen, mert ez a legközelebbi: **5(a)** hatósági jogosultság-értékelés
 közszolgáltatási juttatásokra — nem vagyunk hatóság, és nem juttatásról döntünk. **5(b)**
@@ -59,10 +56,9 @@ nincs ilyen tevékenység. **5(d)** segélyhívás-osztályozás — nincs.
 
 Mivel a rendszer **egyik Annex III-as ponthoz sem tartozik**, a **6. cikk (3)** derogációjára nem
 kell hivatkoznunk — és ez több stílusnál. A derogáció ugyanis **nem mentesség**: aki rá hivatkozik,
-annak a **6. cikk (4)** szerint a forgalomba hozatal előtt dokumentálnia kell az értékelését, és a
-**49. cikk (2)** szerint regisztrálnia kell magát és a rendszert a **71. cikk** szerinti uniós
-adatbázisban. A „kívül esik a listán" kontra „a listán van, de derogált" különbség pontosan az,
-amit az 5. pontban vizsgált LLM elrontott.
+annak a **6. cikk (4)** szerint dokumentálnia kell az értékelését, és a **49. cikk (2)** szerinti
+regisztráció is fennáll. A „kívül esik a listán" kontra „a listán van, de derogált" különbség
+pontosan az, amit az 5. pontban vizsgált LLM elrontott.
 
 ### 2.3 Ami marad: az 50. cikk
 
@@ -84,10 +80,10 @@ nem történik meg. A **113. cikk** szerint az általános alkalmazás — és v
 tehát nem jövőbeli feladat, hanem **lejárt határidő**. A javítás olcsó: állandó, az első interakció
 előtt látható felirat a fejlécben („Ez egy MI-asszisztens — a válaszokat nyelvi modell generálja").
 
-**Az 50. cikk (2)-t sem hallgatom el.** A rendszer szintetikus **szöveget** generál, tehát az
-ellenőrzött szöveg alapján a gépi olvashatóságú jelölés hatálya alá esik; ma semmilyen jelölést
-nem teszünk a kimenetre. Azt, hogy ez egy chat-válasznál a gyakorlatban mit követel, hivatkozással
-nem tudom megválaszolni, ezért **nyitott tételként** viszem tovább, nem döntöm el magamtól.
+**Az 50. cikk (2)-t sem hallgatom el.** A rendszer szintetikus **szöveget** generál, tehát a gépi
+olvashatóságú jelölés hatálya alá esik; ma semmilyen jelölést nem teszünk a kimenetre. Hogy ez egy
+chat-válasznál a gyakorlatban mit követel, hivatkozással nem tudom megválaszolni, ezért **nyitott
+tételként** viszem tovább, nem döntöm el magamtól.
 
 ### 2.4 A szerepünk a láncban
 
@@ -95,15 +91,14 @@ nem tudom megválaszolni, ezért **nyitott tételként** viszem tovább, nem dö
 Egyúttal **downstream szolgáltató** (**3. cikk 68. pont**), mert általános célú MI-modelleket
 integrálunk (válasz: `claude-sonnet-4-6`; HyDE és rerank: `claude-haiku-4-5`; vektorizálás: OpenAI
 `text-embedding-3-small`). Az upstream modellszolgáltatókat az **53. cikk**, rendszerszintű
-kockázat esetén az **55. cikk** terheli — minket a *rendszer* szolgáltatójáéi. A kettő nem
-cserélhető: a modell képességeiért nem mi felelünk, a rendszerbe épített rendeltetésért igen.
+kockázat esetén az **55. cikk** terheli — minket a *rendszer* szolgáltatójáéi: a modell
+képességeiért nem mi felelünk, a rendszerbe épített rendeltetésért igen.
 
 **Az átcsúszás mindkét irányban.** Ha egy bolt átveszi és pusztán használja, ő az **üzembe
 helyező** (**3. cikk 4. pont**), mi maradunk a szolgáltató. Ha **saját márkanév alatt** futtatja, a
 **25. cikk (1) a)** szerint ő is szolgáltatóvá válna — **de a 25. cikk (1) felütése kifejezetten
-magas kockázatú rendszerekről szól**, tehát a mi jelenlegi rendszerünknél ez a szabály **nem
-aktiválódik**. Akkor élesedik, ha a 2.5 határesetei bekövetkeznek. A QueueGeniusnál viszont igenis
-él (5. pont), és ez a különbség köti össze a két elemzést.
+magas kockázatú rendszerekről szól**, tehát nálunk ez a szabály **nem aktiválódik**. Akkor
+élesedik, ha a 2.5 határesetei bekövetkeznek; a QueueGeniusnál viszont él (5. pont).
 
 ### 2.5 Határeset-elemzés
 
@@ -179,12 +174,9 @@ jegyzék **B. mellékletében** van.
 ## 4. Email a jogi csapatnak
 
 A levél külön fájlban él — **`docs/hf4/level-jogi-csapatnak.md`** —, mert elküldhetőnek kell
-lennie: kontextus nélkül, önmagában is érthető, és nem hivatkozik erre a dokumentumra. Tartalmazza
-a kiírás négy kötelező tényét (ki használja · milyen adatokat kezel · milyen döntést hoz vagy
-befolyásol · mi történik, ha téved), a fenti 2. pont besorolását és annak két fő indokát, majd
-**négy számozott, eldönthető kérdéssel** zárul — nem „várom a visszajelzést"-tel. A 2.3-ban mért
-50. cikkes hiányosságot a levél is néven nevezi, és a javasolt felirat szövegére kifejezetten
-jóváhagyást kér.
+lennie: kontextus nélkül is érthető, és nem hivatkozik erre a dokumentumra. Tartalmazza a kiírás
+négy kötelező tényét, a fenti besorolást a két fő indokával, és **négy számozott, eldönthető
+kérdéssel** zárul — nem „várom a visszajelzést"-tel.
 
 ## 5. A kapott use case: QueueGenius
 
@@ -214,8 +206,7 @@ természetes személyek **profilalkotását** végzi.
   következménnyel, azaz profilalkotás.
 - **Kifér a derogáció alá, HA** a pontszám tisztán dokumentum-szintű, a személytől elválasztott, és
   nem mutatható ki rendszeres hátrány.
-- **És akkor is marad kötelezettség:** a **6. cikk (4)** dokumentálás és a **49. cikk (2)**
-  regisztráció. A derogáció nem mentesség.
+- **És akkor is marad kötelezettség:** a 2.2-ben leírt 6. cikk (4) és 49. cikk (2).
 
 **A mérés, amivel eldönthető:** a várakozási idő és a sorrend eloszlása kérelmezői csoportok
 szerint, a teljességi pontszámmal összevetve. Ha a pontszám és a védett tulajdonságok proxyi
@@ -242,9 +233,9 @@ szolgáltatóvá válik.
 **Négy hibás hivatkozás:** az **Annex III 5(a)** és **5(b)** felcserélése; az előkészítő feladat
 **6. cikk (3) c)**-ként hivatkozása a **d)** helyett; a szolgáltatói átminősülés **elsődlegesen az
 50. cikk (1)-re** alapítása (a helyes 25. cikk (1) a) nála csak zárójelben); és a regisztrációs
-kötelezettség **feltétel nélküli** tagadása, holott a modell maga nyitotta meg a derogációs ágat,
-ahol a 6. cikk (4) és a 49. cikk (2) fennáll. Mind a négy a modell **szó szerinti mondatával**
-szemben, az átirat sorszámával a jegyzék **C. mellékletében**.
+kötelezettség **feltétel nélküli** tagadása, holott a modell maga nyitotta meg a derogációs ágat.
+Mind a négy a modell **szó szerinti mondatával** szemben, az átirat sorszámával a jegyzék
+**C. mellékletében**.
 
 **Egy belső ellentmondás:** kimondja, hogy a rendszer nem magas kockázatú, majd mégis alkalmazza rá
 a **25. cikk (1) a)**-t, amelynek felütése magas kockázatú rendszerekről szól — a saját besorolása
@@ -266,17 +257,11 @@ a felelősség csak akkor viselhető, ha a **levezetés** ellenőrizhető, nem c
 
 ## 6. Válasz a jogi csapatnak
 
-A válaszlevél is külön fájlban él — **`docs/hf4/valasz-jogi-csapatnak.md`**. A keret az, hogy a
-besorolást **nem tárgyalja újra**: a tervezett panaszkezelő és kompenzációs bővítésre a magas
-kockázatú követelményekkel készülünk, egyetlen írásban rögzítendő hatókör-észrevétellel. A hét
-kötelezettség (**9., 10., 12., 14., 15., 26., 27. cikk**) mindegyikéhez tartozik **intézkedés és
-auditkori bizonyíték** is — a levél attól kétnyelvű, hogy a jogász a kötelezettséget látja benne,
-a mérnök a backlogot. A legerősebb állítása a 14. cikknél van: az emberi felügyeletet nem
-prompt-tiltás adja, hanem **elvett képesség** — ami nincs az eszközkészletben, azt a modell akkor
-sem hívja meg, ha rábeszélik.
-
-A levél külön szakaszban sorolja azt is, **amit ma nem tudunk**: az 50. cikkes tájékoztatás
-hiányát, a hitelesítés nélküli beszélgetés-listázót — amit a bővítés **blokkoló feltételének**
-nevez —, a megőrzési idő hiányát és a még el nem készült dokumentumokat. A határidőt kimondja: az
-Annex III szerinti kötelezettségek **2027. december 2-től** alkalmazandók, az 50. cikkes
-tájékoztatás viszont **már ma esedékes**.
+A válaszlevél is külön fájlban él — **`docs/hf4/valasz-jogi-csapatnak.md`**. A besorolást **nem
+tárgyalja újra**: a tervezett kompenzációs bővítésre a magas kockázatú követelményekkel készülünk.
+A hét kötelezettség (**9., 10., 12., 14., 15., 26., 27. cikk**) mindegyikéhez **intézkedés és
+auditkori bizonyíték** is tartozik — ettől kétnyelvű: a jogász a kötelezettséget látja benne, a
+mérnök a backlogot. Külön szakasza sorolja, **amit ma nem tudunk**, és a hitelesítés nélküli
+beszélgetés-listázót a bővítés **blokkoló feltételének** nevezi. A határidőt kimondja: az Annex III
+szerinti kötelezettségek **2027. december 2-től** alkalmazandók — az 50. cikkes tájékoztatás
+viszont **már ma esedékes**.
