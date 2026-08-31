@@ -178,6 +178,14 @@ jegyzék **B. mellékletében** van.
 
 ## 4. Email a jogi csapatnak
 
+A levél külön fájlban él — **`docs/hf4/level-jogi-csapatnak.md`** —, mert elküldhetőnek kell
+lennie: kontextus nélkül, önmagában is érthető, és nem hivatkozik erre a dokumentumra. Tartalmazza
+a kiírás négy kötelező tényét (ki használja · milyen adatokat kezel · milyen döntést hoz vagy
+befolyásol · mi történik, ha téved), a fenti 2. pont besorolását és annak két fő indokát, majd
+**négy számozott, eldönthető kérdéssel** zárul — nem „várom a visszajelzést"-tel. A 2.3-ban mért
+50. cikkes hiányosságot a levél is néven nevezi, és a javasolt felirat szövegére kifejezetten
+jóváhagyást kér.
+
 ## 5. A kapott use case: QueueGenius
 
 A brief: az ágens nem hoz hiteldöntést, csak beolvassa a hitelkérelmek dokumentumait, teljességi
