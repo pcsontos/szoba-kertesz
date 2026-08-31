@@ -135,6 +135,47 @@ amelyre a 6. pont válaszol.
 
 ## 3. Átfedő szabályozások
 
+**GDPR — (EU) 2016/679.** Két helyen kezelünk személyes adatot: a `customers` táblában név,
+kapcsolattartó, email, város, keret és **szabadszöveges `notes`** — a `customerType` felveheti a
+`magánszemély` értéket, és a seedben **öt ilyen ügyfél van** —, a `threads`/`messages` táblákban
+pedig a **teljes beszélgetés-tartalom**. A **GDPR 6. cikk (1)** szerinti jogalapot ma nem
+rögzítettük írásban. A **GDPR 5. cikk (1) c)** adattakarékossága a `notes`-nál a legélesebb:
+bármit tartalmazhat, amit a felhasználó beír — akár egészségre utalót, ami már a **GDPR 9. cikk**
+hatálya. A **GDPR 5. cikk (1) e)** ma nem teljesül: **a beszélgetéseknek nincs megőrzési ideje** —
+mérve, a `threads` modulban nincs törlés, és a `szoba-kertesz_chat` szerepnek **nincs is DELETE
+joga**, tehát ez hiányzó képesség, nem elmaradt funkció. A **GDPR 13. cikk** tájékoztatása
+ugyanúgy hiányzik, mint a 2.3-ban.
+
+**A mért hiányosság, néven nevezve (GDPR 32. cikk).** A `GET /api/threads` és a
+`/api/threads/:id` **hitelesítés nélkül** adja vissza az **összes** beszélgetést, a bennük tárolt
+`runSql`-kimenetekkel együtt. Mérve: az `apps/server/src/app.ts:142` origin-korlátozás nélküli
+`cors()`-t hív, a `:154` köti be az útvonalakat, és a `threads.ts`-ben egyetlen hitelesítésre utaló
+sor sincs. Az UUID a felderítést nehezíti, a hozzáférést nem. A DB-szintű szétválasztás valódi — a
+`_ro` szerep REVOKE-olva van a `threads` és `messages` tábláról —, de **ezt a felületet nem védi**:
+a támadó nem SQL-en jön be, hanem a bejáraton.
+
+**Harmadik országbeli továbbítás (GDPR V. fejezet).** A promptok az Anthropichoz, az embeddelendő
+szövegek az OpenAI-hoz mennek — mindkettő egyesült államokbeli szolgáltató. Ez adattovábbítás,
+aminek jogalapot és garanciákat kell rendelni.
+
+**Termékfelelősség — (EU) 2024/2853.** Az irányelv a **szoftvert kifejezetten terméknek** minősíti,
+és az MI-szolgáltatót gyártói minőségben kezeli: nálunk egy téves gondozási tanács elpusztult
+növényt, mérgező fajnál testi kárt okozhat. **És itt kell kimondani, hogy az MI-felelősségi
+irányelvet visszavonták** — a COM(2022) 496 javaslatot a C/2025/5423 közlemény vonta vissza,
+HL 2025. október 6. —, tehát az MI-specifikus bizonyítási könnyítések **nem jöttek létre**: a
+felelősség az általános termékfelelősségi és polgári jogi kereteken belül marad. Aki elavult
+forrásból dolgozik, itt fog elbukni.
+
+| További szabályozás | Miért érint minket konkrétan |
+|---|---|
+| **Általános termékbiztonság — (EU) 2023/988** | a `products.pet_safe` és `kid_safe` mező: egy téves jelzés gyerekre vagy háziállatra nézve valódi veszély |
+| **Tisztességtelen kereskedelmi gyakorlatok — 2005/29/EK** | az ajánlás sorrendje és az árazás (a prompt `COALESCE(sale_price, price)` szabálya) nem lehet megtévesztő (az irányelv 6–7. cikke), és fizetett kiemelés nem adható el semleges tanácsként |
+| **ePrivacy — 2002/58/EK** | az irányelv 5. cikk (3) bekezdése a webes felület böngészőbeli tárolására áll |
+
+**Amit indoklással kizárok:** a **DORA (EU) 2022/2554**, az **MDR (EU) 2017/745** és a **NIS2
+(EU) 2022/2555**. A tételes indoklás — és az MDR egy határesete, amely visszamutat a 2.5-re — a
+jegyzék **B. mellékletében** van.
+
 ## 4. Email a jogi csapatnak
 
 ## 5. A kapott use case: QueueGenius

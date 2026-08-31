@@ -188,3 +188,18 @@ A vizsgált rendszer: a szoba-kertész MI-asszisztens a **ma működő** állapo
 | 6. Bűnüldözés | nincs bűnüldözési rendeltetés; nem értékel bizonyítékot, nem profiloz gyanúsítottat |
 | 7. Migráció, menekültügy, határigazgatás | nincs ilyen rendeltetés; nem vizsgál kérelmet és nem értékel kockázatot személyekre |
 | 8. Igazságszolgáltatás és demokratikus folyamatok | nem segít jogértelmezésben vagy tényállás megállapításában, és nem befolyásol választási magatartást |
+
+---
+
+## B. melléklet — indoklással kizárt szabályozások
+
+Ez a melléklet is **érvelés, nem forrás**: a `docs/hf4-ai-act.md` 3. pontjának kizárásait vezeti
+le. A jogszabályok azonosítója és hivatalos címe a fenti 3. táblázatban van, `EUR-Lex`-ről
+ellenőrizve. A kiírás kifejezetten kéri a **nemleges válasz indoklását** is — attól, hogy egy
+szabályozás nem áll ránk, még végig kell gondolni, hogy miért nem.
+
+| Szabályozás | Miért nem áll a szoba-kertészre |
+|---|---|
+| **DORA — (EU) 2022/2554** | nem vagyunk pénzügyi szervezet (nem hitelintézet, pénzforgalmi szolgáltató, befektetési vállalkozás, biztosító, kereskedési helyszín), és nem is nyújtunk IKT-szolgáltatást ilyen szervezetnek. A rendelet hatálya alanyi körhöz kötött, nem a technológiához — attól, hogy pénzügyi adat (a `budget` mező) van a rendszerben, nem kerülünk a hatálya alá |
+| **MDR — (EU) 2017/745** | a 2. cikk (1) a szoftvert csak akkor tekinti eszköznek, ha a **gyártó orvosi rendeltetéssel** szánja. A gondozási tanács növényre vonatkozik, nem emberre. **Határeset, ami visszamutat a 2.5-re:** ha a tudásbázisból egészségügyi állítás lenne („ez a növény enyhíti az asztmát"), a rendeltetés megváltozna, és a besorolás megnyílna — ugyanaz a mechanizmus, mint az Annex III 5(b)-nél: nem az adat dönt, hanem a rendeltetés |
+| **NIS2 — (EU) 2022/2555** | sem ágazat, sem méret alapján nem tartozunk az érintett szervezetek körébe: a dísznövény-kiskereskedelem nincs a felsorolt ágazatok között, és a méretküszöböt (legalább középvállalkozás) sem érjük el. A tagállami külön kijelölés elvi lehetősége fennáll, de arra semmilyen jel nem utal |
