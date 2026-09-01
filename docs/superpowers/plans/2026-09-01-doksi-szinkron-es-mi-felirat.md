@@ -519,7 +519,7 @@ EOF
 Ez a Task **közvetlenül a felirat után** jön, még a ROI előtt: ugyanahhoz a jogszabályi
 tételhez tartozik, és a döntés akkor friss, amikor az 50. cikk (1)-et éppen megvalósítottuk.
 
-- [ ] **3.1 lépés: az ADR megírása**
+- [x] **3.1 lépés: az ADR megírása**
 
 Másold a `docs/adr/_template.md` szerkezetét, és töltsd ki. A kötelező tartalom:
 
@@ -543,7 +543,7 @@ Másold a `docs/adr/_template.md` szerkezetét, és töltsd ki. A kötelező tar
   naplózott, tehát egy későbbi olvasó meg tudja különböztetni a tudatos döntést a
   feledékenységtől.
 
-- [ ] **3.2 lépés: az index kiegészítése**
+- [x] **3.2 lépés: az index kiegészítése**
 
 A `docs/adr/README.md` táblájába, a `0002` sor **alá**:
 
@@ -551,7 +551,7 @@ A `docs/adr/README.md` táblájába, a `0002` sor **alá**:
 | [0003](0003-ai-act-50-2-gepi-jeloles.md) | Az AI Act 50. cikk (2) gépi jelölésének elhalasztása | elfogadva | 2026-09-01 |
 ```
 
-- [ ] **3.3 lépés: ellenőrzés**
+- [x] **3.3 lépés: ellenőrzés**
 
 ```bash
 ls docs/adr/
@@ -561,7 +561,7 @@ grep -c "0003" docs/adr/README.md
 Elvárt: a fájl létezik, és az index pontosan **egy** hivatkozást tartalmaz rá. Nyisd meg és
 olvasd el: a négy alternatíva **mind** benne van-e az elvetés indokával? Az ADR értéke épp ez.
 
-- [ ] **3.4 lépés: commit**
+- [x] **3.4 lépés: commit**
 
 ```bash
 git add docs/adr/0003-ai-act-50-2-gepi-jeloles.md docs/adr/README.md
