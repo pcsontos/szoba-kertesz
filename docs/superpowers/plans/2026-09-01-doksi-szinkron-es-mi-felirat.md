@@ -733,7 +733,7 @@ EOF
 Ez a Task jön **utoljára**, hogy a README a végállapotot írja le — beleértve a Task 1–2
 feliratát és a Task 4 új ROI-ját.
 
-- [ ] **5.1 lépés: az ingyenes audit lefuttatása — ELŐSZÖR, nem utoljára**
+- [x] **5.1 lépés: az ingyenes audit lefuttatása — ELŐSZÖR, nem utoljára**
 
 ```bash
 rm -rf apps/web/dist apps/web/out-tsc
@@ -755,7 +755,7 @@ parancsra, ami nem fut le.
 > specjeit, ezért futó, seedelt Postgres kell. A `--dump-cases` **ingyenes** (nem indít
 > böngészőt és nem hív modellt), a `mcp:smoke` szintén (valódi MCP-kliens, modellhívás nélkül).
 
-- [ ] **5.2 lépés: a README két új szakasza**
+- [x] **5.2 lépés: a README két új szakasza**
 
 A „Jelenlegi státusz" alá, a meglévő alszakaszok mintájára (`### Cím` + magyarázó bekezdés):
 
@@ -783,7 +783,7 @@ A „Jelenlegi státusz" alá, a meglévő alszakaszok mintájára (`### Cím` +
 - A szervert **nem kézzel indítod**, a HOST indítja (`.mcp.json`, minta: `.mcp.example.json`).
 - Részletek: `docs/mcp.md`.
 
-- [ ] **5.3 lépés: HF4-mutató és státusz-átvezetés**
+- [x] **5.3 lépés: HF4-mutató és státusz-átvezetés**
 
 - A meglévő „HF3 — hol találod a leadandókat" mellé **HF4-mutató**: `docs/hf4-ai-act.md` és
   `docs/hf4/HF4-leadas.pdf`, `hf4-ai-act` tag.
@@ -792,7 +792,7 @@ A „Jelenlegi státusz" alá, a meglévő alszakaszok mintájára (`### Cím` +
   hitelesítetlensége (ez már benne van, `:153`), a beszélgetés-tár **megőrzési idejének
   hiánya**, és az **50. cikk (2)** nyitott tétele az ADR 0003-ra hivatkozva.
 
-- [ ] **5.4 lépés: az implementációs terv táblája**
+- [x] **5.4 lépés: az implementációs terv táblája**
 
 A `docs/implementacios-terv.md` „Hol tart a terv — a kurzus-alkalmak" táblájába három sor, a
 meglévő oszlopokkal (`Alkalom | Mi került be | Mi maradt ki tudatosan`):
@@ -804,7 +804,7 @@ meglévő oszlopokkal (`Alkalom | Mi került be | Mi maradt ki tudatosan`):
 - **10.** — nincs hozzá kurzus-kód, a témája a 08-ban valósult meg; a HF4 leadva
   (`hf4-ai-act` tag).
 
-- [ ] **5.5 lépés: állítás-audit a README-n**
+- [x] **5.5 lépés: állítás-audit a README-n**
 
 Menj végig a README-n, és minden **parancson és állításon** ellenőrizd, igaz-e ma:
 
@@ -816,7 +816,7 @@ Minden ingyenes parancsra: fut-e. Minden fizetősre: **ki van-e írva, hogy fize
 hivatkozott szám mellett ott van-e a **mérés dátuma**. Amit nem tudsz igazolni, azt **korlátként
 mondd ki** — elhallgatni nem szabad.
 
-- [ ] **5.6 lépés: a mért hiány megszűnésének ellenőrzése**
+- [x] **5.6 lépés: a mért hiány megszűnésének ellenőrzése**
 
 ```bash
 grep -c "apps/mcp\|tools/autotest" README.md
@@ -827,7 +827,7 @@ Elvárt: az első **nem 0** (a kiindulás 0 volt), a második három sort ad. **
 találat**, hanem hogy egy olvasó a leírás alapján el tudja indítani mindkettőt — olvasd el a
 két új szakaszt ezzel a szemmel.
 
-- [ ] **5.7 lépés: záró zöld-ellenőrzés**
+- [x] **5.7 lépés: záró zöld-ellenőrzés**
 
 ```bash
 rm -rf apps/web/dist apps/web/out-tsc
@@ -838,7 +838,7 @@ pnpm nx run-many -t test
 
 Elvárt: zöld, és a teszt-szám nagyobb, mint az 5.1 lépésben mért kiindulás.
 
-- [ ] **5.8 lépés: commit**
+- [x] **5.8 lépés: commit**
 
 ```bash
 git add README.md docs/implementacios-terv.md
@@ -873,12 +873,12 @@ EOF
 
 ## Záró ellenőrzés (a terv teljesülése)
 
-- [ ] **Z.1 — a spec mind a 10 sikerkritériuma végigmérve.** Vedd elő a specet, és
+- [x] **Z.1 — a spec mind a 10 sikerkritériuma végigmérve.** Vedd elő a specet, és
   kritériumonként írd le, mi bizonyítja. Ami nem teljesült, azt **mondd ki**.
-- [ ] **Z.2 — a `packages/core` diffje ÜRES.** `git diff master --stat -- packages/core`.
+- [x] **Z.2 — a `packages/core` diffje ÜRES.** `git diff master --stat -- packages/core`.
   Elvárt: **üres kimenet**. A 08. és 09. kör is ezt mérte; ez a kör folytatja a sorozatot. Ha
   bármi van benne, az scope-szivárgás — a spec 7. döntése kifejezetten kizárja.
-- [ ] **Z.3 — a `SYSTEM_PROMPT` bájtazonossága.** Futtasd a `CLAUDE.md`-ben álló `diff`
+- [x] **Z.3 — a `SYSTEM_PROMPT` bájtazonossága.** Futtasd a `CLAUDE.md`-ben álló `diff`
   parancsot. Elvárt: üres kimenet.
-- [ ] **Z.4 — a terv jelölőinek átírása** (`- [ ]` → `- [x]`), **külön commitban**, angolul,
+- [x] **Z.4 — a terv jelölőinek átírása** (`- [ ]` → `- [x]`), **külön commitban**, angolul,
   a projekt szokása szerint (`docs: mark …`).
