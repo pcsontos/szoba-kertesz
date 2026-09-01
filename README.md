@@ -16,11 +16,24 @@ Magyar nyelvű AI-ágens szobanövény-katalógushoz: természetes nyelvű kérd
 | 5 | `docs/ARCHITEKTURA.md` + ábra | [`docs/ARCHITEKTURA.md`](docs/ARCHITEKTURA.md) · [`docs/img/`](docs/img/) | 7 szakasz + az adatfolyam-ábra a törlés útjával |
 | 6 | költségbecslés | [„Költségbecslés"](#költségbecslés) | mért és becsült számok szétválasztva |
 
+## HF4 — AI Act-besorolás
+
+> A kurzus 4. házi feladata (EU AI Act) szintén ebben a repóban készült, **kód nélkül**:
+> [`docs/hf4-ai-act.md`](docs/hf4-ai-act.md) a fődokumentum, a leadott PDF a
+> [`docs/hf4/`](docs/hf4/) alatt (`hf4-ai-act` tag).
+
+A besorolás: a szoba-kertész **nem magas kockázatú**, hanem az **50. cikk (1)** szerinti
+átláthatósági kötelezettség alá esik. A dokumentum a saját rendszerünk **mért** gyengeségeit is
+néven nevezi — ezek közül a hiányzó MI-tájékoztatást ez a repó azóta **pótolta** (lásd lentebb),
+a másik kettő tudatosan nyitva maradt („Vállalt korlátok").
+
 ## Jelenlegi státusz
 
 ### Felület — streamelő chat (`apps/web`)
 
 React 19 + a Vercel AI SDK `useChat` hookja (`DefaultChatTransport`). A válasz **tokenenként** érkezik, markdownként renderelve; „Állj" gombbal megszakítható a futó válasz, és az auto-scroll nem rántja vissza a felhasználót, ha közben felfelé olvas. Tailwind 4, shadcn-stílusú komponensréteg (Radix Slot + `cva` + `tailwind-merge`).
+
+A fejlécben **állandó MI-tájékoztatás** áll („Ez egy MI-asszisztens — a válaszokat nyelvi modell generálja"), és ugyanez megjelenik a CLI indító bannerében és a `--help` leírásában is. Ez az **AI Act 50. cikk (1)+(5)**: a felhasználót tájékoztatni kell, hogy MI-rendszerrel beszél, **legkésőbb az első interakció idején**. Szándékosan **nem** elutasítható sáv — az csak az első betöltésre teljesítené a követelményt, egy visszatérő látogatónak soha. A „nyilvánvaló"-kivételre nem hivatkozunk; az indoklás a [`docs/hf4-ai-act.md`](docs/hf4-ai-act.md) 2.3 pontjában áll.
 
 A 06. alkalom óta a chat **azt is megmutatja, MIT csinált** az ágens: a tool-hívások kártyaként jelennek meg a válasz fölött — a tudásbázis-találatok címmel, kattintható forrás-linkkel és színkódolt vektortávolsággal, a katalógus-lekérdezés a ténylegesen lefuttatott SQL-lel. Ezt a korábbi szöveg-stream nem tudta, és nem sebesség kérdése volt: **egy karakterfolyamba nem fér bele egy tool-hívás**. A szerver ezért AI SDK **üzenet-streamet** küld (`text/event-stream`), típusos részekkel.
 
@@ -63,9 +76,47 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 `runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `queryCustomers` · `delegateToIngest` (csak adminnál)
 
+### Negyedik belépési pont — MCP-szerver (`apps/mcp`)
+
+A 09. alkalom óta **megfordul az irány**: eddig mi hívtuk a modellt (CLI, HTTP, böngésző), itt egy **idegen host** (Claude Code, Claude Desktop) modellje hívja a mi tooljainkat, stdio MCP-n. Három tool, szándékosan három különböző stílusban:
+
+- **`search_plants`** — *adat-tool*: strukturált szűrők → egy paraméterezett `SELECT` → nyers sorok. **Nincs benne modell**; a gondolkodás a hívó oldalán marad.
+- **`search_knowledge`** — *átkötött core-tool*: a meglévő `executeSearchKnowledge` MCP-alakra fordítva, változatlan HyDE → embedding → pgvector → rerank pipeline-nal.
+- **`ask_szobakertesz`** — *agent-as-tool*: egyetlen tool-hívás mögött a **teljes query-agent loopunk** fut, a mi promptunkkal és a mi SQL-szabályainkkal.
+
+**A kör biztonsági állítása:** az `ask_szobakertesz` fixen `role: 'customer'` **és** `print: false`. Adminként a query-agent megkapná a `delegateToIngest`-et, és egy idegen host modellje ezen keresztül **írhatna** a katalógusba — egy spec valódi MCP-híváson (`InMemoryTransport`) pinneli mindkettőt. Szándékosan **nincs** kitéve: `queryCustomers`, `upsertProduct`, `delegateToIngest`, valamint a `threads`/`messages` tár; és egyetlen MCP-hívás sem perzisztál semmit.
+
+A szervert **nem kézzel indítod — a HOST indítja** (`.mcp.json`; a minta a commitolt `.mcp.example.json`). `pnpm mcp:smoke` az ingyenes ellenőrzés (valódi MCP-kliens, modellhívás nélkül). Bekötés és a két stdio-csapda: [`docs/mcp.md`](docs/mcp.md).
+
+### Mérőeszköz — nehézségi létra és RAG-mérés (`tools/autotest`)
+
+A 08. alkalom nem terméket adott, hanem **mérőeszközt**: honnan tudod, hogy jól működik?
+
+- **`battery.ts`** — Playwright „nehézségi létra" a **valódi** web UI-n: **11 fok, 29 eset**, a single-steptől a multi-turnön, stresszen és trollkodáson át a jailbreakig és a RAG-groundingig. (Mérve `pnpm autotest:battery --dump-cases`-szel, ami ingyenes.)
+- **`rag-eval.ts`** — RAGAS-stílusú kiértékelés hat metrikán, böngésző nélkül, közvetlenül a valódi `retrieveKnowledge` pipeline-on.
+
+A tesztesetek **adatban** élnek (`cases/*.json`), tehát egy új eset egy sor, nem kódmódosítás.
+
+**Miért külön workspace-csomag, és miért nem a `.claude/skills/` alatt?** Mert az kívül esik a pnpm-workspace-en: oda se lint, se typecheck, se CI nem futna — pont arra a kódra, amelyik **hamis zöldet** tud jelezni. **És miért nem az `apps/cli`-ben?** Mert az szállított termék, a Playwright pedig nem való a függőségei közé.
+
+**FIZETŐS**: a `battery` és a `rag-eval` valódi API-hívásokat indít. A mért költség-táblázat és a RAG-alapérték a [`.claude/skills/autotest/SKILL.md`](.claude/skills/autotest/SKILL.md)-ben áll, hogy a következő futásnak legyen mihez viszonyítania. A hurkot (futtat → kiértékel → kérdez → ADR) az `/autotest` skill vezeti.
+
 ### Minőségi kapuk
 
-262 teszteset 45 spec fájlban (Vitest): `core` 195, `cli` 35, `server` 19, `web` 13. CI minden pushra és PR-ra: `lint` + `typecheck` + `build`. A teszt-lépés **szándékosan** nincs a CI-ban: több spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
+**555 teszteset 75 spec fájlban** (Vitest) — mérve 2026-09-01:
+
+| projekt | spec fájl | teszt |
+|---|---|---|
+| `core` | 33 | 229 |
+| `autotest` | 13 | 154 |
+| `cli` | 11 | 57 |
+| `mcp` | 7 | 45 |
+| `web` | 8 | 37 |
+| `server` | 3 | 33 |
+
+CI minden pushra és PR-ra: `lint` + `typecheck` + `build`, **plusz két célzott teszt-lépés**: `pnpm nx test autotest` és `pnpm nx test mcp`.
+
+A **teljes** `test` szándékosan kimarad: több `core` spec valódi, seedelt Postgresre támaszkodik, a runneren pedig nincs adatbázis — a zölden hazudó CI rosszabb, mint a hiányzó teszt-lépés. A két kivétel azért kivétel, mert a specjeik **tiszták** (se DB, se API-kulcs, se böngésző), és mert az `autotest` pont az a kód, amelyik hamis zöldet tud jelezni. Az indoklás a [`ci.yml`](.github/workflows/ci.yml) tetején áll.
 
 ---
 
@@ -151,6 +202,19 @@ pnpm serve:web    # Vite    — http://localhost:4200
 Nyisd meg a `http://localhost:4200` címet. A szerver konzolján közben ugyanaz a színes, körről körre növekvő ágens-trace fut, mint a CLI-ben; a böngésző a válasz mellé a **tool-lépéseket** is megkapja (üzenet-stream), és kártyaként jeleníti meg őket.
 
 > ⚠️ **Vállalt korlát:** a thread-végpontok hitelesítés nélkül, nyitott `cors()` mögött futnak — aki eléri a szervert, az **minden** beszélgetést kilistázhat és elolvashat, a bennük tárolt SQL-kimenetekkel együtt. A UUID-azonosító a végigszámolást akadályozza meg, nem a hozzáférést. Tulajdonos-fogalom és hitelesítés a következő fázis dolga.
+
+### Vállalt korlátok — amit a rendszer NEM tud
+
+Ezek **megnevezett, nyitott tételek**, nem elfelejtett feladatok. A `docs/hf4-ai-act.md` mindhármat kimondja; azóta az egyik (a hiányzó MI-tájékoztatás) megoldódott, a másik kettő nem.
+
+| # | Korlát | Állapot |
+|---|---|---|
+| 1 | Nincs MI-tájékoztatás a felületen (AI Act 50. cikk (1)+(5)) | ✅ **megoldva** — állandó felirat a webes fejlécben és a CLI-ben |
+| 2 | A generált szöveg **gépi olvashatóságú jelölése** hiányzik (AI Act 50. cikk (2)) | ❌ **nyitva** — tudatos döntés, [`ADR 0003`](docs/adr/0003-ai-act-50-2-gepi-jeloles.md) rögzíti az elvetett alternatívákkal |
+| 3 | A `GET /api/threads` és `/:id` **hitelesítés nélkül** adja vissza az összes beszélgetést | ❌ **nyitva** — lásd a fenti figyelmeztetést |
+| 4 | A beszélgetés-tárnak **nincs megőrzési ideje**; a `_chat` szerepnek DELETE-joga sincs | ❌ **nyitva** — a törlési út megtervezése önálló kör |
+
+A 2. tétel **lejárt** jogszabályi határidő (az 50. cikk általános alkalmazása 2026-08-02-án indult, és ezt a Digital Omnibus kifejezetten nem tolta ki) — ezt nem szépítjük.
 
 A 07. alkalom óta a bal oldali sávban ott vannak a **korábbi beszélgetések** (`GET /api/threads`), és minden beszélgetésnek saját URL-je van: az `?thread=<uuid>` cím újratöltés után is — és egy másik fülön is — visszaadja ugyanazt a beszélgetést, a tool-kártyákkal együtt. A kérésben **csak az új üzenet** megy fel; az előzményt a szerver az adatbázisból tölti, ezért a böngészőből felküldött hamis előzmény hatástalan.
 
