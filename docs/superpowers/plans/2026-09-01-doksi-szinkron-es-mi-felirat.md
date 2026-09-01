@@ -593,7 +593,7 @@ EOF
 vagy **becsült**, és a mértnél a forrásnak megnevezve kell lennie. Ez volt a dokumentum eddigi
 legnagyobb gyengesége.
 
-- [ ] **4.1 lépés: a mért alap átvétele (NE számold újra)**
+- [x] **4.1 lépés: a mért alap átvétele (NE számold újra)**
 
 Ezek a számok a spec „Kiindulási állapot" szakaszából valók, és **fizetős mérés nélkül**
 rendelkezésre állnak. Írd be őket a dokumentumba forrásmegjelöléssel:
@@ -612,7 +612,7 @@ Ebből a **kérdésenkénti sáv**, amit a dokumentumnak ki kell mondania:
 - katalógus-kérdés: **≈ $0,015**
 - gondozási kérdés: **$0,036 – $0,046** (a válasz-réteg 3,04–4,03 centje + a pipeline 0,55 centje)
 
-- [ ] **4.2 lépés: a 4. szakasz (üzemeltetési költség) újraírása**
+- [x] **4.2 lépés: a 4. szakasz (üzemeltetési költség) újraírása**
 
 A régi becsült számsor (`≈ 1 510 input token`) **teljesen kiesik**. Helyette:
 
@@ -642,7 +642,7 @@ A régi becsült számsor (`≈ 1 510 input token`) **teljesen kiesik**. Helyett
 6. Az üzemeltetési puffer (~20 000 Ft/hó) **becslés marad**, így jelölve. **Írd oda**, hogy ezt
    a szám a go-live köre (Kör B) fogja valósra cserélni.
 
-- [ ] **4.3 lépés: a haszon-oldal kiegészítése**
+- [x] **4.3 lépés: a haszon-oldal kiegészítése**
 
 Az 1. és 3. szakaszba:
 
@@ -656,12 +656,12 @@ Az 1. és 3. szakaszba:
   beszélgetésekkel, ami a bevezetési súrlódást csökkenti (ezt **becslésként** jelöld, nem
   mértként — nem mértük).
 
-- [ ] **4.4 lépés: a feltételezés-tábla megjelölése**
+- [x] **4.4 lépés: a feltételezés-tábla megjelölése**
 
 A 2. szakasz táblája kapjon egy **új oszlopot**: `mért | becsült`. Az A1–A9 sorok többsége
 **becsült** marad (a bér- és időadatok), és ez így helyes — a lényeg, hogy **látszódjon**.
 
-- [ ] **4.5 lépés: a 7. szakasz (Korlátok) kiegészítése**
+- [x] **4.5 lépés: a 7. szakasz (Korlátok) kiegészítése**
 
 Vedd fel az újakat:
 
@@ -671,7 +671,7 @@ Vedd fel az újakat:
 - az árfolyam ellenőrizetlen, 2026-07-03-i feltételezés;
 - az üzemeltetési puffer becslés, amit a go-live köre válthat valósra.
 
-- [ ] **4.6 lépés: a következtetés ellenőrzése — és kimondása**
+- [x] **4.6 lépés: a következtetés ellenőrzése — és kimondása**
 
 Számold ki a nettó megtakarítást az új költségekkel. **Elvárt eredmény:** az API-költség nőtt a
 régi becsléshez képest, de a nagyságrend változatlan, tehát a **következtetés nem dől meg**.
@@ -680,7 +680,7 @@ régi becsléshez képest, de a nagyságrend változatlan, tehát a **következt
 megállapítás — nem formalitás. Ha viszont a számolás mást ad, **azt írd le**, és ne igazítsd
 hozzá a feltételezéseket.
 
-- [ ] **4.7 lépés: a hivatkozások visszakereshetőségének ellenőrzése**
+- [x] **4.7 lépés: a hivatkozások visszakereshetőségének ellenőrzése**
 
 ```bash
 grep -n "logs/autotest\|README.md\|cost.ts\|golden-set\|chunking-strategia" docs/roi.md
@@ -691,7 +691,7 @@ Elvárt: minden hivatkozott fájl **létezik**, és minden szám mellett ott a f
 „becsült" jelölés. Nyisd meg a dokumentumot, és olvasd végig: van-e olyan szám, amiről nem
 derül ki, honnan jön? Ha igen, az hiba.
 
-- [ ] **4.8 lépés: commit**
+- [x] **4.8 lépés: commit**
 
 ```bash
 git add docs/roi.md
