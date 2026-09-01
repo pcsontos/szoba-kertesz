@@ -6,6 +6,7 @@ import {
   type ThreadStore,
 } from '@szoba-kertesz/core';
 import { runInteractive } from './interactive.js';
+import { AI_DISCLOSURE } from './lib/ai-disclosure.js';
 
 function makeResult(answer: string): AskResult {
   return {
@@ -73,6 +74,30 @@ describe('runInteractive', () => {
   afterEach(() => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+
+  it('az indító banner kimondja, hogy MI-asszisztens válaszol', async () => {
+    // AI Act 50. cikk (1)+(5). Nem a forrást nézzük, hanem amit a felhasználó INDULÁSKOR
+    // ténylegesen lát a konzolon — ezért console-spy, nem sztring-összehasonlítás a fájlra.
+    // A CLI is közvetlenül természetes személlyel interaktál, tehát a kötelezettség ide is
+    // szól; a HF4 kizárólag az apps/web-et mérte, de a rendelkezés nem felület-specifikus.
+    const ask = vi.fn().mockResolvedValue(makeResult('a válasz'));
+
+    const done = runInteractive({
+      input,
+      output,
+      ask,
+      print: false,
+      store: silentStore(),
+    });
+    input.write('exit\n');
+    await done;
+
+    // A banner a kérdés ELŐTT íródik ki: a modell meg sem szólalt.
+    expect(ask).not.toHaveBeenCalled();
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining(AI_DISCLOSURE),
+    );
   });
 
   it('answers a question and exits cleanly on "exit"', async () => {

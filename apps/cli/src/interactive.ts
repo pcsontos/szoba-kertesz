@@ -13,6 +13,7 @@ import {
   type UserRole,
 } from '@szoba-kertesz/core';
 import { printPrompt } from './lib/print-prompt.js';
+import { AI_DISCLOSURE } from './lib/ai-disclosure.js';
 
 export interface RunInteractiveOptions {
   readonly showPrompt?: boolean;
@@ -167,8 +168,11 @@ export async function runInteractive(
     let processing = false;
     const queue: string[] = [];
 
+    // AI Act 50. cikk (1)+(5): a CLI is közvetlenül természetes személlyel interaktál, tehát
+    // a kötelezettség ide is szól — a HF4 csak az apps/web-et mérte, de nem felület-specifikus.
+    // EGY console.log hívás marad: a meglévő spec arra épít, hogy a banner egyetlen kiírás.
     console.log(
-      'Szobakertész interaktív mód — írj be egy kérdést, és válaszol. Kilépés: "exit".',
+      `Szobakertész interaktív mód — írj be egy kérdést, és válaszol. Kilépés: "exit".\n${AI_DISCLOSURE}`,
     );
     rl.prompt();
 
