@@ -9,8 +9,9 @@ körről, a `docs/roi.md` egy 2026 júliusi képességhalmazt áraz, a felület 
 felhasználó elől, hogy modell válaszol neki. Ez a terv mindhármat lezárja, plusz naplózza az
 egyetlen tudatosan nyitva hagyott jogi tételt.
 
-**Megközelítés:** a felirat egy **közös konstansból** él a `packages/core`-ban, és két felület
-(web, CLI) a saját formájába csomagolja — így nem tud driftelni. A dokumentumok utoljára
+**Megközelítés:** a felirat **felületenként egy konstansból** él (`apps/web/src/lib/` és
+`apps/cli/src/lib/`), mert a webes bundle nem importálhat a `packages/core`-ból; a két szöveg
+bájtazonosságát külön lépés méri. A dokumentumok utoljára
 készülnek, hogy a **végállapotot** írják le. A README állításait ingyenes parancsokkal
 igazoljuk; fizetős mérést ez a kör nem indít.
 
@@ -50,7 +51,7 @@ commander + `node:readline` (`apps/cli`) · Vitest (`globals: true` — a specek
 | Fájl | Felelősség | Task |
 |---|---|---|
 | `apps/web/src/lib/ai-disclosure.ts` | **ÚJ** — a mondat a webes felület számára | 1 |
-| `apps/web/src/App.tsx` | fejléc-felirat (`role="note"`) + üres állapot | 1 |
+| `apps/web/src/App.tsx` | fejléc-felirat (`role="note"`) | 1 |
 | `apps/web/src/App.disclosure.spec.tsx` | **ÚJ** — a felirat viselkedése | 1 |
 | `apps/cli/src/lib/ai-disclosure.ts` | **ÚJ** — ugyanaz a mondat a CLI-nek (két fájl használja) | 2 |
 | `apps/cli/src/interactive.ts` | az indító banner | 2 |
@@ -83,7 +84,7 @@ commander + `node:readline` (`apps/cli`) · Vitest (`globals: true` — a specek
 > configot húzna a böngészőbe. A Z.2 lépés ezt méri: a `packages/core` diffjének **üresnek**
 > kell maradnia.
 
-- [ ] **1.1 lépés: a konstans megírása**
+- [x] **1.1 lépés: a konstans megírása**
 
 Hozd létre `apps/web/src/lib/ai-disclosure.ts` néven:
 
@@ -111,7 +112,7 @@ export const AI_DISCLOSURE =
   'Ez egy MI-asszisztens — a válaszokat nyelvi modell generálja.';
 ```
 
-- [ ] **1.2 lépés: a bukó teszt megírása (web)**
+- [x] **1.2 lépés: a bukó teszt megírása (web)**
 
 Hozd létre `apps/web/src/App.disclosure.spec.tsx` néven. A `stubFetch` mintája az
 `App.testids.spec.tsx`-ből való; a `describe`/`it`/`expect` **globális** ebben a csomagban:
@@ -128,8 +129,11 @@ import App from './App.js';
  *
  * Miért `role="note"` és nem testid? Mert a felirat akadálymentesen is közlendő, és a role
  * természetes fogódzó — az App.testids.spec.tsx elve szerint ahol van ilyen, ott nem teszünk
- * testidet. Egyúttal egyértelműsít: az ÜRES ÁLLAPOT szövege is tartalmazza a mondatot, tehát
- * szövegre keresve két találat lenne.
+ * testidet.
+ *
+ * A MÁSODIK eset a teherbíró: a felirat CSAK a fejlécben van. Az üres állapot az első üzenet
+ * után eltűnik — ha a fejléces példány elveszne, a tájékoztatás pont beszélgetés közben
+ * szűnne meg, és egy visszatérő látogató sosem látná.
  */
 
 const originalFetch = globalThis.fetch;
@@ -156,17 +160,6 @@ describe('MI-tájékoztatás (AI Act 50. cikk)', () => {
 
     await findByText(/Kérdezz a növénykatalógusról/);
     expect(getByRole('note').textContent).toContain(AI_DISCLOSURE);
-  });
-
-  it('az üres állapot szövege is kimondja, a példakérdés ELŐTT', async () => {
-    const { findByText } = render(<App />);
-
-    const empty = await findByText(/Kérdezz a növénykatalógusról/);
-    const text = empty.textContent ?? '';
-    expect(text).toContain(AI_DISCLOSURE);
-    expect(text.indexOf(AI_DISCLOSURE)).toBeLessThan(
-      text.indexOf('Kérdezz a növénykatalógusról'),
-    );
   });
 
   it('a felirat NEM tűnik el, amikor már van üzenet a beszélgetésben', async () => {
@@ -208,18 +201,17 @@ describe('MI-tájékoztatás (AI Act 50. cikk)', () => {
 });
 ```
 
-- [ ] **1.3 lépés: futtatás — BUKNIA kell**
+- [x] **1.3 lépés: futtatás — BUKNIA kell**
 
 ```bash
 pnpm nx test web
 ```
 
 Elvárt: a három új eset **BUKIK**. A várható hibaüzenet
-`Unable to find an accessible element with the role "note"`, az üres állapotosé pedig
-`expected '' to contain 'Ez egy MI-asszisztens…'`. Ha bármelyik ZÖLDEN átmegy, állj meg: akkor
-nem azt méred, amit hiszel.
+`Unable to find an accessible element with the role "note"`. Ha bármelyik ZÖLDEN átmegy,
+állj meg: akkor nem azt méred, amit hiszel.
 
-- [ ] **1.4 lépés: a webes felület megvalósítása**
+- [x] **1.4 lépés: a webes felület megvalósítása**
 
 Az `apps/web/src/App.tsx` import-blokkjához add hozzá (a többi `./lib/…` import mellé):
 
@@ -244,18 +236,11 @@ A `:193` sort (`<h1 …>Szobakertész</h1>`) cseréld erre:
         </header>
 ```
 
-A `:207` üres állapotot cseréld erre (a tájékoztatás **elöl**, a példakérdés utána):
+A `:207` üres állapothoz **NEM nyúlunk**. (A spec eredetileg kérte, de a Task 1 élő
+ellenőrzésén elvetettük: a mondat így kétszer állt egymás alatt. A fejléces példány a
+teherbíró, mert üzenetek mellett is ott marad.)
 
-```tsx
-          {messages.length === 0 && (
-            <p className="text-sm text-neutral-500">
-              {AI_DISCLOSURE} Kérdezz a növénykatalógusról — például: „Hány
-              pozsgás van 5000 Ft alatt?"
-            </p>
-          )}
-```
-
-- [ ] **1.5 lépés: futtatás — ZÖLDNEK kell lennie**
+- [x] **1.5 lépés: futtatás — ZÖLDNEK kell lennie**
 
 ```bash
 pnpm nx test web
@@ -266,7 +251,7 @@ Elvárt: minden `web` teszt zöld, beleértve a meglévő `App.testids.spec.tsx`
 tájékoztatással kezdődik, de a reguláris kifejezés továbbra is illeszkedik. **Ha mégis bukik,
 az valódi információ** — ne a tesztet igazítsd, hanem nézd meg, mit változtattál.
 
-- [ ] **1.6 lépés: a core érintetlenségének igazolása**
+- [x] **1.6 lépés: a core érintetlenségének igazolása**
 
 ```bash
 git diff --stat -- packages/core
@@ -275,16 +260,34 @@ git diff --stat -- packages/core
 Elvárt: **üres kimenet.** Ha bármi van benne, visszaléptél a spec 7. döntése elé — nézd meg,
 mit módosítottál, és vond vissza.
 
-- [ ] **1.7 lépés: lint + typecheck + build**
+- [x] **1.7 lépés: lint + typecheck + build**
 
 ```bash
-pnpm nx run-many -t lint typecheck build
+rm -rf apps/web/dist apps/web/out-tsc
+pnpm nx run-many -t lint typecheck
+pnpm nx run-many -t build
 ```
 
 A `build` itt azért kell, és nem csak a kör végén: ez az a lépés, ami **kimutatná**, ha az új
 import mégis Node-only kódot húzna a böngésző-bundle-be.
 
-- [ ] **1.8 lépés: ÉLŐ ellenőrzés — ezt a felhasználó nézi meg**
+> **BUKTATÓ, mérve a Task 1-ben — a sorrend számít.** A `web:typecheck` (`tsc --build`) a
+> deklarációit az `apps/web/dist`-be emittálja, **ugyanoda, ahová a Vite `build` ír**, a
+> `tsbuildinfo` pedig az `apps/web/out-tsc`-ben él. Ha a `build` a `typecheck` UTÁN fut és
+> felülírja a `dist`-et, a következő `typecheck` **TS6305**-tel bukik nyolc olyan fájlon is,
+> amihez senki nem nyúlt. Ez NEM regresszió — a tiszta HEAD-en is reprodukálható. Ezért
+> futtatjuk KÉT lépésben, és törlünk előtte:
+>
+> ```bash
+> rm -rf apps/web/dist apps/web/out-tsc
+> pnpm nx run-many -t lint typecheck
+> pnpm nx run-many -t build
+> ```
+>
+> Az Nx a végén akkor is kiír egy „Nx detected a flaky task" bannert, ha minden zöld — az
+> igazságot a `Successfully ran…` sor mondja, ne a banner.
+
+- [x] **1.8 lépés: ÉLŐ ellenőrzés — ezt a felhasználó nézi meg**
 
 ```bash
 pnpm serve:api    # egyik terminál
@@ -292,11 +295,11 @@ pnpm serve:web    # másik terminál
 ```
 
 Nyisd meg a `http://localhost:4200`-at, és **kérdezd meg a felhasználót**, hogy a fejléc
-felirata és az üres állapot szövege így jó-e. **Ez emberi visszaigazolás, nem futtatható
-állítás** — a két mondat egymás alatt ismétlődik, és hogy ez segít-e vagy zavar, azt csak
-ránézésre lehet eldönteni. Ne lépj tovább a válasza nélkül.
+felirata így jó-e. **Ez emberi visszaigazolás, nem futtatható állítás.** Ne lépj tovább a
+válasza nélkül. (MEGTÖRTÉNT: a felhasználó itt vetette el az üres állapotbeli második
+példányt.)
 
-- [ ] **1.9 lépés: commit**
+- [x] **1.9 lépés: commit**
 
 ```bash
 git add apps/web/src/lib/ai-disclosure.ts apps/web/src/App.tsx \
@@ -311,7 +314,6 @@ jövőbeli feladat — a docs/hf4-ai-act.md 2.3 pontja néven is nevezte.
 
 - a fejlécben állandó, role="note" felirat — NEM elutasítható sáv, mert
   az csak az első betöltésre teljesítené az 50. cikk (5)-öt
-- az üres állapotban a tájékoztatás a példakérdés ELŐTT áll
 - a "nyilvánvaló" kivételre (50. cikk (1)) nem hivatkozunk, az indoklás
   a HF4-ben áll
 
@@ -734,11 +736,15 @@ feliratát és a Task 4 új ROI-ját.
 - [ ] **5.1 lépés: az ingyenes audit lefuttatása — ELŐSZÖR, nem utoljára**
 
 ```bash
-pnpm nx run-many -t lint typecheck build
+rm -rf apps/web/dist apps/web/out-tsc
+pnpm nx run-many -t lint typecheck
+pnpm nx run-many -t build
 pnpm nx run-many -t test
 pnpm mcp:smoke
 pnpm autotest:battery --dump-cases
 ```
+
+A `lint typecheck` és a `build` KÜLÖN fut, és előtte törlünk — lásd az 1.7 lépés buktatóját.
 
 **Írd le a tényleges kimenetet** (teszt-szám, hibák), ne az elvártat. A kiindulási teszt-szám
 **552** volt a 09. körben mérve; a Task 1–2 négy új esettel járul hozzá, tehát a számnak
@@ -824,7 +830,9 @@ két új szakaszt ezzel a szemmel.
 - [ ] **5.7 lépés: záró zöld-ellenőrzés**
 
 ```bash
-pnpm nx run-many -t lint typecheck build
+rm -rf apps/web/dist apps/web/out-tsc
+pnpm nx run-many -t lint typecheck
+pnpm nx run-many -t build
 pnpm nx run-many -t test
 ```
 

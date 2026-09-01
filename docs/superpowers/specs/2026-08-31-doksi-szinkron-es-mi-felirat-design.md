@@ -109,7 +109,7 @@ saját formájába csomagolja. A `packages/core` **nem változik**; az indoklás
 | Felület | Hol | Hogyan |
 |---|---|---|
 | web | `App.tsx:193` fejléc mellett | állandó, mindig látható felirat a `Szobakertész` cím alatt |
-| web | `App.tsx:207` üres állapot | a tájékoztatás **elöl**, a példakérdés utána |
+| web | `App.tsx:207` üres állapot | ~~a tájékoztatás elöl, a példakérdés utána~~ → **ELVETVE a Task 1 élő ellenőrzésén.** Megvalósítva és megnézve a böngészőben: a mondat így kétszer állt egymás alatt ~60 képponttal, ami kettőzésnek hatott. A felirat **csak a fejlécben** marad; az 50. cikk (5)-öt az teljesíti, mert az első interakció előtt **és** után is látszik — az üres állapot szövege viszont az első üzenettel eltűnne |
 | CLI | `interactive.ts:171` banner | az indító sor kiegészül |
 | CLI | `main.ts:41` `--help` leírás | a parancs leírása kiegészül |
 
