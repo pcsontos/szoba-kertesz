@@ -345,7 +345,7 @@ EOF
 - **A szövegnek bájtra egyeznie kell** az `apps/web/src/lib/ai-disclosure.ts`-belivel (Task 1).
   Ez a spec 7. döntésének vállalt korlátja: két másolat, mindkettőt spec pinneli.
 
-- [ ] **2.1 lépés: a konstans megírása**
+- [x] **2.1 lépés: a konstans megírása**
 
 Hozd létre `apps/cli/src/lib/ai-disclosure.ts` néven. **A mondat bájtra azonos** a Task 1-ben
 írttal; a gondolatjel em dash (—), nem kötőjel:
@@ -367,7 +367,7 @@ export const AI_DISCLOSURE =
   'Ez egy MI-asszisztens — a válaszokat nyelvi modell generálja.';
 ```
 
-- [ ] **2.2 lépés: a bukó teszt megírása**
+- [x] **2.2 lépés: a bukó teszt megírása**
 
 Az `apps/cli/src/interactive.spec.ts` import-blokkjában vedd fel az `AI_DISCLOSURE`-t a
 `./lib/ai-disclosure.js`-ből, és adj hozzá egy esetet a `describe('runInteractive', …)`-ba. A
@@ -401,7 +401,7 @@ Az `ask`, a `print: false`, a `silentStore()` és az `input.write('exit\n')` min
 meglévő eseteiből való (`interactive.spec.ts:78` és `:99`) — ne térj el tőle, és ne találj ki
 új opciót.
 
-- [ ] **2.3 lépés: futtatás — BUKNIA kell**
+- [x] **2.3 lépés: futtatás — BUKNIA kell**
 
 ```bash
 pnpm nx test cli
@@ -409,7 +409,7 @@ pnpm nx test cli
 
 Elvárt: az új eset **BUKIK**, mert a banner még nem tartalmazza a mondatot.
 
-- [ ] **2.4 lépés: az interaktív banner kiegészítése**
+- [x] **2.4 lépés: az interaktív banner kiegészítése**
 
 Az `apps/cli/src/interactive.ts`-ben vedd fel az `AI_DISCLOSURE` importot a
 `./lib/ai-disclosure.js`-ből, és a `:170` `console.log(...)` hívást cseréld erre:
@@ -423,7 +423,7 @@ Az `apps/cli/src/interactive.ts`-ben vedd fel az `AI_DISCLOSURE` importot a
     );
 ```
 
-- [ ] **2.5 lépés: a `--help` leírás kiegészítése**
+- [x] **2.5 lépés: a `--help` leírás kiegészítése**
 
 Az `apps/cli/src/main.ts`-ben vedd fel az `AI_DISCLOSURE` importot a `./lib/ai-disclosure.js`-ből,
 és a `:40-42` `.description(...)` hívást cseréld erre:
@@ -434,7 +434,7 @@ Az `apps/cli/src/main.ts`-ben vedd fel az `AI_DISCLOSURE` importot a `./lib/ai-d
   )
 ```
 
-- [ ] **2.6 lépés: futtatás — ZÖLDNEK kell lennie**
+- [x] **2.6 lépés: futtatás — ZÖLDNEK kell lennie**
 
 ```bash
 pnpm nx test cli
@@ -445,7 +445,7 @@ kilépéskor „se banner, se Viszlát!" nincs (`interactive.spec.ts:404` körny
 `expect.stringContaining('interaktív mód')`) — ez továbbra is illeszkedik, mert egyetlen
 `console.log` hívás maradt.
 
-- [ ] **2.7 lépés: élő füstpróba (ingyenes)**
+- [x] **2.7 lépés: élő füstpróba (ingyenes)**
 
 ```bash
 pnpm cli --help
@@ -460,7 +460,7 @@ echo "exit" | pnpm cli
 
 Elvárt: a banner két sora megjelenik, kérdés nélkül kilép, **API-hívás nem történik**.
 
-- [ ] **2.8 lépés: a két másolat egyezésének igazolása**
+- [x] **2.8 lépés: a két másolat egyezésének igazolása**
 
 A spec 7. döntésének korlátja miatt ez **kézi ellenőrzés**, és pont ezért van külön lépésben:
 
@@ -472,13 +472,13 @@ diff <(grep -A2 "^export const AI_DISCLOSURE" apps/web/src/lib/ai-disclosure.ts)
 Elvárt: **üres kimenet**. Ha eltér, a két felület mást mond a felhasználónak — javítsd, mielőtt
 továbbmész.
 
-- [ ] **2.9 lépés: lint + typecheck**
+- [x] **2.9 lépés: lint + typecheck**
 
 ```bash
 pnpm nx run-many -t lint typecheck
 ```
 
-- [ ] **2.10 lépés: commit**
+- [x] **2.10 lépés: commit**
 
 ```bash
 git add apps/cli/src/lib/ai-disclosure.ts apps/cli/src/interactive.ts \
