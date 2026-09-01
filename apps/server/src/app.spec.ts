@@ -70,8 +70,9 @@ const storedMessage = (
 async function start(
   ask: AskFn,
   store: ThreadStore = fakeStore().store,
+  extra: Parameters<typeof createApp>[0] = {},
 ): Promise<string> {
-  const app = createApp({ ask, store });
+  const app = createApp({ ask, store, ...extra });
   const listening = app.listen(0);
   server = listening;
   await new Promise<void>((resolve) =>
@@ -649,5 +650,43 @@ describe('POST /api/chat — a DB az igazságforrás (07. alkalom, Task 8)', () 
 
     expect(response.status).toBe(400);
     expect(ask).not.toHaveBeenCalled();
+  });
+});
+
+describe('Basic auth az egész appon', () => {
+  const auth = { user: 'demo', password: 'titkos-jelszo' };
+  const header = (user: string, password: string) => ({
+    authorization: `Basic ${Buffer.from(`${user}:${password}`, 'utf8').toString('base64')}`,
+  });
+
+  it('auth nélkül a /api/threads elérhető marad (fejlesztői mód)', async () => {
+    const url = await start(async () => answer('x'));
+    const response = await fetch(`${url}/api/threads`);
+    expect(response.status).not.toBe(401);
+  });
+
+  it('auth-tal a /api/threads jelszó nélkül 401, WWW-Authenticate fejléccel', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, { auth });
+    const response = await fetch(`${url}/api/threads`);
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toContain('Basic');
+  });
+
+  it('auth-tal a helyes jelszó átmegy', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, { auth });
+    const response = await fetch(`${url}/api/threads`, {
+      headers: header('demo', 'titkos-jelszo'),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it('auth-tal a /api/chat is 401 — a FIZETŐS végpont sincs kint', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, { auth });
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: uiMessage('user', 'Hány kaktusz van?') }),
+    });
+    expect(response.status).toBe(401);
   });
 });

@@ -41,11 +41,31 @@ if (!process.env['DATABASE_URL_CHAT']) {
   process.exit(1);
 }
 
+// A KAPU élesben KÖTELEZŐ. Ha csak "van env → véd" logika lenne, egy elfelejtett változó
+// NÉMÁN kapcsolná ki a védelmet egy publikus URL-en — és a /api/chat valódi pénzt költ.
+// Ugyanaz a fail-fast minta, mint fent: magyar üzenet, exit 1.
+const isProduction = process.env.NODE_ENV === 'production';
+const authUser = process.env['BASIC_AUTH_USER'];
+const authPassword = process.env['BASIC_AUTH_PASSWORD'];
+
+if (isProduction && (!authUser || !authPassword)) {
+  console.error(
+    'szobakertész szerver: hiányzó BASIC_AUTH_USER / BASIC_AUTH_PASSWORD — élesben ' +
+      '(NODE_ENV=production) a szerver nem indul kapuzás nélkül. A /api/chat hitelesítés ' +
+      'nélkül valódi pénzt költ, a /api/threads pedig minden beszélgetést kiadna.',
+  );
+  process.exit(1);
+}
+
 // A folyamatos "control room" log — UGYANAZ a fájl, mint a CLI-nél (tail -f).
 setWatchLog(join(process.cwd(), 'logs', 'agent.log'));
 
 const port = Number(process.env.PORT ?? 3000);
 
-createApp().listen(port, () => {
+createApp({
+  auth: authUser && authPassword
+    ? { user: authUser, password: authPassword }
+    : undefined,
+}).listen(port, () => {
   console.log(`szobakertész szerver: http://localhost:${port}/api/chat`);
 });

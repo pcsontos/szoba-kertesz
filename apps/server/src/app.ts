@@ -22,6 +22,7 @@ import {
 } from '@szoba-kertesz/core';
 import { createDebugKnowledgeRouter } from './debug-knowledge.js';
 import { createThreadsRouter } from './threads.js';
+import { createBasicAuth, type BasicAuthCredentials } from './lib/basic-auth.js';
 
 // app.ts — VÉKONY HTTP-réteg a core agent fölött. A böngészőből érkező kérdés PONTOSAN
 // ugyanazon az úton megy, mint a CLI-ben: askAgent → a közös agent-loop. A @szoba-kertesz/core
@@ -68,6 +69,11 @@ export interface CreateAppOptions {
   readonly ask?: AskFn;
   /** A beszélgetés-tár. Injektálható, hogy a route-ok DB nélkül tesztelhetők legyenek. */
   readonly store?: ThreadStore;
+  /**
+   * Ha meg van adva, az EGÉSZ app Basic auth mögé kerül — az /api ÉS a statikus web is.
+   * Az env-olvasás szándékosan a main.ts dolga: az app.ts mellékhatás-mentes marad.
+   */
+  readonly auth?: BasicAuthCredentials;
 }
 
 // A kérés HATÁRA — Zod-validálás, ahogy minden külvilágból jövő adatnál.
@@ -139,6 +145,12 @@ export function createApp(options: CreateAppOptions = {}): Express {
   const store: ThreadStore = options.store ?? defaultThreadStore;
 
   const app = express();
+
+  // A kapu MINDEN elé kerül: a /debug, az /api és a statikus web is mögötte van.
+  if (options.auth) {
+    app.use(createBasicAuth(options.auth));
+  }
+
   app.use(cors());
   app.use(express.json());
 
