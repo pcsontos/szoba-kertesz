@@ -690,3 +690,35 @@ describe('Basic auth az egész appon', () => {
     expect(response.status).toBe(401);
   });
 });
+
+describe('rate limit a /api/chat-en', () => {
+  const post = (url: string) =>
+    fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: uiMessage('user', 'Hány kaktusz van?') }),
+    });
+
+  it('a küszöb feletti kérés 429-et kap', async () => {
+    // A /api/chat az EGYETLEN végpont, ami pénzt költ. Küszöb nélkül egy publikus URL
+    // korlátlan számlát jelent — ezt VISELKEDÉSBEN mérjük, nem konfigban.
+    const url = await start(streamingAsk('kész'), fakeStore().store, {
+      chatRateLimit: { windowMs: 60_000, limit: 2 },
+    });
+
+    expect((await post(url)).status).not.toBe(429);
+    expect((await post(url)).status).not.toBe(429);
+    expect((await post(url)).status).toBe(429);
+  });
+
+  it('a /api/threads-et NEM korlátozza — az ingyenes, csak DB-t olvas', async () => {
+    const url = await start(streamingAsk('kész'), fakeStore().store, {
+      chatRateLimit: { windowMs: 60_000, limit: 1 },
+    });
+    await post(url);
+    await post(url);
+
+    const response = await fetch(`${url}/api/threads`);
+    expect(response.status).not.toBe(429);
+  });
+});

@@ -66,6 +66,10 @@ createApp({
   auth: authUser && authPassword
     ? { user: authUser, password: authPassword }
     : undefined,
+  chatRateLimit: {
+    windowMs: Number(process.env['CHAT_RATE_WINDOW_MS'] ?? 60_000),
+    limit: Number(process.env['CHAT_RATE_LIMIT'] ?? 20),
+  },
 }).listen(port, () => {
   console.log(`szobakertész szerver: http://localhost:${port}/api/chat`);
 });

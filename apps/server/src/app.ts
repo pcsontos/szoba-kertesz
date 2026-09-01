@@ -1,5 +1,6 @@
 import express, { type Express, type Request, type Response } from 'express';
 import cors from 'cors';
+import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import {
   convertToModelMessages,
@@ -74,6 +75,11 @@ export interface CreateAppOptions {
    * Az env-olvasás szándékosan a main.ts dolga: az app.ts mellékhatás-mentes marad.
    */
   readonly auth?: BasicAuthCredentials;
+  /**
+   * A /api/chat korlátja. Élesben kötelező (main.ts állítja be); tesztben kicsi értékekkel
+   * injektáljuk, hogy a viselkedés gyorsan mérhető legyen.
+   */
+  readonly chatRateLimit?: { readonly windowMs: number; readonly limit: number };
 }
 
 // A kérés HATÁRA — Zod-validálás, ahogy minden külvilágból jövő adatnál.
@@ -151,6 +157,24 @@ export function createApp(options: CreateAppOptions = {}): Express {
     app.use(createBasicAuth(options.auth));
   }
 
+  // A Railway (mint minden PaaS) reverse proxy mögött futtat: enélkül MINDEN kérés a proxy
+  // IP-jéről látszana, és a limiter globálissá válna — az első felhasználó kimerítené a
+  // keretet mindenki elől. Egy proxy van köztünk, ezért 1.
+  app.set('trust proxy', 1);
+
+  const chatLimiter = options.chatRateLimit
+    ? rateLimit({
+        windowMs: options.chatRateLimit.windowMs,
+        limit: options.chatRateLimit.limit,
+        standardHeaders: 'draft-8',
+        legacyHeaders: false,
+        message: {
+          error:
+            'Túl sok kérés rövid idő alatt. Várj egy kicsit, aztán próbáld újra.',
+        },
+      })
+    : undefined;
+
   app.use(cors());
   app.use(express.json());
 
@@ -165,7 +189,8 @@ export function createApp(options: CreateAppOptions = {}): Express {
   // /debug/knowledge): nem indít fizetős hívást, és a webes chat alapfunkciója.
   app.use('/api/threads', createThreadsRouter(store));
 
-  app.post('/api/chat', async (req: Request, res: Response) => {
+  const chatHandlers = chatLimiter ? [chatLimiter] : [];
+  app.post('/api/chat', ...chatHandlers, async (req: Request, res: Response) => {
     const parsed = ChatRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
