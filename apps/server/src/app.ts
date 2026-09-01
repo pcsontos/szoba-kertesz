@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import express, { type Express, type Request, type Response } from 'express';
 import cors from 'cors';
 import { rateLimit } from 'express-rate-limit';
@@ -80,6 +81,8 @@ export interface CreateAppOptions {
    * injektáljuk, hogy a viselkedés gyorsan mérhető legyen.
    */
   readonly chatRateLimit?: { readonly windowMs: number; readonly limit: number };
+  /** A buildelt web (`apps/web/dist`) útja. Ha nincs, az app csak API-t szolgál ki. */
+  readonly webDist?: string;
 }
 
 // A kérés HATÁRA — Zod-validálás, ahogy minden külvilágból jövő adatnál.
@@ -175,7 +178,12 @@ export function createApp(options: CreateAppOptions = {}): Express {
       })
     : undefined;
 
-  app.use(cors());
+  // A cors() ÉLESBEN NEM KELL, és ezért nem is mountoljuk: egy service, egy origin — a
+  // böngésző ugyanarról a hostról kéri az /api-t, ahonnan az oldalt kapta. Ami nincs ott,
+  // azt nem lehet elrontani. Lokálisan viszont kell: ott a web a 4200-on, az API a 3000-en.
+  if (process.env.NODE_ENV !== 'production') {
+    app.use(cors());
+  }
   app.use(express.json());
 
   // A RAG debug-felülete. ÉLESBEN NINCS MOUNTOLVA: a `?pipeline=full` kérésenként
@@ -349,6 +357,20 @@ export function createApp(options: CreateAppOptions = {}): Express {
       res.status(500).json({ error: `Az agent futása megszakadt: ${detail}` });
     }
   });
+
+  // A buildelt web ugyanebből a service-ből. AZ ÖSSZES /api ROUTE UTÁN mountoljuk, különben
+  // a SPA-fallback elnyelné őket.
+  // Lokális konstans, hogy a closure-ben ne kelljen cast: a TypeScript az
+  // `options.webDist`-et a callbacken belül nem szűkítené.
+  const webDist = options.webDist;
+  if (webDist) {
+    app.use(express.static(webDist));
+    // SPA-fallback. FIGYELEM: Express 5-ben a `app.get('*')` DOB
+    // ("Missing parameter name at index 1") — mérve az 5.2.1-en. Nevesített wildcard kell.
+    app.get('/*splat', (_req: Request, res: Response) => {
+      res.sendFile(join(webDist, 'index.html'));
+    });
+  }
 
   return app;
 }

@@ -1,5 +1,8 @@
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { streamText, tool } from 'ai';
 import { z } from 'zod';
@@ -720,5 +723,38 @@ describe('rate limit a /api/chat-en', () => {
 
     const response = await fetch(`${url}/api/threads`);
     expect(response.status).not.toBe(429);
+  });
+});
+
+describe('a web kiszolgálása ugyanabból a service-ből', () => {
+  async function webDistDir(prefix: string): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), prefix));
+    await writeFile(join(dir, 'index.html'), '<html>szobakertesz-web</html>', 'utf8');
+    return dir;
+  }
+
+  it('webDist nélkül az ismeretlen út 404 — nincs fallback', async () => {
+    const url = await start(async () => answer('x'));
+    const response = await fetch(`${url}/valami-ismeretlen`);
+    expect(response.status).toBe(404);
+  });
+
+  it('webDist mellett az ismeretlen út az index.html-t kapja (SPA-fallback)', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, {
+      webDist: await webDistDir('webdist-app-'),
+    });
+    const response = await fetch(`${url}/valami-ismeretlen`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('szobakertesz-web');
+  });
+
+  it('a fallback NEM nyeli el az /api-t', async () => {
+    // Ha a statikus mount az /api ELÉ kerülne, a thread-lista helyett index.html jönne —
+    // és a chat NÉMÁN elromlana.
+    const url = await start(async () => answer('x'), fakeStore().store, {
+      webDist: await webDistDir('webdist-api-'),
+    });
+    const response = await fetch(`${url}/api/threads`);
+    expect(await response.text()).not.toContain('szobakertesz-web');
   });
 });

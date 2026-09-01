@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { loadConfig, setWatchLog } from '@szoba-kertesz/core';
 import { createApp } from './app.js';
+import { resolveWebDist } from './lib/web-dist.js';
 
 // main.ts — a BOOT. Két dolgot csinál, amit az app.ts szándékosan nem:
 // betölti/ellenőrzi a környezetet, és lefoglalja a portot.
@@ -62,6 +63,21 @@ setWatchLog(join(process.cwd(), 'logs', 'agent.log'));
 
 const port = Number(process.env.PORT ?? 3000);
 
+// A buildelt web útja. Alapértelmezés a repo-elrendezés szerint; élesben a WEB_DIST env
+// írja felül, mert ott a könyvtárszerkezet más lehet.
+const webDist = resolveWebDist(
+  process.env['WEB_DIST'] ?? join(process.cwd(), 'apps', 'web', 'dist'),
+);
+
+if (isProduction && webDist === null) {
+  console.error(
+    'szobakertész szerver: nem találom a buildelt webet (WEB_DIST vagy ' +
+      'apps/web/dist, benne index.html). Élesben EGY service szolgálja ki az API-t ÉS a ' +
+      'webet — enélkül a felhasználó üres 404-et kapna. Futtasd: pnpm nx run web:build',
+  );
+  process.exit(1);
+}
+
 createApp({
   auth: authUser && authPassword
     ? { user: authUser, password: authPassword }
@@ -70,6 +86,7 @@ createApp({
     windowMs: Number(process.env['CHAT_RATE_WINDOW_MS'] ?? 60_000),
     limit: Number(process.env['CHAT_RATE_LIMIT'] ?? 20),
   },
+  webDist: webDist ?? undefined,
 }).listen(port, () => {
   console.log(`szobakertész szerver: http://localhost:${port}/api/chat`);
 });
