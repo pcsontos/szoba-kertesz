@@ -12,6 +12,7 @@ import { runInteractive } from './interactive.js';
 import { printPrompt } from './lib/print-prompt.js';
 import { parseRole } from './lib/parse-role.js';
 import { parseThreadId } from './lib/parse-thread.js';
+import { AI_DISCLOSURE } from './lib/ai-disclosure.js';
 import { splitCliArgs } from './lib/parse-cli-args.js';
 
 // .env betöltése a belépési pontban (a core sosem tölt fájlt, lásd
@@ -37,8 +38,10 @@ const program = new Command();
 
 program
   .name('szobakertesz')
+  // AI Act 50. cikk (1)+(5): a `--help` az egyik hely, ahol a felhasználó az ELSŐ interakció
+  // előtt találkozik a programmal — a tájékoztatásnak itt is ott a helye.
   .description(
-    'Szobakertész CLI — szobanövény-katalógushoz kapcsolódó, magyar nyelvű kérdéseket megválaszoló asszisztens.',
+    `Szobakertész CLI — szobanövény-katalógushoz kapcsolódó, magyar nyelvű kérdéseket megválaszoló asszisztens. ${AI_DISCLOSURE}`,
   )
   .version(CLI_VERSION, '-V, --version', 'a CLI verziószámának kiírása');
 

@@ -173,7 +173,7 @@ pnpm-workspace.yaml: packages/*, apps/*
 
 Minden sor végén: **te tesztelsz → ha zöld, commitolunk és merge-elünk.**
 
-## Hol tart a terv — a kurzus-alkalmak (kiegészítés, 2026-08-22)
+## Hol tart a terv — a kurzus-alkalmak (kiegészítés, 2026-08-22; frissítve 2026-09-01)
 
 Az A1–B3 fázisok után a projekt a kurzus alkalmain nőtt tovább; ez a táblázat köti össze a fenti tervet a jelennel. A részletes tervek a `docs/superpowers/plans/` alatt vannak, alkalmanként egy fájl.
 
@@ -183,8 +183,15 @@ Az A1–B3 fázisok után a projekt a kurzus alkalmain nőtt tovább; ez a tábl
 | 05. | `apps/server` + `apps/web` (streamelő chat), szerep (`--role admin`), `delegateToIngest` | — |
 | 06. | tudásbázis (RAG): 202 cikk → 1906 chunk, HyDE + rerank, tool-kártyák, üzenet-stream | — |
 | 07. | **A+B fázis:** `customers` tábla + `queryCustomers`, beszélgetés-perzisztencia (`threads` + `messages`), negyedik DB-szerep, thread-API, `--thread`, webes thread-lista és megosztható URL | **C fázis** (orchestrátor-agent, package-agent, `ORCHESTRATION_MODE`) és **D fázis** (voice miniapp, flow-test skill) |
+| 08. | **mérőeszköz, nem termék:** `tools/autotest` külön workspace-csomagként — Playwright nehézségi létra (11 fok / 29 eset), RAGAS-stílusú RAG-eval (6 metrika), `/autotest` skill, ADR-napló (`docs/adr/`). A `packages/core` diffje **üres** maradt | a fizetős futások CI-be emelése (csak a tiszta `lib`-specek mennek) |
+| 09. | **negyedik belépési pont:** `apps/mcp` stdio MCP-szerver három toollal (`search_plants` adat-tool · `search_knowledge` átkötött core-tool · `ask_szobakertesz` agent-as-tool, fixen `role: 'customer'`). A `packages/core` diffje itt is **üres** | MCPB-csomag (Claude Desktop Extension) és streamable HTTP + Railway-deploy (a spec 1. döntése) |
+| 10. | **nincs hozzá kurzus-kód** — a téma („honnan tudod, hogy jól működik") kódja a 08. alkalmon született meg. A hozzá tartozó **HF4 leadva** (AI Act-besorolás, `hf4-ai-act` tag) | — |
 
-A 07. alkalom C fázisa azért maradt ki, mert önmagában nagyobb, mint az A+B együtt, a kódvezetés maga jelöli kiszállási pontnak az A+B végét, és a 08–09. alkalom nem épít rá. A döntés indoklása a `docs/superpowers/specs/2026-08-22-ora-07-perzisztencia-design.md` 1. döntésénél, a lezárás bizonyítéka a `docs/ora-07-zaro-ellenorzes.md`-ben.
+A 07. alkalom C fázisa azért maradt ki, mert önmagában nagyobb, mint az A+B együtt, a kódvezetés maga jelöli kiszállási pontnak az A+B végét, és a 08–09. alkalom nem épít rá. A döntés indoklása a `docs/superpowers/specs/2026-08-22-ora-07-perzisztencia-design.md` 1. döntésénél, a lezárás bizonyítéka a `docs/ora-07-zaro-ellenorzes.md`-ben. **A C+D fázis továbbra is a legnagyobb hiányzó *termék*-képesség**, és nem a kurzus zárultával szűnt meg — csak nem került sorra.
+
+**A 08. és 09. alkalom közös tanulsága**, amit érdemes külön kimondani: mindkét kör **új felületet vagy új eszközt** adott, és egyik sem írta át a magot. A `packages/core` diffje mindkét körben **üres** volt, mérve. Ez a „framework-független mag" invariáns bizonyítéka, nem kivétele: egy új belépési pont új app, nem a core átírása.
+
+**A 11–13. alkalomhoz sem tartozik kurzus-kód** (go-live, menedzsment-bemutatás, záróprojekt): ezek a meglévő munka **kitelepítéséről és bemutatásáról** szólnak. Ami ebből még nincs meg: **nincs deploy-konfiguráció és nincs éles környezet**. Ez a következő kör tárgya.
 
 ## Testing Strategy
 

@@ -18,6 +18,7 @@ import {
 } from './lib/assistant-parts.js';
 import { toStoredMessages, toThreadSummaries } from './lib/api-shapes.js';
 import { isNearBottom } from './lib/scroll.js';
+import { AI_DISCLOSURE } from './lib/ai-disclosure.js';
 
 // App.tsx — a chat streamel, mutatja a tool-lépéseket, és MOST MÁR EMLÉKSZIK.
 //
@@ -190,7 +191,18 @@ export function App() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col gap-4">
-        <h1 className="text-xl font-semibold text-emerald-900">Szobakertész</h1>
+        {/* AI Act 50. cikk (1)+(5): állandó, az első interakció előtt látható tájékoztatás.
+            NEM elutasítható sáv — az eltüntethető banner csak az első betöltésre teljesítené
+            a "legkésőbb az első interakció idején" követelményt, egy visszatérő látogatónak
+            soha. A "nyilvánvaló" kivételre nem hivatkozunk (docs/hf4-ai-act.md 2.3). */}
+        <header>
+          <h1 className="text-xl font-semibold text-emerald-900">
+            Szobakertész
+          </h1>
+          <p role="note" className="text-xs text-neutral-600">
+            {AI_DISCLOSURE}
+          </p>
+        </header>
 
         {/* A `data-testid`-ek a Playwright-battery fogódzói (tools/autotest, 08. alkalom).
             A buborékoknak nincs más stabil horgja — csak Tailwind-osztályok —, és egy törött
