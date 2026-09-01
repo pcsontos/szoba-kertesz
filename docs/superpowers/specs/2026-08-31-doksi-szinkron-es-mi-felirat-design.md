@@ -44,6 +44,21 @@ Munkaág: `feat/doksi-szinkron-es-mi-felirat`, a masterről.
 A HF4 által megadott sorszámok (`App.tsx:193`, `:207`) **ma is pontosan stimmelnek** — a
 dokumentum azóta nem avult el.
 
+### Egy architektúra-tény, ami a 7. döntést eldöntötte
+
+| Mérés | Eredmény |
+|---|---|
+| `grep -rn "@szoba-kertesz/core" apps/web/` | **0 találat** — a webes app soha nem importál a core-ból |
+| `apps/web/package.json` | a `@szoba-kertesz/core` **nincs** a függőségei között |
+| `tsconfig.base.json` → `compilerOptions.paths` | **nincs** — a feloldás pnpm-workspace-en megy |
+| `eslint.config.mjs` | `@nx/enforce-module-boundaries` `error` szinten, `enforceBuildableLibDependency: true` |
+
+Ez nem véletlen, hanem **fenntartott invariáns**: az `apps/web` böngésző-bundle, a
+`packages/core` barrelje viszont `pg`-t (`db-readonly.ts`, `db-chat.ts`) és Node-only configot
+is újraexportál. A core-nak **nincs** eager mellékhatása (a poolok lazyk, `new Pool` függvényen
+belül), tehát Node-ban — CLI, szerver, teszt — az importja ártalmatlan; a probléma kizárólag a
+böngésző-bundle.
+
 ### Amiből a ROI mért számai jönnek
 
 | Forrás | Mit ad |
@@ -74,7 +89,7 @@ kérdésenkénti költség természetes szórása, és a ROI-nak **sávot kell m
 | 4 | **Az 50. cikk (2) nyitva marad, de ADR rögzíti** | Megoldás most (jelölő HTTP-fejléc / üzenet-metaadat): **nem érné el**, amit a rendelkezés kér (watermarking, provenance) — megfelelési állítást nem alapozhatnánk rá, és egy álmegoldás rosszabb a bevallott hiánynál · Nyitva marad ADR nélkül: a HF4 már néven nevezi, de egy későbbi olvasó nem tudná megkülönböztetni a tudatos döntést a feledékenységtől |
 | 5 | **Doksi-szinkron: kiegészítés + INGYENES állítás-audit** | Csak kiegészítés: a 13. alkalom mércéjét („minden állítás igazolható") nem teljesíti · Teljes friss-klón próba: a legerősebb bizonyíték, de valódi API-költség (`knowledge:ingest` + egy battery-futás) és a helyi DB újraépítése — a fizetős állítások helyett a **meglévő naplókra hivatkozunk, kiírt mérési dátummal** |
 | 6 | **Végrehajtási sorrend: felirat → ROI → README** | A felhasználó által kért 1→2→3 (README elöl): a README a **végállapotot** írja le, elöl megírva a felirat és az új ROI után újra kellene írni. A fontossági sorrend nem változik, csak a README kerül a végére, hogy **egyszer** íródjon és igazat mondjon |
-| 7 | **A felirat mondata KÖZÖS konstans** a `packages/core`-ban (`ai-disclosure.ts`), felületenkénti csomagolással | Felületenkénti külön sztring: nincs core-diff, de **két másolat driftel**. A projekt saját precedense az `ansi.ts`, ami pontosan azért került a core-ba, mert „a Trace és a CLI is a saját másolatát tartotta". Vállalt ár: **megtörik a 08–09. kör „üres core-diff" sorozata** — az az állítás azokra a körökre szólt (új felület ≠ core-átírás), ez pedig nem felület-specifikus kód, hanem két belépési pont közös szövege |
+| 7 | **Felületenkénti konstans**, a `packages/core` **érintetlenül** (`apps/web/src/lib/ai-disclosure.ts` és `apps/cli/src/lib/ai-disclosure.ts`) | **JAVÍTVA a tervezés közben — az eredeti döntés mérésen bukott meg.** Először közös core-konstanst írtam elő az `ansi.ts` precedensére hivatkozva; a terv írásakor kiderült, hogy az `apps/web` **nulla** sort importál a core-ból, a `@szoba-kertesz/core` **nincs** a `package.json`-jában, és `tsconfig.base.json`-ban **nincs** `paths` — az import fel sem oldódna, felvéve pedig a barrel `pg`-t és Node-only configot húzna egy böngésző-bundle-be. Az `ansi.ts` azért érvénytelen precedens, mert az a Trace és a CLI között él, ahol **mindkét oldal Node**. · Elvetve: core-konstans + webes másolat teszttel összekötve — valódi drift-védelem, de a `apps/web`-nek fel kellene vennie a core-t dev-függőségnek, ami átlépi a mért „a web nem függ a core-tól" határt · Elvetve: külön mini workspace-csomag (`packages/disclosure`) — az egyetlen igazi „egy forrás" megoldás, de egy teljes csomag (package.json, tsconfig, lint, build-target) **egyetlen sztringért** aránytalan |
 | 8 | **A felirat ÁLLANDÓ, nem elutasítható** | Elutasítható banner: az 50. cikk (5) „legkésőbb az első interakció idején"-t kér — egy eltüntethető sáv ezt csak az **első** betöltésre teljesítené, egy visszatérő felhasználónak soha |
 | 9 | **Nem hivatkozunk az 50. cikk (1) „nyilvánvaló" kivételére** | A kivételre hivatkozás: a HF4 2.3 pontja már kimondta, hogy nem hivatkozunk rá, és megindokolta — ugyanezt a felületet emberi ügyintézővel is láthatná a felhasználó. Ezt a kör **nem tárgyalja újra** |
 | 10 | **Egy PR az egész körre**, Task-onkénti commitokkal | PR-enkénti tétel: lásd az 1. döntést |
@@ -87,8 +102,9 @@ kérdésenkénti költség természetes szórása, és a ROI-nak **sávot kell m
 
 > Ez egy MI-asszisztens — a válaszokat nyelvi modell generálja.
 
-Egy exportált konstansban él (`packages/core/src/lib/ai-disclosure.ts`), és minden felület a saját
-formájába csomagolja:
+**Felületenként egy konstansban** él (`apps/web/src/lib/ai-disclosure.ts` és
+`apps/cli/src/lib/ai-disclosure.ts` — utóbbit a CLI két fájlja használja), és minden felület a
+saját formájába csomagolja. A `packages/core` **nem változik**; az indoklás a 7. döntésnél áll.
 
 | Felület | Hol | Hogyan |
 |---|---|---|
@@ -182,8 +198,13 @@ Nem az, hogy „a fájl tartalmazza X-et", hanem hogy mi **figyelhető meg**:
    nem tűnik el. Ez a viselkedés, nem a forráskód.
 2. **A CLI indulásakor a felhasználó látja a tájékoztatást.** Az `interactive.spec.ts`
    konzol-spy-jal állítja, mit ír ki a program **ténylegesen** induláskor.
-3. **A két felület nem tud elcsúszni egymástól.** Mindkettő ugyanabból a konstansból dolgozik;
-   ha valaki átírja az egyiket, a másik vele változik.
+3. **Mindkét felület szövegét spec pinneli, a pontos mondattal.** Egy felületen belül egy
+   forrás van (a CLI két fájlja egy konstansból dolgozik), és ha valaki átírja, a saját
+   csomagja pirosat ad.
+   **Vállalt korlát, mondjuk ki:** a `web` és a `cli` konstansa **két külön másolat** (7.
+   döntés). Ha valaki mindkét helyen átírja a szöveget **és** mindkét specet hozzáigazítja,
+   azt semmi nem fogja meg. Ezt tudatosan vállaljuk — az alternatívák ára (a web
+   core-függősége vagy egy külön workspace-csomag egyetlen mondatért) nagyobb volt.
 4. **A `docs/roi.md` minden száma visszakereshető.** Aki megnyitja a hivatkozott naplófájlt vagy
    doksi-szakaszt, azt a számot találja, amit az anyag állít. Ahol becslés van, ott ez ki van
    írva — nincs olyan sor, amiről ne derülne ki, mért-e vagy becsült.
