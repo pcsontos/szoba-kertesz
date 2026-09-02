@@ -201,7 +201,7 @@ pnpm serve:web    # Vite    — http://localhost:4200
 
 Nyisd meg a `http://localhost:4200` címet. A szerver konzolján közben ugyanaz a színes, körről körre növekvő ágens-trace fut, mint a CLI-ben; a böngésző a válasz mellé a **tool-lépéseket** is megkapja (üzenet-stream), és kártyaként jeleníti meg őket.
 
-> ⚠️ **Vállalt korlát:** a thread-végpontok hitelesítés nélkül, nyitott `cors()` mögött futnak — aki eléri a szervert, az **minden** beszélgetést kilistázhat és elolvashat, a bennük tárolt SQL-kimenetekkel együtt. A UUID-azonosító a végigszámolást akadályozza meg, nem a hozzáférést. Tulajdonos-fogalom és hitelesítés a következő fázis dolga.
+> ⚠️ **Vállalt korlát:** fejlesztésben a thread-végpontok hitelesítés nélkül, nyitott `cors()` mögött futnak — aki eléri a szervert, az **minden** beszélgetést kilistázhat és elolvashat, a bennük tárolt SQL-kimenetekkel együtt. A UUID-azonosító a végigszámolást akadályozza meg, nem a hozzáférést. Élesben a Basic auth (`BASIC_AUTH_USER`/`BASIC_AUTH_PASSWORD`, lásd [`docs/deploy.md`](docs/deploy.md)) az idegen látogatót kizárja, de tulajdonos-fogalom továbbra sincs: aki a megosztott jelszóval bejut, mindenki beszélgetését látja.
 
 ### Vállalt korlátok — amit a rendszer NEM tud
 
@@ -211,10 +211,13 @@ Ezek **megnevezett, nyitott tételek**, nem elfelejtett feladatok. A `docs/hf4-a
 |---|---|---|
 | 1 | Nincs MI-tájékoztatás a felületen (AI Act 50. cikk (1)+(5)) | ✅ **megoldva** — állandó felirat a webes fejlécben és a CLI-ben |
 | 2 | A generált szöveg **gépi olvashatóságú jelölése** hiányzik (AI Act 50. cikk (2)) | ❌ **nyitva** — tudatos döntés, [`ADR 0003`](docs/adr/0003-ai-act-50-2-gepi-jeloles.md) rögzíti az elvetett alternatívákkal |
-| 3 | A `GET /api/threads` és `/:id` **hitelesítés nélkül** adja vissza az összes beszélgetést | ❌ **nyitva** — lásd a fenti figyelmeztetést |
+| 3 | A `GET /api/threads` és `/:id` **hitelesítés nélkül** adja vissza az összes beszélgetést | ⚠️ **élesben mérsékelve** — a Basic auth (Task 1, [`docs/deploy.md`](docs/deploy.md)) idegen látogatót kizár, de **tulajdonos-fogalom továbbra sincs**: aki a megosztott jelszóval bejut, mindenki beszélgetését látja |
 | 4 | A beszélgetés-tárnak **nincs megőrzési ideje**; a `_chat` szerepnek DELETE-joga sincs | ❌ **nyitva** — a törlési út megtervezése önálló kör |
+| 5 | A `POST /api/chat` valódi Anthropic-/OpenAI-hívást indít, tehát **pénzbe kerül** minden kérés | ⚠️ **élesben mérsékelve** — Basic auth + rate limit (alap: 20/perc, [`docs/deploy.md`](docs/deploy.md)) védi, de a megosztott jelszót ismerő bárki a kereten belül továbbra is tud költeni |
 
 A 2. tétel **lejárt** jogszabályi határidő (az 50. cikk általános alkalmazása 2026-08-02-án indult, és ezt a Digital Omnibus kifejezetten nem tolta ki) — ezt nem szépítjük.
+
+Az **5. tétel eddig egyetlen dokumentumban sem szerepelt** — sem a HF4 három megnevezett gyengesége, sem a Kör A négy tétele között nem volt kimondva, hogy a hitelesítés és korlátozás nélküli `/api/chat` valódi pénzt költ. Itt kerül először dokumentálásra, a go-live kör (Task 5) részeként.
 
 A 07. alkalom óta a bal oldali sávban ott vannak a **korábbi beszélgetések** (`GET /api/threads`), és minden beszélgetésnek saját URL-je van: az `?thread=<uuid>` cím újratöltés után is — és egy másik fülön is — visszaadja ugyanazt a beszélgetést, a tool-kártyákkal együtt. A kérésben **csak az új üzenet** megy fel; az előzményt a szerver az adatbázisból tölti, ezért a böngészőből felküldött hamis előzmény hatástalan.
 
@@ -437,6 +440,15 @@ Három dolog látszik ebből:
 1. **A válaszmodell viszi a költség ~85%-át.** A RAG-pipeline három hívása együtt sem éri el a fele árát.
 2. **A RAG ára maga a kontextus:** a kereséssel dolgozó kérdés inputja 3849 → 8702 token, mert az öt darab bekerül a promptba. A modellváltás olcsóbb modellre itt sokkal többet spórolna, mint a pipeline bármelyik lépésének elhagyása.
 3. **Az embedding gyakorlatilag ingyen van** — a teljes tudásbázis felépítése annyiba kerül, mint egy hatod válasz.
+
+## Kitelepítés
+
+A projekt Railway-re telepíthető: `railway.json` a build- és start-parancsokat írja le (web +
+szerver build, egy service), [`docs/deploy.md`](docs/deploy.md) pedig a teljes sorrendet — az
+adatbázis-név invariánstól (`szoba-kertesz`, be van drótozva a szerep-migrációkba) a titkok
+teljes táblázatán át a két fizetős lépésig (`knowledge:ingest` ~2 Ft, füstteszt ~5 Ft) és a
+rate limit alapértékének mért indoklásáig. A tényleges kitelepítés **emberi lépés** (a Railway-
+fiók, a bankkártya és a titkok a felhasználóé); az agent szerepe ott a vezetés és az ellenőrzés.
 
 ## Dokumentáció
 
