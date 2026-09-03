@@ -496,6 +496,11 @@ describe('askAgent — AgentDefinition.toolChoice (Task 11)', () => {
     // Amikor az AgentDefinition-ben nincs beállítva a toolChoice, az SDK
     // alapértelmezése ('auto') marad — a meglévő agentek ezt kapják, és így
     // viselkedésük nem változik.
+    //
+    // Megjegyzés: A feladat breve `undefined`-et jósolt, de az AI SDK az
+    // omittált toolChoice-ot normalizálja `{ type: 'auto' }`-ra (dokumentált
+    // alapértelmezés) a provider-szinthez éréskor — ez a teszt az igazit
+    // állítja, nem a brief hibás jóslatát.
     expect(capturedToolChoice).toEqual({ type: 'auto' });
   });
 });
