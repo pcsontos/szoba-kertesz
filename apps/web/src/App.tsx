@@ -44,7 +44,8 @@ import { AI_DISCLOSURE } from './lib/ai-disclosure.js';
 //   Állj gomb      — egy hosszú válasz megszakítható
 //   hiba-sáv       — a szerver magyar hibaüzenete LÁTSZIK (a useChat `error`-ja)
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+const API_URL =
+  import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:3000');
 
 /** A user-buborék szövege: ott csak text-részek vannak. */
 const textOf = (message: {
