@@ -74,7 +74,7 @@ Postgres + pgvector) · Vitest.
 - Előállítja: a `CreateAppOptions` új, opcionális `auth?: BasicAuthCredentials` mezője.
   A Task 2 és 3 ugyanezt az opció-objektumot bővíti tovább.
 
-- [ ] **1.1 lépés: a bukó teszt megírása**
+- [x] **1.1 lépés: a bukó teszt megírása**
 
 Hozd létre `apps/server/src/lib/basic-auth.spec.ts` néven. **Ebben a csomagban a `vitest`
 neveit EXPLICITEN importáljuk** — az `app.spec.ts` is így teszi:
@@ -171,7 +171,7 @@ describe('createBasicAuth', () => {
 });
 ```
 
-- [ ] **1.2 lépés: futtatás — BUKNIA kell**
+- [x] **1.2 lépés: futtatás — BUKNIA kell**
 
 ```bash
 pnpm nx test server
@@ -179,7 +179,7 @@ pnpm nx test server
 
 Elvárt: mind a hét eset **BUKIK**, `Cannot find module './basic-auth.js'` jellegű hibával.
 
-- [ ] **1.3 lépés: a middleware megírása**
+- [x] **1.3 lépés: a middleware megírása**
 
 Hozd létre `apps/server/src/lib/basic-auth.ts` néven:
 
@@ -258,7 +258,7 @@ export function createBasicAuth(
 }
 ```
 
-- [ ] **1.4 lépés: futtatás — ZÖLDNEK kell lennie**
+- [x] **1.4 lépés: futtatás — ZÖLDNEK kell lennie**
 
 ```bash
 pnpm nx test server
@@ -266,7 +266,7 @@ pnpm nx test server
 
 Elvárt: mind a hét új eset zöld, a meglévő `server` tesztek érintetlenül zöldek.
 
-- [ ] **1.5 lépés: bekötés az `app.ts`-be**
+- [x] **1.5 lépés: bekötés az `app.ts`-be**
 
 Az `apps/server/src/app.ts`-ben vedd fel az importot:
 
@@ -293,7 +293,7 @@ A `createApp` törzsében, **közvetlenül az `const app = express();` UTÁN, mi
   }
 ```
 
-- [ ] **1.6 lépés: route-szintű teszt az `app.spec.ts`-be**
+- [x] **1.6 lépés: route-szintű teszt az `app.spec.ts`-be**
 
 Az `apps/server/src/app.spec.ts` végére.
 
@@ -364,7 +364,7 @@ describe('Basic auth az egész appon', () => {
 });
 ```
 
-- [ ] **1.7 lépés: fail-fast a `main.ts`-ben**
+- [x] **1.7 lépés: fail-fast a `main.ts`-ben**
 
 Az `apps/server/src/main.ts`-ben, a meglévő `DATABASE_URL_CHAT`-ellenőrzés **UTÁN**:
 
@@ -396,7 +396,7 @@ createApp({
 }).listen(port, () => {
 ```
 
-- [ ] **1.8 lépés: a fail-fast élő igazolása**
+- [x] **1.8 lépés: a fail-fast élő igazolása**
 
 ```bash
 NODE_ENV=production node apps/server/dist/main.js; echo "kilépési kód: $?"
@@ -408,7 +408,7 @@ NODE_ENV=production node apps/server/dist/main.js; echo "kilépési kód: $?"
 > Ha a futás előbb a `loadConfig()`-on vagy a `DATABASE_URL_CHAT`-en akad el, az is rendben —
 > akkor add meg azokat a változókat, és ismételd, hogy a **BASIC_AUTH** ága bizonyítottan fusson.
 
-- [ ] **1.9 lépés: lint + typecheck + build**
+- [x] **1.9 lépés: lint + typecheck + build**
 
 ```bash
 rm -rf apps/web/dist apps/web/out-tsc
@@ -416,7 +416,7 @@ pnpm nx run-many -t lint typecheck 2>&1 | grep -E "Successfully ran|Failed tasks
 pnpm nx run-many -t build 2>&1 | grep -E "Successfully ran|Failed tasks"
 ```
 
-- [ ] **1.10 lépés: commit**
+- [x] **1.10 lépés: commit**
 
 ```bash
 git add apps/server/src/lib/basic-auth.ts apps/server/src/lib/basic-auth.spec.ts \
@@ -462,7 +462,7 @@ EOF
 - Használja: a Task 1 `CreateAppOptions` objektumát; új, opcionális mező:
   `readonly chatRateLimit?: { readonly windowMs: number; readonly limit: number }`.
 
-- [ ] **2.1 lépés: a függőség felvétele**
+- [x] **2.1 lépés: a függőség felvétele**
 
 ```bash
 pnpm add express-rate-limit --filter @szoba-kertesz/server
@@ -471,7 +471,7 @@ pnpm add express-rate-limit --filter @szoba-kertesz/server
 Ellenőrzés: `node -e "console.log(require('./apps/server/package.json').dependencies)"` — az
 `express-rate-limit` szerepel benne.
 
-- [ ] **2.2 lépés: a bukó teszt megírása**
+- [x] **2.2 lépés: a bukó teszt megírása**
 
 Az `apps/server/src/app.spec.ts`-be. A chat-útvonal valódi streamet vár, ezért a fájl
 `streamingAsk` helperjét használjuk, nem az `answer`-t:
@@ -510,7 +510,7 @@ describe('rate limit a /api/chat-en', () => {
 });
 ```
 
-- [ ] **2.3 lépés: futtatás — BUKNIA kell**
+- [x] **2.3 lépés: futtatás — BUKNIA kell**
 
 ```bash
 pnpm nx test server
@@ -518,7 +518,7 @@ pnpm nx test server
 
 Elvárt: a harmadik kérés **200-at** kap 429 helyett (nincs még limiter).
 
-- [ ] **2.4 lépés: a limiter bekötése**
+- [x] **2.4 lépés: a limiter bekötése**
 
 Az `app.ts` importjai közé:
 
@@ -571,13 +571,13 @@ helyett:
   app.post('/api/chat', ...chatHandlers, async (req: Request, res: Response) => {
 ```
 
-- [ ] **2.5 lépés: futtatás — ZÖLDNEK kell lennie**
+- [x] **2.5 lépés: futtatás — ZÖLDNEK kell lennie**
 
 ```bash
 pnpm nx test server
 ```
 
-- [ ] **2.6 lépés: a limit bekötése a `main.ts`-be**
+- [x] **2.6 lépés: a limit bekötése a `main.ts`-be**
 
 A `createApp({ auth: … })` hívást egészítsd ki:
 
@@ -591,7 +591,7 @@ A `createApp({ auth: … })` hívást egészítsd ki:
 Alapértelmezés: **percenként 20 kérés** IP-nként. Ez egy demóhoz bőven elég, és a
 `docs/deploy.md`-ben mért költséggel indokoljuk: 20 gondozási kérdés ≈ $0,92/perc felső korlát.
 
-- [ ] **2.7 lépés: lint + typecheck + build**
+- [x] **2.7 lépés: lint + typecheck + build**
 
 ```bash
 rm -rf apps/web/dist apps/web/out-tsc
@@ -599,7 +599,7 @@ pnpm nx run-many -t lint typecheck 2>&1 | grep -E "Successfully ran|Failed tasks
 pnpm nx run-many -t build 2>&1 | grep -E "Successfully ran|Failed tasks"
 ```
 
-- [ ] **2.8 lépés: commit**
+- [x] **2.8 lépés: commit**
 
 ```bash
 git add apps/server/package.json apps/server/src/app.ts apps/server/src/app.spec.ts \
@@ -638,7 +638,7 @@ EOF
   az abszolút utat adja, egyébként `null`-t.
 - Előállítja: a `CreateAppOptions` új, opcionális `webDist?: string` mezője.
 
-- [ ] **3.1 lépés: a bukó teszt megírása**
+- [x] **3.1 lépés: a bukó teszt megírása**
 
 Hozd létre `apps/server/src/lib/web-dist.spec.ts` néven:
 
@@ -678,13 +678,13 @@ describe('resolveWebDist', () => {
 });
 ```
 
-- [ ] **3.2 lépés: futtatás — BUKNIA kell**
+- [x] **3.2 lépés: futtatás — BUKNIA kell**
 
 ```bash
 pnpm nx test server
 ```
 
-- [ ] **3.3 lépés: a modul megírása**
+- [x] **3.3 lépés: a modul megírása**
 
 Hozd létre `apps/server/src/lib/web-dist.ts` néven:
 
@@ -711,13 +711,13 @@ export function resolveWebDist(candidate: string | undefined): string | null {
 }
 ```
 
-- [ ] **3.4 lépés: futtatás — ZÖLDNEK kell lennie**
+- [x] **3.4 lépés: futtatás — ZÖLDNEK kell lennie**
 
 ```bash
 pnpm nx test server
 ```
 
-- [ ] **3.5 lépés: a statikus kiszolgálás bekötése**
+- [x] **3.5 lépés: a statikus kiszolgálás bekötése**
 
 Az `app.ts` importjaihoz:
 
@@ -751,7 +751,7 @@ elnyelné az API-hívásokat):
   }
 ```
 
-- [ ] **3.6 lépés: a `cors()` élesben ne mountolódjon**
+- [x] **3.6 lépés: a `cors()` élesben ne mountolódjon**
 
 Az `app.ts`-ben a `app.use(cors());` sort cseréld erre:
 
@@ -764,7 +764,7 @@ Az `app.ts`-ben a `app.use(cors());` sort cseréld erre:
   }
 ```
 
-- [ ] **3.7 lépés: route-szintű teszt**
+- [x] **3.7 lépés: route-szintű teszt**
 
 Az `app.spec.ts`-be. A fájl tetejére kellenek ezek az importok, ha még nincsenek ott:
 
@@ -811,7 +811,7 @@ describe('a web kiszolgálása ugyanabból a service-ből', () => {
 });
 ```
 
-- [ ] **3.8 lépés: bekötés a `main.ts`-be**
+- [x] **3.8 lépés: bekötés a `main.ts`-be**
 
 Az importokhoz:
 
@@ -840,7 +840,7 @@ if (isProduction && webDist === null) {
 
 És a `createApp` hívásba: `webDist: webDist ?? undefined,`
 
-- [ ] **3.9 lépés: élő ellenőrzés egy service-ből**
+- [x] **3.9 lépés: élő ellenőrzés egy service-ből**
 
 ```bash
 pnpm nx run web:build
@@ -855,7 +855,7 @@ kill %1
 
 Elvárt: **401**, **200**, **200**. Ha az első nem 401, a kapu nem fed mindent.
 
-- [ ] **3.10 lépés: lint + typecheck + build + commit**
+- [x] **3.10 lépés: lint + typecheck + build + commit**
 
 ```bash
 rm -rf apps/web/dist apps/web/out-tsc
@@ -904,7 +904,7 @@ megoldás a migráció saját `IF NOT EXISTS` őrén áll: ha a szerep **már l�
 a migráció nem hozza létre újra, csak a grantokat teszi rá. Ezért a bootstrap a `migrate deploy`
 **előtt** fut.
 
-- [ ] **4.1 lépés: a bootstrap script megírása**
+- [x] **4.1 lépés: a bootstrap script megírása**
 
 Hozd létre `packages/db/prisma/bootstrap-roles.ts` néven:
 
@@ -999,7 +999,7 @@ async function main(): Promise<void> {
 void main();
 ```
 
-- [ ] **4.2 lépés: az ellenőrző script megírása**
+- [x] **4.2 lépés: az ellenőrző script megírása**
 
 Hozd létre `packages/db/prisma/check-role-passwords.ts` néven:
 
@@ -1066,7 +1066,7 @@ async function main(): Promise<void> {
 void main();
 ```
 
-- [ ] **4.3 lépés: a két script felvétele**
+- [x] **4.3 lépés: a két script felvétele**
 
 A gyökér `package.json` `scripts` blokkjába:
 
@@ -1075,7 +1075,7 @@ A gyökér `package.json` `scripts` blokkjába:
     "db:check-roles": "tsx packages/db/prisma/check-role-passwords.ts",
 ```
 
-- [ ] **4.4 lépés: az ellenőrző igazolása a LOKÁLIS adatbázison — BUKNIA kell**
+- [x] **4.4 lépés: az ellenőrző igazolása a LOKÁLIS adatbázison — BUKNIA kell**
 
 ```bash
 pnpm db:check-roles; echo "kilépési kód: $?"
@@ -1135,7 +1135,7 @@ process.loadEnvFile(); console.log(new URL(process.env.DATABASE_URL).username)")
   -d postgres -c 'DROP DATABASE IF EXISTS "bootstrap-proba";'
 ```
 
-- [ ] **4.7 lépés: lint + typecheck + a teljes csomag**
+- [x] **4.7 lépés: lint + typecheck + a teljes csomag**
 
 ```bash
 rm -rf apps/web/dist apps/web/out-tsc
@@ -1146,7 +1146,7 @@ pnpm nx run-many -t test 2>&1 | grep -E "Successfully ran|Failed tasks"
 A `core` DB-s specjeinek **zöldnek kell lenniük** — ez igazolja, hogy a 4.5 lépés nem hagyott
 maga után elrontott jelszót.
 
-- [ ] **4.8 lépés: commit**
+- [x] **4.8 lépés: commit**
 
 ```bash
 git add packages/db/prisma/bootstrap-roles.ts packages/db/prisma/check-role-passwords.ts package.json
@@ -1184,7 +1184,7 @@ EOF
 - Létrehoz: `railway.json`, `docs/deploy.md`
 - Módosít: `README.md`
 
-- [ ] **5.1 lépés: `railway.json`**
+- [x] **5.1 lépés: `railway.json`**
 
 A repo gyökerébe:
 
@@ -1203,7 +1203,7 @@ A repo gyökerébe:
 }
 ```
 
-- [ ] **5.2 lépés: `docs/deploy.md`**
+- [x] **5.2 lépés: `docs/deploy.md`**
 
 Írd meg a kitelepítés sorrendjét. Kötelező tartalom:
 
@@ -1236,7 +1236,7 @@ A repo gyökerébe:
    percenkénti 20 kérés felső korlátja ≈ $0,92/perc, a `docs/roi.md` mért $0,046-os felső
    gondozási kérdésárával számolva.
 
-- [ ] **5.3 lépés: README**
+- [x] **5.3 lépés: README**
 
 A „Vállalt korlátok" táblába vedd fel az **eddig hiányzó** tételt, és frissítsd a státuszokat:
 
@@ -1249,7 +1249,7 @@ A „Vállalt korlátok" táblába vedd fel az **eddig hiányzó** tételt, és 
 
 Plusz egy „Kitelepítés" szakasz a `docs/deploy.md`-re mutatva.
 
-- [ ] **5.4 lépés: commit**
+- [x] **5.4 lépés: commit**
 
 ```bash
 git add railway.json docs/deploy.md README.md
@@ -1282,13 +1282,13 @@ EOF
 > az agent nem hoz létre fiókot, nem ad meg jelszót és nem visz be titkot idegen felületre.
 > Az agent szerepe: **vezet és ellenőriz**.
 
-- [ ] **6.1 — a felhasználó létrehozza** a Railway-projektet, benne a Postgres-t pgvector
+- [x] **6.1 — a felhasználó létrehozza** a Railway-projektet, benne a Postgres-t pgvector
   sablonból, `szoba-kertesz` nevű adatbázissal, és az `app` service-t erről a repóról.
-- [ ] **6.2 — a felhasználó beviszi a titkokat** a `docs/deploy.md` táblája szerint. Erős
+- [x] **6.2 — a felhasználó beviszi a titkokat** a `docs/deploy.md` táblája szerint. Erős
   jelszavakat generáljon (pl. `openssl rand -base64 24`), és a `DATABASE_URL_READWRITE`-ot
   **ne** vigye be.
-- [ ] **6.3 — a felhasználó lefuttatja** a bootstrap → migrate → seed → ingest sorrendet.
-- [ ] **6.4 — az agent ellenőriz** (a felhasználó által megadott URL-lel):
+- [x] **6.3 — a felhasználó lefuttatja** a bootstrap → migrate → seed → ingest sorrendet.
+- [x] **6.4 — az agent ellenőriz** (a felhasználó által megadott URL-lel):
 
 ```bash
 curl -s -o /dev/null -w 'gyökér jelszó nélkül: %{http_code}\n' https://<host>/
@@ -1298,19 +1298,19 @@ curl -s -o /dev/null -w 'debug élesben:        %{http_code}\n' https://<host>/d
 
 Elvárt: **401**, **401**, **401 vagy 404**.
 
-- [ ] **6.5 — füstteszt** (**FIZETŐS, ~5 Ft**): a felhasználó a böngészőben, jelszóval, feltesz
+- [x] **6.5 — füstteszt** (**FIZETŐS, ~5 Ft**): a felhasználó a böngészőben, jelszóval, feltesz
   egy katalógus- és egy gondozási kérdést. Elvárt: a katalógus-kérdés száma **egyezik** az éles
   adatbázisban láthatóval, a gondozási kérdés pedig **forrásmegjelöléses** választ ad.
-- [ ] **6.6 — `pnpm db:check-roles` az ÉLES `DATABASE_URL`-lel.** Elvárt: **zöld** — mind a
+- [x] **6.6 — `pnpm db:check-roles` az ÉLES `DATABASE_URL`-lel.** Elvárt: **zöld** — mind a
   három szerep elutasítja az alapértelmezett jelszót. Ez a kör egyik legfontosabb bizonyítéka.
 
 ---
 
 ## Záró ellenőrzés
 
-- [ ] **Z.1 — a spec mind a 10 sikerkritériuma végigmérve**, kritériumonként kiírva, mi
+- [x] **Z.1 — a spec mind a 10 sikerkritériuma végigmérve**, kritériumonként kiírva, mi
   bizonyítja. Ami nem teljesült, azt **mondd ki**.
-- [ ] **Z.2 — `git diff master --stat -- packages/core`.** Elvárt: **üres**.
-- [ ] **Z.3 — `SYSTEM_PROMPT` bájtazonosság** (a `CLAUDE.md`-ben álló `diff`). Elvárt: üres.
-- [ ] **Z.4 — a teljes csomag zöld**, és a teszt-szám az új specekkel **nő** (kiindulás: 555).
-- [ ] **Z.5 — a terv jelölőinek átírása**, külön commitban, angolul (`docs: mark …`).
+- [x] **Z.2 — `git diff master --stat -- packages/core`.** Elvárt: **üres**.
+- [x] **Z.3 — `SYSTEM_PROMPT` bájtazonosság** (a `CLAUDE.md`-ben álló `diff`). Elvárt: üres.
+- [x] **Z.4 — a teljes csomag zöld**, és a teszt-szám az új specekkel **nő** (kiindulás: 555).
+- [x] **Z.5 — a terv jelölőinek átírása**, külön commitban, angolul (`docs: mark …`).
