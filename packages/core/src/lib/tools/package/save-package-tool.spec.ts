@@ -10,7 +10,7 @@ function fakeRejectingPool(): Pool {
   // A checkPackage ELSŐ (customer) lekérdezése üres sort ad — a savePackage tehát
   // unknown_customer-en bukik, és SOSEM jut el a pool.connect()-ig (a transactionig).
   return {
-    query: async (): Promise<QueryResult> => ({ rows: [], rowCount: 0 } as QueryResult),
+    query: async (): Promise<QueryResult> => ({ rows: [], rowCount: 0 } as unknown as QueryResult),
     connect: vi.fn(),
   } as unknown as Pool;
 }
