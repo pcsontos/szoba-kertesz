@@ -66,3 +66,14 @@ BEGIN
   END IF;
 END
 $$;
+
+-- Az ÖTÖDIK szerep: a csomag-építés útja (a package-agent validatePackage/savePackage
+-- toolja). A grantok a <ts2>_package_role migrációban vannak, nem itt — az init.sql a
+-- products/customers táblák létrehozása ELŐTT fut, tehát itt csak a szerep jöhet létre.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'szoba-kertesz_package') THEN
+    CREATE ROLE "szoba-kertesz_package" LOGIN PASSWORD 'szoba-kertesz_package';
+  END IF;
+END
+$$;
