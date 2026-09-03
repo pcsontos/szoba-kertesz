@@ -69,6 +69,14 @@ export interface AgentDefinition {
   readonly maxOutputTokens: number;
   /** Ha a loop a limit miatt válasz nélkül áll meg, ezt mondjuk a felhasználónak. */
   readonly emptyAnswer: string;
+  /**
+   * Kényszerített tool-választás. Az ÖSSZES eddigi agent hallgatólagosan 'auto'-n fut (a
+   * modell dönt, hívjon-e toolt) — ezt a mezőt EGYELŐRE csak az orchestrátor tölti ki
+   * ('required'): ő SOSEM válaszolhat tool nélkül, mindig pontosan egy route-tool-t kell
+   * hívnia. Alapértelmezés nélkül (undefined) a streamText saját alapértelmezése ('auto')
+   * érvényesül — a meglévő agentek viselkedése ezért változatlan.
+   */
+  readonly toolChoice?: 'auto' | 'none' | 'required';
 }
 
 export interface AskOptions {
@@ -243,6 +251,7 @@ export async function runAgentLoop(
       system: systemPrompt,
       messages,
       tools,
+      toolChoice: agent.toolChoice,
       // Régen: for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) — most deklaratívan
       // mondjuk meg, meddig mehet a loop. A limit is az AGENTÉ.
       stopWhen: isStepCount(agent.maxSteps),

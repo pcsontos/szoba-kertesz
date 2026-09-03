@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockLanguageModelV4, simulateReadableStream } from 'ai/test';
 import { askAgent, MAX_TOOL_ITERATIONS } from './query-agent/query-agent.js';
+import { runAgentLoop } from './agent-loop.js';
 
 /**
  * A KÖZÖS agent-loop (`agent-loop.ts`) tesztjei — a query-agenten keresztül
@@ -471,5 +472,57 @@ describe('onStream — az ÜZENET-csatorna', () => {
 
     // Az onChunk hookot az SDK hívja a stream feldolgozásakor — mindegy, KI olvassa.
     expect(deltas.join('')).toBe('Kész.');
+  });
+});
+
+describe('askAgent — AgentDefinition.toolChoice (Task 11)', () => {
+  it("meg nem adott toolChoice esetén az SDK alapértelmezése marad 'auto' (a meglévő agentek viselkedése változatlan)", async () => {
+    let capturedToolChoice: unknown;
+    const model = new MockLanguageModelV4({
+      doStream: (async (options: { toolChoice?: unknown }) => {
+        capturedToolChoice = options.toolChoice;
+        return { stream: streamOf(textStepChunks('kész')) };
+      }) as never,
+    });
+
+    await askAgent('kérdés', {
+      config: TEST_CONFIG,
+      model,
+      print: false,
+      persistTrace: false,
+      log: async () => undefined,
+    });
+
+    // Amikor az AgentDefinition-ben nincs beállítva a toolChoice, az SDK
+    // alapértelmezése ('auto') marad — a meglévő agentek ezt kapják, és így
+    // viselkedésük nem változik.
+    expect(capturedToolChoice).toEqual({ type: 'auto' });
+  });
+});
+
+describe('runAgentLoop — toolChoice threading (Task 11)', () => {
+  it('a megadott toolChoice a PROVIDER-szintű alakban ({type: "required"}) ér célba', async () => {
+    let capturedToolChoice: unknown;
+    const model = new MockLanguageModelV4({
+      doStream: (async (options: { toolChoice?: unknown }) => {
+        capturedToolChoice = options.toolChoice;
+        return { stream: streamOf(textStepChunks('kész')) };
+      }) as never,
+    });
+
+    await runAgentLoop(
+      'kérdés',
+      {
+        systemPrompt: 'system',
+        buildTools: () => ({}),
+        maxSteps: 1,
+        maxOutputTokens: 100,
+        emptyAnswer: 'üres',
+        toolChoice: 'required',
+      },
+      { config: TEST_CONFIG, model, print: false, persistTrace: false, log: async () => undefined },
+    );
+
+    expect(capturedToolChoice).toEqual({ type: 'required' });
   });
 });
