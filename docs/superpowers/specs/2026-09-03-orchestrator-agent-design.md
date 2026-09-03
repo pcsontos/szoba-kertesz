@@ -101,7 +101,7 @@ Két új Prisma-modell (`packages/db/prisma/schema.prisma`):
 
 ```prisma
 model Package {
-  id          String        @id @default(uuid()) @db.Uuid
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   customerId  Int           @map("customer_id")
   customer    Customer      @relation(fields: [customerId], references: [id])
   totalPrice  Decimal       @map("total_price") @db.Decimal(12, 2)
@@ -182,9 +182,10 @@ csomagot, a `validatePackage`/`savePackage` mindig a teljes, aktuális tétellis
 
 ## Hibakezelés
 
-- **Az orchestrátor egyik route-tool-t sem hívja** (a `toolChoice: 'required'` ellenére sem
-  100%-ig garantált egy streamelő modellnél) → fallback: `routeToInfoAgent`, mint a
-  biztonságosabb, csak-olvasó út; a Trace-ben anomáliaként jelölve.
+- **Az orchestrátor nem hívna tool-t** — ezt a `toolChoice: 'required'` STRUKTURÁLISAN
+  kizárja (a modell a protokoll szintjén kényszerítve van tool-hívásra), tehát nincs rá külön
+  futásidejű ág. Ha a loop mégis lépéskorlát-kimerülésig jutna szöveg nélkül, a meglévő
+  `emptyAnswer` mechanizmus (`agent-loop.ts`) fedezi — ugyanaz, mint minden más agentnél.
 - **`validatePackage` szabálysértést talál** → nem hiba (`isError: false`), a modell a
   szöveges visszajelzésből ajánl korrekciót az ügyfélnek.
 - **`savePackage` DB-hiba** (kapcsolat, constraint) → elkapva, magyar üzenet,
