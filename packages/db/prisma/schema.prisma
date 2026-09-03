@@ -49,6 +49,7 @@ model Product {
   rating          Decimal  @db.Decimal(3, 2)
   reviewsCount    Int      @map("reviews_count")
   description     String
+  packageItems    PackageItem[]
 
   @@map("products")
 }
@@ -72,6 +73,7 @@ model Customer {
   notes           String // döntést befolyásoló kontextus (fény, stílus, öntözési hajlandóság)
   createdAt       DateTime @default(now()) @map("created_at")
   threads         Thread[]
+  packages        Package[]
 
   @@map("customers")
 }
@@ -110,4 +112,36 @@ model Message {
 
   @@index([threadId])
   @@map("messages")
+}
+
+// packages + package_items — a CSOMAG-ÉPÍTÉS eredménye. A package-agent validatePackage/
+// savePackage toolja ír ide, a szoba-kertesz_package szerepen. APPEND-ONLY: nincs UPDATE,
+// nincs DELETE-grant — egy elmentett csomag nem szerkeszthető vagy törölhető innentől.
+//
+// Az id itt is UUID, dbgenerated()-del (NEM Prisma-kliens-oldali @default(uuid())): a
+// savePackage NYERS SQL INSERT-tel ír, tehát a DB-nek magának kell generálnia az azonosítót,
+// ahogy a Thread modellnél is (lásd ott a kommentet).
+model Package {
+  id          String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customerId  Int           @map("customer_id")
+  customer    Customer      @relation(fields: [customerId], references: [id])
+  totalPrice  Decimal       @map("total_price") @db.Decimal(12, 2)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  items       PackageItem[]
+
+  @@map("packages")
+}
+
+// A unitPrice ÁRPILLANATKÉP mentéskor (COALESCE(sale_price, price) abban a pillanatban) —
+// egy elmentett csomag ára ne sodródjon a katalógus KÉSŐBB árváltozásaival.
+model PackageItem {
+  id         Int      @id @default(autoincrement())
+  packageId  String   @map("package_id") @db.Uuid
+  package    Package  @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  productId  Int      @map("product_id")
+  product    Product  @relation(fields: [productId], references: [id])
+  quantity   Int
+  unitPrice  Decimal  @map("unit_price") @db.Decimal(12, 2)
+
+  @@map("package_items")
 }
