@@ -1,4 +1,4 @@
-import { tool } from 'ai';
+import { tool, type Tool } from 'ai';
 import { z } from 'zod';
 import type { ToolOutcome, ToolReporter } from '../tool-outcome.js';
 
@@ -8,7 +8,9 @@ import type { ToolOutcome, ToolReporter } from '../tool-outcome.js';
 
 export const CANCEL_PACKAGE_TOOL_NAME = 'cancelPackage';
 
-export const cancelPackageTool = (report?: ToolReporter) =>
+export const cancelPackageTool = (
+  report?: ToolReporter,
+): Tool<Record<string, never>, string> =>
   tool({
     description:
       'Jelzi, hogy a csomag-építés megszakadt mentés nélkül — akkor hívd, ha a felhasználó ' +
