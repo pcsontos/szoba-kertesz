@@ -1,5 +1,7 @@
+import { join } from 'node:path';
 import express, { type Express, type Request, type Response } from 'express';
 import cors from 'cors';
+import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import {
   convertToModelMessages,
@@ -22,6 +24,7 @@ import {
 } from '@szoba-kertesz/core';
 import { createDebugKnowledgeRouter } from './debug-knowledge.js';
 import { createThreadsRouter } from './threads.js';
+import { createBasicAuth, type BasicAuthCredentials } from './lib/basic-auth.js';
 
 // app.ts — VÉKONY HTTP-réteg a core agent fölött. A böngészőből érkező kérdés PONTOSAN
 // ugyanazon az úton megy, mint a CLI-ben: askAgent → a közös agent-loop. A @szoba-kertesz/core
@@ -68,6 +71,18 @@ export interface CreateAppOptions {
   readonly ask?: AskFn;
   /** A beszélgetés-tár. Injektálható, hogy a route-ok DB nélkül tesztelhetők legyenek. */
   readonly store?: ThreadStore;
+  /**
+   * Ha meg van adva, az EGÉSZ app Basic auth mögé kerül — az /api ÉS a statikus web is.
+   * Az env-olvasás szándékosan a main.ts dolga: az app.ts mellékhatás-mentes marad.
+   */
+  readonly auth?: BasicAuthCredentials;
+  /**
+   * A /api/chat korlátja. Élesben kötelező (main.ts állítja be); tesztben kicsi értékekkel
+   * injektáljuk, hogy a viselkedés gyorsan mérhető legyen.
+   */
+  readonly chatRateLimit?: { readonly windowMs: number; readonly limit: number };
+  /** A buildelt web (`apps/web/dist`) útja. Ha nincs, az app csak API-t szolgál ki. */
+  readonly webDist?: string;
 }
 
 // A kérés HATÁRA — Zod-validálás, ahogy minden külvilágból jövő adatnál.
@@ -139,7 +154,36 @@ export function createApp(options: CreateAppOptions = {}): Express {
   const store: ThreadStore = options.store ?? defaultThreadStore;
 
   const app = express();
-  app.use(cors());
+
+  // A kapu MINDEN elé kerül: a /debug, az /api és a statikus web is mögötte van.
+  if (options.auth) {
+    app.use(createBasicAuth(options.auth));
+  }
+
+  // A Railway (mint minden PaaS) reverse proxy mögött futtat: enélkül MINDEN kérés a proxy
+  // IP-jéről látszana, és a limiter globálissá válna — az első felhasználó kimerítené a
+  // keretet mindenki elől. Egy proxy van köztünk, ezért 1.
+  app.set('trust proxy', 1);
+
+  const chatLimiter = options.chatRateLimit
+    ? rateLimit({
+        windowMs: options.chatRateLimit.windowMs,
+        limit: options.chatRateLimit.limit,
+        standardHeaders: 'draft-8',
+        legacyHeaders: false,
+        message: {
+          error:
+            'Túl sok kérés rövid idő alatt. Várj egy kicsit, aztán próbáld újra.',
+        },
+      })
+    : undefined;
+
+  // A cors() ÉLESBEN NEM KELL, és ezért nem is mountoljuk: egy service, egy origin — a
+  // böngésző ugyanarról a hostról kéri az /api-t, ahonnan az oldalt kapta. Ami nincs ott,
+  // azt nem lehet elrontani. Lokálisan viszont kell: ott a web a 4200-on, az API a 3000-en.
+  if (process.env.NODE_ENV !== 'production') {
+    app.use(cors());
+  }
   app.use(express.json());
 
   // A RAG debug-felülete. ÉLESBEN NINCS MOUNTOLVA: a `?pipeline=full` kérésenként
@@ -153,7 +197,8 @@ export function createApp(options: CreateAppOptions = {}): Express {
   // /debug/knowledge): nem indít fizetős hívást, és a webes chat alapfunkciója.
   app.use('/api/threads', createThreadsRouter(store));
 
-  app.post('/api/chat', async (req: Request, res: Response) => {
+  const chatHandlers = chatLimiter ? [chatLimiter] : [];
+  app.post('/api/chat', ...chatHandlers, async (req: Request, res: Response) => {
     const parsed = ChatRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -312,6 +357,20 @@ export function createApp(options: CreateAppOptions = {}): Express {
       res.status(500).json({ error: `Az agent futása megszakadt: ${detail}` });
     }
   });
+
+  // A buildelt web ugyanebből a service-ből. AZ ÖSSZES /api ROUTE UTÁN mountoljuk, különben
+  // a SPA-fallback elnyelné őket.
+  // Lokális konstans, hogy a closure-ben ne kelljen cast: a TypeScript az
+  // `options.webDist`-et a callbacken belül nem szűkítené.
+  const webDist = options.webDist;
+  if (webDist) {
+    app.use(express.static(webDist));
+    // SPA-fallback. FIGYELEM: Express 5-ben a `app.get('*')` DOB
+    // ("Missing parameter name at index 1") — mérve az 5.2.1-en. Nevesített wildcard kell.
+    app.get('/*splat', (_req: Request, res: Response) => {
+      res.sendFile(join(webDist, 'index.html'));
+    });
+  }
 
   return app;
 }

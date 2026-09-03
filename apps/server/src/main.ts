@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { loadConfig, setWatchLog } from '@szoba-kertesz/core';
 import { createApp } from './app.js';
+import { resolveWebDist } from './lib/web-dist.js';
 
 // main.ts — a BOOT. Két dolgot csinál, amit az app.ts szándékosan nem:
 // betölti/ellenőrzi a környezetet, és lefoglalja a portot.
@@ -41,11 +42,51 @@ if (!process.env['DATABASE_URL_CHAT']) {
   process.exit(1);
 }
 
+// A KAPU élesben KÖTELEZŐ. Ha csak "van env → véd" logika lenne, egy elfelejtett változó
+// NÉMÁN kapcsolná ki a védelmet egy publikus URL-en — és a /api/chat valódi pénzt költ.
+// Ugyanaz a fail-fast minta, mint fent: magyar üzenet, exit 1.
+const isProduction = process.env.NODE_ENV === 'production';
+const authUser = process.env['BASIC_AUTH_USER'];
+const authPassword = process.env['BASIC_AUTH_PASSWORD'];
+
+if (isProduction && (!authUser || !authPassword)) {
+  console.error(
+    'szobakertész szerver: hiányzó BASIC_AUTH_USER / BASIC_AUTH_PASSWORD — élesben ' +
+      '(NODE_ENV=production) a szerver nem indul kapuzás nélkül. A /api/chat hitelesítés ' +
+      'nélkül valódi pénzt költ, a /api/threads pedig minden beszélgetést kiadna.',
+  );
+  process.exit(1);
+}
+
 // A folyamatos "control room" log — UGYANAZ a fájl, mint a CLI-nél (tail -f).
 setWatchLog(join(process.cwd(), 'logs', 'agent.log'));
 
 const port = Number(process.env.PORT ?? 3000);
 
-createApp().listen(port, () => {
+// A buildelt web útja. Alapértelmezés a repo-elrendezés szerint; élesben a WEB_DIST env
+// írja felül, mert ott a könyvtárszerkezet más lehet.
+const webDist = resolveWebDist(
+  process.env['WEB_DIST'] ?? join(process.cwd(), 'apps', 'web', 'dist'),
+);
+
+if (isProduction && webDist === null) {
+  console.error(
+    'szobakertész szerver: nem találom a buildelt webet (WEB_DIST vagy ' +
+      'apps/web/dist, benne index.html). Élesben EGY service szolgálja ki az API-t ÉS a ' +
+      'webet — enélkül a felhasználó üres 404-et kapna. Futtasd: pnpm nx run web:build',
+  );
+  process.exit(1);
+}
+
+createApp({
+  auth: authUser && authPassword
+    ? { user: authUser, password: authPassword }
+    : undefined,
+  chatRateLimit: {
+    windowMs: Number(process.env['CHAT_RATE_WINDOW_MS'] ?? 60_000),
+    limit: Number(process.env['CHAT_RATE_LIMIT'] ?? 20),
+  },
+  webDist: webDist ?? undefined,
+}).listen(port, () => {
   console.log(`szobakertész szerver: http://localhost:${port}/api/chat`);
 });

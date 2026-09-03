@@ -1,5 +1,8 @@
 import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { streamText, tool } from 'ai';
 import { z } from 'zod';
@@ -70,8 +73,9 @@ const storedMessage = (
 async function start(
   ask: AskFn,
   store: ThreadStore = fakeStore().store,
+  extra: Parameters<typeof createApp>[0] = {},
 ): Promise<string> {
-  const app = createApp({ ask, store });
+  const app = createApp({ ask, store, ...extra });
   const listening = app.listen(0);
   server = listening;
   await new Promise<void>((resolve) =>
@@ -649,5 +653,108 @@ describe('POST /api/chat — a DB az igazságforrás (07. alkalom, Task 8)', () 
 
     expect(response.status).toBe(400);
     expect(ask).not.toHaveBeenCalled();
+  });
+});
+
+describe('Basic auth az egész appon', () => {
+  const auth = { user: 'demo', password: 'titkos-jelszo' };
+  const header = (user: string, password: string) => ({
+    authorization: `Basic ${Buffer.from(`${user}:${password}`, 'utf8').toString('base64')}`,
+  });
+
+  it('auth nélkül a /api/threads elérhető marad (fejlesztői mód)', async () => {
+    const url = await start(async () => answer('x'));
+    const response = await fetch(`${url}/api/threads`);
+    expect(response.status).not.toBe(401);
+  });
+
+  it('auth-tal a /api/threads jelszó nélkül 401, WWW-Authenticate fejléccel', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, { auth });
+    const response = await fetch(`${url}/api/threads`);
+    expect(response.status).toBe(401);
+    expect(response.headers.get('www-authenticate')).toContain('Basic');
+  });
+
+  it('auth-tal a helyes jelszó átmegy', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, { auth });
+    const response = await fetch(`${url}/api/threads`, {
+      headers: header('demo', 'titkos-jelszo'),
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it('auth-tal a /api/chat is 401 — a FIZETŐS végpont sincs kint', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, { auth });
+    const response = await fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: uiMessage('user', 'Hány kaktusz van?') }),
+    });
+    expect(response.status).toBe(401);
+  });
+});
+
+describe('rate limit a /api/chat-en', () => {
+  const post = (url: string) =>
+    fetch(`${url}/api/chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: uiMessage('user', 'Hány kaktusz van?') }),
+    });
+
+  it('a küszöb feletti kérés 429-et kap', async () => {
+    // A /api/chat az EGYETLEN végpont, ami pénzt költ. Küszöb nélkül egy publikus URL
+    // korlátlan számlát jelent — ezt VISELKEDÉSBEN mérjük, nem konfigban.
+    const url = await start(streamingAsk('kész'), fakeStore().store, {
+      chatRateLimit: { windowMs: 60_000, limit: 2 },
+    });
+
+    expect((await post(url)).status).not.toBe(429);
+    expect((await post(url)).status).not.toBe(429);
+    expect((await post(url)).status).toBe(429);
+  });
+
+  it('a /api/threads-et NEM korlátozza — az ingyenes, csak DB-t olvas', async () => {
+    const url = await start(streamingAsk('kész'), fakeStore().store, {
+      chatRateLimit: { windowMs: 60_000, limit: 1 },
+    });
+    await post(url);
+    await post(url);
+
+    const response = await fetch(`${url}/api/threads`);
+    expect(response.status).not.toBe(429);
+  });
+});
+
+describe('a web kiszolgálása ugyanabból a service-ből', () => {
+  async function webDistDir(prefix: string): Promise<string> {
+    const dir = await mkdtemp(join(tmpdir(), prefix));
+    await writeFile(join(dir, 'index.html'), '<html>szobakertesz-web</html>', 'utf8');
+    return dir;
+  }
+
+  it('webDist nélkül az ismeretlen út 404 — nincs fallback', async () => {
+    const url = await start(async () => answer('x'));
+    const response = await fetch(`${url}/valami-ismeretlen`);
+    expect(response.status).toBe(404);
+  });
+
+  it('webDist mellett az ismeretlen út az index.html-t kapja (SPA-fallback)', async () => {
+    const url = await start(async () => answer('x'), fakeStore().store, {
+      webDist: await webDistDir('webdist-app-'),
+    });
+    const response = await fetch(`${url}/valami-ismeretlen`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain('szobakertesz-web');
+  });
+
+  it('a fallback NEM nyeli el az /api-t', async () => {
+    // Ha a statikus mount az /api ELÉ kerülne, a thread-lista helyett index.html jönne —
+    // és a chat NÉMÁN elromlana.
+    const url = await start(async () => answer('x'), fakeStore().store, {
+      webDist: await webDistDir('webdist-api-'),
+    });
+    const response = await fetch(`${url}/api/threads`);
+    expect(await response.text()).not.toContain('szobakertesz-web');
   });
 });
