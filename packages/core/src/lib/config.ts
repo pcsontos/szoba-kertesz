@@ -16,6 +16,11 @@ const EnvSchema = z.object({
   // módja megköveteli, az egylövetű `ask` viszont nem — ezért OPCIONÁLIS, mint a
   // READWRITE és az OPENAI_API_KEY. A hiányát a threads/db-chat.ts jelzi, fail-fast.
   DATABASE_URL_CHAT: z.string().min(1).optional(),
+  // Csak a package-agent validatePackage/savePackage útjához kell (szoba-kertesz_package
+  // szerep) — a katalógus/gondozás kérdés-válasz oldal enélkül is teljesen működik, ezért
+  // OPCIONÁLIS, mint a READWRITE, a CHAT és az OPENAI_API_KEY. A hiányát a
+  // tools/package/db-package.ts jelzi, fail-fast, érthető magyar üzenettel.
+  DATABASE_URL_PACKAGE: z.string().min(1).optional(),
 });
 
 export interface Config {
@@ -25,6 +30,7 @@ export interface Config {
   readonly databaseUrlReadWrite?: string;
   readonly openaiApiKey?: string;
   readonly databaseUrlChat?: string;
+  readonly databaseUrlPackage?: string;
 }
 
 /**
@@ -36,7 +42,7 @@ export interface Config {
  * vagy hiányzó kötelező érték esetén azonnal, egyértelmű magyar
  * hibaüzenettel dob.
  *
- * NÉGY jogosultsági szint van, és ez a függvény ebből HÁRMAT lát:
+ * ÖT jogosultsági szint van, és ez a függvény ebből NÉGYET lát:
  *   - `DATABASE_URL_READONLY`  — a `szoba-kertesz_ro` szerep; a query-agent
  *     `runSql`/`listCategories`/`queryCustomers` toolja (`run-sql/db-readonly.ts`).
  *     KÖTELEZŐ.
@@ -46,8 +52,11 @@ export interface Config {
  *   - `DATABASE_URL_CHAT`      — a `szoba-kertesz_chat` szerep; KIZÁRÓLAG a
  *     beszélgetés-tár (`threads/thread-store.ts`). OPCIONÁLIS, mert az
  *     egylövetű `ask` nem perzisztál.
+ *   - `DATABASE_URL_PACKAGE`   — a `szoba-kertesz_package` szerep; KIZÁRÓLAG a
+ *     package-agent validatePackage/savePackage útja. OPCIONÁLIS, mert a
+ *     katalógus/gondozás kérdés-válasz oldal enélkül is teljesen működik.
  *
- * A negyedik, a `DATABASE_URL` (admin/Prisma) SOSEM kerül ide: ez a függvény
+ * Az ötödik, a `DATABASE_URL` (admin/Prisma) SOSEM kerül ide: ez a függvény
  * nem olvassa ki és nem adja vissza — azt kizárólag a Prisma (packages/db)
  * kezeli, és egyik agent sem ír rajta keresztül.
  */
@@ -71,5 +80,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrlReadWrite: parsed.data.DATABASE_URL_READWRITE,
     openaiApiKey: parsed.data.OPENAI_API_KEY,
     databaseUrlChat: parsed.data.DATABASE_URL_CHAT,
+    databaseUrlPackage: parsed.data.DATABASE_URL_PACKAGE,
   };
 }

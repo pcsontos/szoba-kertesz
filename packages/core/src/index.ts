@@ -16,6 +16,11 @@ export * from './lib/agents/query-agent/query-agent.js';
 export * from './lib/agents/query-agent/query-prompt.js';
 export * from './lib/agents/ingest-agent/ingest-agent.js';
 export * from './lib/agents/ingest-agent/ingest-prompt.js';
+export * from './lib/agents/package-agent/package-agent.js';
+export * from './lib/agents/package-agent/package-prompt.js';
+export * from './lib/agents/orchestrator-agent/orchestrator-agent.js';
+export * from './lib/agents/orchestrator-agent/orchestrator-prompt.js';
+export * from './lib/agents/orchestrator-agent/flow-lock.js';
 
 export * from './lib/rag/chunk.js';
 export * from './lib/rag/embed.js';
@@ -38,6 +43,15 @@ export * from './lib/tools/upsert-product/db-readwrite.js';
 export * from './lib/tools/fetch-feed/fetch-feed-tool.js';
 export * from './lib/tools/fetch-feed/shopify-feed.js';
 export * from './lib/tools/delegate-to-ingest/delegate-to-ingest-tool.js';
+export * from './lib/tools/ask-info-agent/ask-info-agent-tool.js';
+export * from './lib/tools/route-to-package/route-to-package-tool.js';
+export * from './lib/tools/route-to-info/route-to-info-tool.js';
+export * from './lib/tools/package/package-schema.js';
+export * from './lib/tools/package/package-validation.js';
+export * from './lib/tools/package/validate-package-tool.js';
+export * from './lib/tools/package/save-package-tool.js';
+export * from './lib/tools/package/cancel-package-tool.js';
+export * from './lib/tools/package/db-package.js';
 
 // threads/ — a BESZÉLGETÉS-TÁR. A szerver ÉS a CLI interaktív módja is ezt hívja:
 // a perzisztencia a tárban van, nem a felületben.

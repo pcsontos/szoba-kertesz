@@ -67,6 +67,8 @@ A system prompt `<grounding>` blokkja kimondja, hogy gondozási kérdésre a mod
 - **`query-agent`** — olvas. Csak a `szoba-kertesz_ro` (SELECT-only) role-t látja.
 - **`ingest-agent`** — ír. Saját system prompt, saját toolkészlet, `szoba-kertesz_rw` role.
 - **`delegateToIngest`** — a query-agent **tool-hívásként** adja át a katalógus-módosítást. Belül teljes második loop fut, saját trace-szel és saját költségméréssel: egy ágens is lehet egy másik ágens toolja. Az olvasó ágens maga sosem ír.
+- **`orchestrator-agent`** (`askOrchestrator`) — a **harmadik** agent, és a belépési pontok (CLI, szerver) mostantól ezt hívják, nem közvetlenül a query-agentet. Más fajta, mint a többi: sosem válaszol saját szóval, hanem pontosan egy toolt hív — `routeToPackageAgent`-et, ha a felhasználó egy növénycsomagot épít, vagy `routeToInfoAgent`-et minden más kérdésre —, és a lefutott route-tool jelentését adja vissza szó szerint. A **flow-lock** (`findLastFlowSignal`) rövidre zárja az orchestrátor saját LLM-hívását, ha a beszélgetés history-jában a legutóbbi jelző-tool `routeToPackageAgent` volt: egy többköríves csomag-építés így egyetlen plusz LLM-hívásba kerül, nem körönként egybe.
+- **`package-agent`** (`askPackageAgent`) — a **negyedik** agent, a csomag-építő: az `askInfoAgent` toolján keresztül olvassa a katalógust/tudásbázist/ügyfeleket (sosem fut SQL-t közvetlenül), `validatePackage`-dal ellenőriz, `savePackage`-dal ment vagy `cancelPackage`-dal megszakít. Saját, **ötödik** DB-szerepen fut (`szoba-kertesz_package`): SELECT a `products`-on és a `customers`-en, SELECT + INSERT a `packages`-en és a `package_items`-en — se UPDATE, se DELETE, tehát egy elmentett csomag **append-only**, mint a beszélgetés-tár.
 
 ### Kétrétegű, egymástól független írásvédelem
 
@@ -74,7 +76,7 @@ Az olvasó úton két, egymástól független réteg véd: **alkalmazásszintű 
 
 ### Toolok
 
-`runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `queryCustomers` · `delegateToIngest` (csak adminnál)
+`runSql` · `searchKnowledge` (RAG a gondozási tudásbázisban) · `upsertProduct` (Zod-sémával, az egyetlen írási út) · `fetchFeed` (élő Shopify-termékfeed) · `listCategories` · `queryCustomers` · `delegateToIngest` (csak adminnál) · `askInfoAgent` (a package-agent kapuja a query-agent felé) · `routeToPackageAgent` · `routeToInfoAgent` (az orchestrátor két, egymást kizáró toolja) · `validatePackage` · `savePackage` · `cancelPackage`
 
 ### Negyedik belépési pont — MCP-szerver (`apps/mcp`)
 
@@ -153,6 +155,7 @@ Töltsd ki a `.env`-ben:
 | `DATABASE_URL_READONLY` | RO kapcsolat a `szoba-kertesz_ro` role-lal — ezt használja a query-agent `runSql` / `listCategories` / `queryCustomers` toolja **és a tudásbázis KERESÉSE** (`searchKnowledge`). A vásárlót kiszolgáló szerver így sosem nyit admin kapcsolatot |
 | `DATABASE_URL_READWRITE` | RW kapcsolat a `szoba-kertesz_rw` role-lal — kizárólag az ingest-agent `upsertProduct` útja. **Opcionális:** nélküle a kérdés-válasz oldal teljesen működik, csak az `ingest` bukik el, érthető magyar üzenettel |
 | `DATABASE_URL_CHAT` | a `szoba-kertesz_chat` role — **kizárólag** a beszélgetés-tár: SELECT + INSERT a `threads`-en és a `messages`-en, UPDATE **csak a `threads`-en** (az `updated_at` léptetéséhez). Semmi más tábla, DELETE sehol, és a `messages` nem írható át — a beszélgetés-történet append-only, a DB szintjén is. A szerver enélkül **el sem indul** (magyar hibaüzenet, exit 1), és az interaktív CLI-mód is ezt használja; az egylövetű `pnpm cli ask` viszont nem igényli |
+| `DATABASE_URL_PACKAGE` | a `szoba-kertesz_package` role — **kizárólag** a package-agent `validatePackage`/`savePackage` útja: SELECT a `products`-on és a `customers`-en (determinisztikus ellenőrzés, nem modell-generált SQL), SELECT + INSERT a `packages`-en és a `package_items`-en, se UPDATE, se DELETE — **append-only**, mint a `_chat` szerep. **Opcionális:** nélküle a katalógus- és gondozási kérdés-válasz oldal teljesen működik, csak a csomag-építés bukik el, érthető magyar üzenettel |
 | `OPENAI_API_KEY` | a tudásbázis embedding-modelljéhez (`text-embedding-3-small`) — **a projekt egyetlen nem-Anthropic hívása**, mert embedding-modellt az Anthropic nem ad. **Opcionális:** nélküle a katalógus-oldal (CLI, web, `runSql`, `listCategories`) teljesen működik, csak a `searchKnowledge` és a `knowledge:ingest` bukik el, érthető magyar üzenettel. A HyDE-t és az átrangsorolást NEM érinti: azok Claude Haikun futnak |
 | `POSTGRES_DB`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` | a docker-compose konténer admin hitelesítő adatai |
 

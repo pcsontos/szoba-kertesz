@@ -84,6 +84,31 @@ A `parts` azért `jsonb` és nem `text`: a böngésző így a tool-kártyákat i
 
 A `threads.updated_at`-nek a Prisma `@updatedAt` MELLETT `@default(now())` is kell, mert a tár nyers SQL-lel ír, a `@updatedAt`-et viszont a Prisma kliensoldalon tölti: alapérték nélkül a kézi INSERT elhasalna a NOT NULL oszlopon.
 
+## packages + package_items séma (orchestrátor-agent kör)
+
+```sql
+packages (
+  id           uuid primary key default gen_random_uuid(),
+  customer_id  int references customers(id) not null,
+  total_price  numeric(12,2),  -- a package_items unit_price × quantity összege
+  created_at   timestamptz
+)
+
+package_items (
+  id          serial primary key,
+  package_id  uuid references packages(id) on delete cascade,
+  product_id  int references products(id) not null,
+  quantity    int,
+  unit_price  numeric(12,2)   -- ÁRPILLANATKÉP mentéskor (COALESCE(sale_price, price))
+)
+```
+
+A `packages.id` és a `threads.id` ugyanazon okból `uuid` (`gen_random_uuid()`, DB-oldalon generálva, nem a Prisma-kliensen): a `savePackage` nyers SQL INSERT-tel ír, tehát az azonosítót magának az adatbázisnak kell előállítania.
+
+A `package_items.unit_price` szándékosan **árpillanatkép**: a mentés pillanatában érvényes `COALESCE(sale_price, price)` értéket rögzíti, nem egy élő hivatkozást a `products` táblára — így egy elmentett csomag ára nem sodródik a katalógus későbbi árváltozásaival.
+
+A `packages`/`package_items` az egyetlen a projekt táblái közül, amelyiket **kizárólag** két tool (`validatePackage`, `savePackage`) írhat, egyetlen agent (`package-agent`) toolkészletén keresztül, a saját, ötödik DB-szerepen (`szoba-kertesz_package`) — lásd lentebb.
+
 ## DB-szerepek
 
 | Szerep | Kapcsolat | Mit lát |
@@ -92,6 +117,7 @@ A `threads.updated_at`-nek a Prisma `@updatedAt` MELLETT `@default(now())` is ke
 | `szoba-kertesz_ro` | `DATABASE_URL_READONLY` | SELECT: `products`, `customers`, `knowledge_chunks` — a `threads`/`messages` **megtagadva** |
 | `szoba-kertesz_rw` | `DATABASE_URL_READWRITE` | SELECT/INSERT/UPDATE a `products`-on; DELETE és DDL nincs |
 | `szoba-kertesz_chat` | `DATABASE_URL_CHAT` | SELECT/INSERT a `threads`-en és a `messages`-en, UPDATE **csak a `threads`-en** (az `updated_at` léptetéséhez); minden más tábla megtagadva, DELETE sehol, és a `messages` nem írható át — **append-only** |
+| `szoba-kertesz_package` | `DATABASE_URL_PACKAGE` | SELECT a `products`-on és a `customers`-en (determinisztikus ellenőrzés, nem modell-generált SQL); SELECT/INSERT a `packages`-en és a `package_items`-en, se UPDATE, se DELETE — **append-only**, a `threads`/`messages`/`knowledge_chunks` megtagadva |
 
 A `messages` UPDATE-jét a `<ts>_messages_append_only` migráció vette vissza (a #8 PR review nyomán): a tár egyetlen művelete sem frissít üzenetet, tehát a grant tágabb volt, mint a kód — és az „append-only" állítást a DB nem támasztotta alá. Mérve: `UPDATE messages` → `permission denied`, `UPDATE threads` → `UPDATE 0`.
 

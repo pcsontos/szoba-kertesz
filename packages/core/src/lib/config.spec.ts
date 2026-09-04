@@ -61,6 +61,7 @@ describe('loadConfig', () => {
       'anthropicApiKey',
       'anthropicModel',
       'databaseUrlChat',
+      'databaseUrlPackage',
       'databaseUrlReadWrite',
       'databaseUrlReadonly',
       'openaiApiKey',
@@ -105,5 +106,25 @@ describe('loadConfig', () => {
     expect(withKey.openaiApiKey).toEqual('sk-proj-test-key');
     expect(withoutKey.openaiApiKey).toBeUndefined();
     expect(withoutKey.anthropicApiKey).toEqual('sk-ant-test-key');
+  });
+
+  it('reads DATABASE_URL_PACKAGE when given, but stays optional without it', () => {
+    // Az ÖTÖDIK jogosultsági szint (szoba-kertesz_package) csak a package-agent
+    // validatePackage/savePackage útjáé. Opcionális, mert a katalógus/gondozás
+    // kérdés-válasz oldal enélkül is teljesen működik — a hiányt a db-package.ts
+    // jelzi, ott, ahol tényleg számít.
+    const PACKAGE_URL = 'postgresql://pkg:pkg@localhost:5433/szoba-kertesz';
+    const withPackage = loadConfig({
+      ANTHROPIC_API_KEY: 'sk-ant-test-key',
+      DATABASE_URL_READONLY: READONLY_URL,
+      DATABASE_URL_PACKAGE: PACKAGE_URL,
+    });
+    const withoutPackage = loadConfig({
+      ANTHROPIC_API_KEY: 'sk-ant-test-key',
+      DATABASE_URL_READONLY: READONLY_URL,
+    });
+
+    expect(withPackage.databaseUrlPackage).toEqual(PACKAGE_URL);
+    expect(withoutPackage.databaseUrlPackage).toBeUndefined();
   });
 });

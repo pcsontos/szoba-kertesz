@@ -13,7 +13,7 @@ import {
   type UIMessage,
 } from 'ai';
 import {
-  askAgent,
+  askOrchestrator,
   defaultThreadStore,
   toThreadTitle,
   ThreadIdSchema,
@@ -150,7 +150,7 @@ function hasContent(parts: readonly { type: string }[]): boolean {
 
 export function createApp(options: CreateAppOptions = {}): Express {
   const ask: AskFn =
-    options.ask ?? ((question, opts) => askAgent(question, opts));
+    options.ask ?? ((question, opts) => askOrchestrator(question, opts));
   const store: ThreadStore = options.store ?? defaultThreadStore;
 
   const app = express();

@@ -1,7 +1,8 @@
 import { createInterface } from 'node:readline';
 import {
-  askAgent,
+  askOrchestrator,
   closeChatPool,
+  closePackagePool,
   closeReadonlyPool,
   defaultThreadStore,
   partsToText,
@@ -142,7 +143,7 @@ export async function runInteractive(
   const ask =
     options.ask ??
     ((question: string, currentHistory: readonly Message[]) =>
-      askAgent(question, {
+      askOrchestrator(question, {
         print,
         history: currentHistory,
         role: options.role,
@@ -252,7 +253,7 @@ export async function runInteractive(
       // Session-végi, egyszeri pool-zárás (lásd a fenti doc-comment) — a
       // lezárási hibát (ha van) jelentjük, de nem hagyjuk a Promise-t
       // örökre függőben.
-      void Promise.all([closeReadonlyPool(), closeChatPool()])
+      void Promise.all([closeReadonlyPool(), closeChatPool(), closePackagePool()])
         .catch((error) => {
           console.error(error instanceof Error ? error.message : String(error));
         })
