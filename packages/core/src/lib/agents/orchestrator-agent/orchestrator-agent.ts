@@ -10,16 +10,23 @@ import { CURRENT_ROLE } from '../../user-role/user-role.js';
 
 // orchestrator-agent.ts — a NEGYEDIK agent, de más fajta: sosem válaszol saját szóval, csak
 // IRÁNYÍT. Két tool-ja van (routeToPackageAgent, routeToInfoAgent), mindkettő egy TELJES
-// beágyazott agent-loopot futtat (ugyanaz az agent-mint-tool minta, mint a delegateToIngest),
-// és a promptja előírja: a tool eredményét SZÓ SZERINT add vissza.
+// beágyazott agent-loopot futtat (ugyanaz az agent-mint-tool minta, mint a delegateToIngest).
+//
+// EGYETLEN kör (maxSteps: 1), NEM kettő: a toolChoice: 'required' MINDEN lépésen érvényes
+// marad (az agent-loop nem térít el rajta lépésenként), tehát egy második kör a modellt ÚJRA
+// tool-hívásra kényszerítené, sosem szövegre. A válasz ezért NEM a modell szövegéből jön,
+// hanem magából a lefutott route-tool jelentéséből (result.toolSteps[].resultSummary — a
+// tool ToolOutcome.content-je), ami úgyis szó szerint a route-olt agent válasza. Egy kör
+// helyett kettő pluszban fizetne egy LLM-hívást azért, hogy a modell begépelje ugyanazt.
 //
 // A FLOW-LOCK a költség miatt kritikus: ha a history-ban a legutóbbi jelző-tool
 // routeToPackageAgent (a package-flow tehát nyitva van), az orchestrátor LLM-hívása KI SEM
 // MEGY — egyenesen a package-agentet hívjuk. Egy N-köríves csomag-építés így egyetlen plusz
 // LLM-hívásba kerül (az elsőbe), nem N-be.
 
-export const MAX_ORCHESTRATOR_STEPS = 2;
+export const MAX_ORCHESTRATOR_STEPS = 1;
 const MAX_TOKENS = 1024;
+const ROUTE_TOOL_NAMES: readonly string[] = ['routeToPackageAgent', 'routeToInfoAgent'];
 
 export interface AskOrchestratorOptions extends AskAgentOptions {
   /** Teszt-szeam: a package-agent futtatója (a flow-lockos ág ÉS a route-tool is ezt hívja). */
@@ -52,7 +59,7 @@ export async function askOrchestrator(
     return runPackage(trimmed, options);
   }
 
-  return runAgentLoop(
+  const result = await runAgentLoop(
     trimmed,
     {
       systemPrompt: ORCHESTRATOR_PROMPT,
@@ -80,6 +87,11 @@ export async function askOrchestrator(
         'Nem sikerült eldönteni, hova irányítsam a kérdést. Pontosítsd, mire vagy kíváncsi: ' +
         'katalógus/gondozás, vagy egy növénycsomag összeállítása.',
     },
-    { ...options, history: [] },
+    options,
   );
+
+  // A válasz magából a route-tool jelentéséből jön (szó szerint), nem a modell szövegéből —
+  // lásd a fenti megjegyzést. A route-tool SOSEM dob, tehát ha lefutott, van jelentése.
+  const routeStep = result.toolSteps.find((step) => ROUTE_TOOL_NAMES.includes(step.toolName));
+  return routeStep ? { ...result, answer: routeStep.resultSummary } : result;
 }

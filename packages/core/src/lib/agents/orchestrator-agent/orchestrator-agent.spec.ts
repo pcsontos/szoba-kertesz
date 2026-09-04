@@ -146,6 +146,17 @@ describe('askOrchestrator — flow-lock rövidzár', () => {
         role: 'assistant',
         content: [{ type: 'tool-call', toolCallId: 'c1', toolName: 'savePackage', input: {} }],
       },
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'savePackage',
+            output: { type: 'text', value: 'A csomag elmentve.' },
+          },
+        ],
+      },
     ];
 
     const result = await askOrchestrator('másik kérdés', {
