@@ -9,6 +9,11 @@ import type { AskOptions, AskResult, Message } from '../../agents/agent-loop.js'
 // sémája ÜRES: a question/history nem a MODELLTŐL jön (mint delegateToIngest instruction
 // mezője), hanem az orchestrator-agent.ts zárja le a factory-hívásban — így a package-agent
 // a TELJES, hiteles beszélgetést kapja, nem egy a modell által újrafogalmazott rövidítést.
+//
+// onTextDelta/onStream: az orchestrátor SAJÁT streamText-hívása sosem generál szöveget (lásd
+// orchestrator-agent.ts), a VALÓDI válasz ebben a beágyazott futásban keletkezik — ezért ide
+// kötjük be a szerver token-streamjét és az üzenet-stream tool-kártyáit, nem az orchestrátor
+// saját loopjába.
 
 export const ROUTE_TO_PACKAGE_AGENT_TOOL_NAME = 'routeToPackageAgent';
 
@@ -18,6 +23,8 @@ export interface RouteToPackageAgentOptions {
   readonly print?: boolean;
   readonly persistTrace?: boolean;
   readonly run?: (question: string, options?: AskOptions) => Promise<AskResult>;
+  readonly onTextDelta?: AskOptions['onTextDelta'];
+  readonly onStream?: AskOptions['onStream'];
 }
 
 export const routeToPackageAgentTool = (
@@ -38,6 +45,8 @@ export const routeToPackageAgentTool = (
           history: options.history,
           print: options.print,
           persistTrace: options.persistTrace,
+          onTextDelta: options.onTextDelta,
+          onStream: options.onStream,
         });
         const outcome: ToolOutcome = {
           content: result.answer,

@@ -19,10 +19,17 @@ import { CURRENT_ROLE } from '../../user-role/user-role.js';
 // tool ToolOutcome.content-je), ami úgyis szó szerint a route-olt agent válasza. Egy kör
 // helyett kettő pluszban fizetne egy LLM-hívást azért, hogy a modell begépelje ugyanazt.
 //
+// onTextDelta/onStream: SZÁNDÉKOSAN nem megy az orchestrátor SAJÁT streamText-hívásának —
+// az sosem generál szöveget (lásd fent), tehát a szerver csak egy üres "routeToInfoAgent"
+// kártyát ÉS duplán a választ látná. Ehelyett a route-tool-oknak adjuk tovább, azok viszik be
+// a BEÁGYAZOTT agent-futásba — onnan jön a valódi token-stream és a valódi tool-kártyák
+// (tool-runSql, tool-searchKnowledge, stb.).
+//
 // A FLOW-LOCK a költség miatt kritikus: ha a history-ban a legutóbbi jelző-tool
 // routeToPackageAgent (a package-flow tehát nyitva van), az orchestrátor LLM-hívása KI SEM
 // MEGY — egyenesen a package-agentet hívjuk. Egy N-köríves csomag-építés így egyetlen plusz
-// LLM-hívásba kerül (az elsőbe), nem N-be.
+// LLM-hívásba kerül (az elsőbe), nem N-be, és ez az ág a teljes options-t (onStream-mel
+// együtt) egyből a package-agentnek adja — nincs orchestrátor-loop, nincs mit kivenni belőle.
 
 export const MAX_ORCHESTRATOR_STEPS = 1;
 const MAX_TOKENS = 1024;
@@ -59,6 +66,10 @@ export async function askOrchestrator(
     return runPackage(trimmed, options);
   }
 
+  // A streaming-mezők a route-olt agent BEÁGYAZOTT futásához tartoznak, nem az orchestrátor
+  // saját route-döntéséhez — lásd a fenti megjegyzést.
+  const { onTextDelta, onStream, ...loopOptions } = options;
+
   const result = await runAgentLoop(
     trimmed,
     {
@@ -70,6 +81,8 @@ export async function askOrchestrator(
           print: options.print,
           persistTrace: options.persistTrace,
           run: options.runPackageAgent,
+          onTextDelta,
+          onStream,
         }),
         routeToInfoAgent: routeToInfoAgentTool(report, {
           question: trimmed,
@@ -78,6 +91,8 @@ export async function askOrchestrator(
           print: options.print,
           persistTrace: options.persistTrace,
           run: options.runInfoAgent,
+          onTextDelta,
+          onStream,
         }),
       }),
       maxSteps: MAX_ORCHESTRATOR_STEPS,
@@ -87,7 +102,7 @@ export async function askOrchestrator(
         'Nem sikerült eldönteni, hova irányítsam a kérdést. Pontosítsd, mire vagy kíváncsi: ' +
         'katalógus/gondozás, vagy egy növénycsomag összeállítása.',
     },
-    options,
+    loopOptions,
   );
 
   // A válasz magából a route-tool jelentéséből jön (szó szerint), nem a modell szövegéből —

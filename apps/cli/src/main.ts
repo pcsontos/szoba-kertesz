@@ -1,8 +1,9 @@
 import { join } from 'node:path';
 import { Command } from 'commander';
 import {
-  askAgent,
+  askOrchestrator,
   askIngestAgent,
+  closePackagePool,
   closeReadonlyPool,
   closeReadWritePool,
   setWatchLog,
@@ -68,7 +69,7 @@ program
       try {
         const print = !options.quiet;
         const role = options.role ? parseRole(options.role) : undefined;
-        const result = await askAgent(question, { print, role });
+        const result = await askOrchestrator(question, { print, role });
         if (options.showPrompt) {
           printPrompt(result.systemPrompt, result.messages);
         }
@@ -87,7 +88,7 @@ program
         // különben a pg alapértelmezett `idleTimeoutMillis`-e miatt a folyamat
         // ~10 másodpercig életben marad a válasz kiírása után is. Biztonságos
         // no-op, ha runSql-t egyáltalán nem hívta a kérdés (nem jött létre pool).
-        await closeReadonlyPool();
+        await Promise.all([closeReadonlyPool(), closePackagePool()]);
       }
     },
   );

@@ -108,6 +108,23 @@ describe('askOrchestrator — route-olás', () => {
     expect(offered).toEqual(['routeToPackageAgent', 'routeToInfoAgent']);
     expect(toolChoice).toEqual({ type: 'required' });
   });
+
+  it('az onTextDelta/onStream a route-olt agentnek megy, nem az orchestrátor saját hívásának', async () => {
+    const { model } = mockModel(toolStepChunks('c1', 'routeToInfoAgent'));
+    const runInfoAgent = vi.fn().mockResolvedValue(fakeResult('kész'));
+    const onTextDelta = vi.fn();
+    const onStream = vi.fn();
+
+    await askOrchestrator('kérdés', {
+      ...baseDeps,
+      model,
+      runInfoAgent,
+      onTextDelta,
+      onStream,
+    });
+
+    expect(runInfoAgent.mock.calls[0]?.[1]).toMatchObject({ onTextDelta, onStream });
+  });
 });
 
 describe('askOrchestrator — flow-lock rövidzár', () => {

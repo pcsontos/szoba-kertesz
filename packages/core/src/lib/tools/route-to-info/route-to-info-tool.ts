@@ -9,6 +9,9 @@ import type { UserRole } from '../../user-role/user-role.js';
 // katalógus/tudásbázis/ügyfél-szakértő (info) agentnek — vagyis a MEGLÉVŐ askAgent-nek. A
 // role-t TOVÁBBADJA a külső hívásból (az orchestrator-agent.ts zárja le): egy admin
 // beszélgetés info-útja is megkapja a delegateToIngest-et, ahogy ma is, orchestrátor nélkül.
+//
+// onTextDelta/onStream: lásd route-to-package-tool.ts — ugyanaz az elv, a valódi streaming
+// ebben a beágyazott futásban keletkezik, nem az orchestrátor saját loopjában.
 
 export const ROUTE_TO_INFO_AGENT_TOOL_NAME = 'routeToInfoAgent';
 
@@ -22,6 +25,8 @@ export interface RouteToInfoAgentOptions {
     question: string,
     options?: AskAgentOptions,
   ) => Promise<AskResult>;
+  readonly onTextDelta?: AskAgentOptions['onTextDelta'];
+  readonly onStream?: AskAgentOptions['onStream'];
 }
 
 export const routeToInfoAgentTool = (
@@ -43,6 +48,8 @@ export const routeToInfoAgentTool = (
           history: options.history,
           print: options.print,
           persistTrace: options.persistTrace,
+          onTextDelta: options.onTextDelta,
+          onStream: options.onStream,
         });
         const outcome: ToolOutcome = {
           content: result.answer,

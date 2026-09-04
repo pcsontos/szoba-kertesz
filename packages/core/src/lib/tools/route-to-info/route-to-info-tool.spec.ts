@@ -62,4 +62,22 @@ describe('routeToInfoAgent', () => {
     expect(reported).toHaveLength(1);
     expect(reported[0]?.isError).toBe(false);
   });
+
+  it('az onTextDelta/onStream mezőket is átadja a beágyazott futásnak', async () => {
+    const run = vi.fn().mockResolvedValue(infoResult('kész'));
+    const onTextDelta = vi.fn();
+    const onStream = vi.fn();
+    const tool = routeToInfoAgentTool(undefined, {
+      question: 'kérdés',
+      history: [],
+      role: 'customer',
+      run,
+      onTextDelta,
+      onStream,
+    });
+
+    await callTool(tool);
+
+    expect(run.mock.calls[0]?.[1]).toMatchObject({ onTextDelta, onStream });
+  });
 });

@@ -75,4 +75,21 @@ describe('routeToPackageAgent', () => {
 
     expect(content).toContain('DATABASE_URL_PACKAGE');
   });
+
+  it('az onTextDelta/onStream mezőket is átadja a beágyazott futásnak', async () => {
+    const run = vi.fn().mockResolvedValue(packageResult('kész'));
+    const onTextDelta = vi.fn();
+    const onStream = vi.fn();
+    const tool = routeToPackageAgentTool(undefined, {
+      question: 'kérdés',
+      history: [],
+      run,
+      onTextDelta,
+      onStream,
+    });
+
+    await callTool(tool);
+
+    expect(run.mock.calls[0]?.[1]).toMatchObject({ onTextDelta, onStream });
+  });
 });
