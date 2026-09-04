@@ -32,7 +32,7 @@
 **Interfaces:**
 - Produces: `packages` tábla (`id UUID`, `customer_id INT` FK, `total_price NUMERIC(12,2)`, `created_at`), `package_items` tábla (`id SERIAL`, `package_id UUID` FK cascade, `product_id INT` FK, `quantity INT`, `unit_price NUMERIC(12,2)`).
 
-- [ ] **Step 1: Séma bővítése**
+- [x] **Step 1: Séma bővítése**
 
 `packages/db/prisma/schema.prisma` végére (a `Message` modell UTÁN) illeszd be:
 
@@ -82,7 +82,7 @@ A `Product` modellhez (a `@@map("products")` elé) add hozzá:
   packageItems    PackageItem[]
 ```
 
-- [ ] **Step 2: Migráció generálása és alkalmazása**
+- [x] **Step 2: Migráció generálása és alkalmazása**
 
 A repo gyökeréről:
 
@@ -92,7 +92,7 @@ pnpm exec prisma migrate dev --name packages
 
 Ez a helyi fejlesztői adatbázisra AZONNAL alkalmazza az új táblákat (biztonságos, additív — csak `CREATE TABLE`, nem érint meglévő adatot) és létrehozza a `packages/db/prisma/migrations/<ts>_packages/migration.sql` fájlt.
 
-- [ ] **Step 3: Ellenőrzés**
+- [x] **Step 3: Ellenőrzés**
 
 ```bash
 docker compose exec postgres psql -U "$POSTGRES_ADMIN_USER" -d szoba-kertesz -c '\d packages'
@@ -101,7 +101,7 @@ docker compose exec postgres psql -U "$POSTGRES_ADMIN_USER" -d szoba-kertesz -c 
 
 Várt: mindkét tábla létezik a fenti oszlopokkal, és a `package_items_package_id_fkey` / `package_items_product_id_fkey` / `packages_customer_id_fkey` idegen kulcsok szerepelnek.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/db/prisma/schema.prisma packages/db/prisma/migrations/
@@ -122,7 +122,7 @@ git commit -m "feat: packages és package_items tábla (Task 1)"
 **Interfaces:**
 - Produces: `Config.databaseUrlPackage?: string` (opcionális, mint a `databaseUrlReadWrite`).
 
-- [ ] **Step 1: A régi teszt megbukik — új mezőt várunk a configtól**
+- [x] **Step 1: A régi teszt megbukik — új mezőt várunk a configtól**
 
 `packages/core/src/lib/config.spec.ts`-ben cseréld ki a `Object.keys(config).sort()` állítást (a `'reads DATABASE_URL_READWRITE...'` teszt előtti, `'reads DATABASE_URL_READONLY into the config...'` teszten belüli blokkot):
 
@@ -172,7 +172,7 @@ A fájl VÉGÉRE (az utolsó `it` blokk után, a záró `});` elé) illessz be e
   });
 ```
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern config.spec.ts
@@ -180,7 +180,7 @@ pnpm nx test core --testPathPattern config.spec.ts
 
 Várt: FAIL — a `Object.keys` állítás hiányolja a `databaseUrlPackage` kulcsot, az új teszt pedig `undefined`-et kap `'databaseUrlPackage' in config` helyett (a mező még nem létezik a típuson/visszatérésen).
 
-- [ ] **Step 3: `config.ts` bővítése**
+- [x] **Step 3: `config.ts` bővítése**
 
 `packages/core/src/lib/config.ts`-ben az `EnvSchema` `DATABASE_URL_CHAT` sora UTÁN:
 
@@ -206,7 +206,7 @@ A `loadConfig` visszatérési objektumában a `databaseUrlChat: parsed.data.DATA
 
 A fájl doc-commentjében (a négy jogosultsági szintet felsoroló blokk) egészítsd ki egy ötödik ponttal, ugyanabban a stílusban, mint a többi.
 
-- [ ] **Step 4: Futtatás — menjen zölden**
+- [x] **Step 4: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern config.spec.ts
@@ -214,7 +214,7 @@ pnpm nx test core --testPathPattern config.spec.ts
 
 Várt: PASS.
 
-- [ ] **Step 5: `init.sql` bővítése**
+- [x] **Step 5: `init.sql` bővítése**
 
 `init.sql`-ben a `szoba-kertesz_chat` szerepet létrehozó `DO $$ ... END $$;` blokk UTÁN (a fájl végére):
 
@@ -231,7 +231,7 @@ END
 $$;
 ```
 
-- [ ] **Step 6: A hand-written migráció**
+- [x] **Step 6: A hand-written migráció**
 
 Válassz egy időbélyeget, ami KÉSŐBBI, mint a Task 1-ben generált `<ts>_packages` mappáé (pl. `date -u +%Y%m%d%H%M%S`), és hozd létre:
 
@@ -278,7 +278,7 @@ Alkalmazd:
 pnpm db:migrate
 ```
 
-- [ ] **Step 7: Ellenőrzés**
+- [x] **Step 7: Ellenőrzés**
 
 ```bash
 docker compose exec postgres psql -U "$POSTGRES_ADMIN_USER" -d szoba-kertesz -c "\du szoba-kertesz_package"
@@ -286,7 +286,7 @@ docker compose exec postgres psql -U "$POSTGRES_ADMIN_USER" -d szoba-kertesz -c 
 
 Várt: a szerep létezik, LOGIN-nal.
 
-- [ ] **Step 8: `.env.example` bővítése**
+- [x] **Step 8: `.env.example` bővítése**
 
 A `DATABASE_URL_CHAT` sor és leírása UTÁN:
 
@@ -303,7 +303,7 @@ A `DATABASE_URL_CHAT` sor és leírása UTÁN:
 DATABASE_URL_PACKAGE=postgresql://szoba-kertesz_package:szoba-kertesz_package@localhost:5433/szoba-kertesz
 ```
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add packages/db/prisma/migrations/ init.sql .env.example packages/core/src/lib/config.ts packages/core/src/lib/config.spec.ts
@@ -322,7 +322,7 @@ git commit -m "feat: ötödik DB-szerep (szoba-kertesz_package) a csomag-épít�
 - Produces: `queryPackage<T>(sql, values?, deps?): Promise<QueryResult<T>>`, `withPackageTransaction<T>(run: (client: PoolClient) => Promise<T>, deps?): Promise<T>`, `closePackagePool(): Promise<void>`, `interface DbPackageDeps { pool?: Pool; config?: Config }`.
 - Consumes: `loadConfig`, `Config` (`../../config.js`).
 
-- [ ] **Step 1: A DB-role-guarantee spec (előbb, valódi DB ellen)**
+- [x] **Step 1: A DB-role-guarantee spec (előbb, valódi DB ellen)**
 
 `packages/core/src/lib/tools/package/db-package.spec.ts`:
 
@@ -441,7 +441,7 @@ describe('db-package — a szoba-kertesz_package szerep jogosultsági határai',
 });
 ```
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern db-package.spec.ts
@@ -449,7 +449,7 @@ pnpm nx test core --testPathPattern db-package.spec.ts
 
 Várt: FAIL — a `./db-package.js` modul nem létezik.
 
-- [ ] **Step 3: `db-package.ts` implementálása**
+- [x] **Step 3: `db-package.ts` implementálása**
 
 ```ts
 import { Pool, type PoolClient, type QueryResult, type QueryResultRow } from 'pg';
@@ -535,7 +535,7 @@ export async function closePackagePool(): Promise<void> {
 }
 ```
 
-- [ ] **Step 4: Futtatás — menjen zölden**
+- [x] **Step 4: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern db-package.spec.ts
@@ -543,7 +543,7 @@ pnpm nx test core --testPathPattern db-package.spec.ts
 
 Várt: PASS (élő, seedelt Postgres kell hozzá — `docker compose up -d` + `pnpm db:migrate` + `pnpm db:seed` már megtörtént az előző taskokban).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/lib/tools/package/db-package.ts packages/core/src/lib/tools/package/db-package.spec.ts
@@ -564,7 +564,7 @@ git commit -m "feat: db-package.ts — pool és tranzakció-helper a csomag-ép�
 - Consumes: `queryPackage`, `DbPackageDeps` (Task 3), `DIFFICULTY` (`../upsert-product/product-schema.js`, meglévő export).
 - Produces: `PackageItemInputSchema`, `PackageInputSchema`, `type PackageInput`, `checkPackage(input: PackageInput, deps?: DbPackageDeps): Promise<PackageCheckResult>`, `type PackageCheckResult`, `type PackageViolation`.
 
-- [ ] **Step 1: `package-schema.ts`**
+- [x] **Step 1: `package-schema.ts`**
 
 ```ts
 import { z } from 'zod';
@@ -592,7 +592,7 @@ export const PackageInputSchema = z
 export type PackageInput = z.infer<typeof PackageInputSchema>;
 ```
 
-- [ ] **Step 2: A validáció UNIT specje (mockolt DB-lekérdezéssel, előbb — bukjon)**
+- [x] **Step 2: A validáció UNIT specje (mockolt DB-lekérdezéssel, előbb — bukjon)**
 
 `packages/core/src/lib/tools/package/package-validation.spec.ts`:
 
@@ -722,7 +722,7 @@ describe('checkPackage', () => {
 });
 ```
 
-- [ ] **Step 3: Futtatás — bukjon**
+- [x] **Step 3: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern package-validation.spec.ts
@@ -730,7 +730,7 @@ pnpm nx test core --testPathPattern package-validation.spec.ts
 
 Várt: FAIL — a `./package-validation.js` modul nem létezik.
 
-- [ ] **Step 4: `package-validation.ts` implementálása**
+- [x] **Step 4: `package-validation.ts` implementálása**
 
 ```ts
 import { queryPackage, type DbPackageDeps } from './db-package.js';
@@ -896,7 +896,7 @@ export async function checkPackage(
 }
 ```
 
-- [ ] **Step 5: Futtatás — menjen zölden**
+- [x] **Step 5: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern package-validation.spec.ts
@@ -904,7 +904,7 @@ pnpm nx test core --testPathPattern package-validation.spec.ts
 
 Várt: PASS, mind a 7 eset.
 
-- [ ] **Step 6: DB-integrációs spec valódi seed-adaton**
+- [x] **Step 6: DB-integrációs spec valódi seed-adaton**
 
 Előbb nézd meg egy valós ügyfél és egy valós termék adatait, hogy a teszt reális határértékekkel dolgozzon:
 
@@ -1007,7 +1007,7 @@ describe('checkPackage — valódi seed-adaton', () => {
 });
 ```
 
-- [ ] **Step 7: Futtatás — menjen zölden**
+- [x] **Step 7: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern package-validation
@@ -1015,7 +1015,7 @@ pnpm nx test core --testPathPattern package-validation
 
 Várt: PASS mindkét fájlra (unit + DB).
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add packages/core/src/lib/tools/package/package-schema.ts packages/core/src/lib/tools/package/package-validation.ts packages/core/src/lib/tools/package/package-validation.spec.ts packages/core/src/lib/tools/package/package-validation-db.spec.ts
@@ -1034,7 +1034,7 @@ git commit -m "feat: package-validation.ts — csomag determinisztikus ellenőrz
 - Consumes: `PackageInputSchema` (Task 4), `checkPackage` (Task 4), `ToolOutcome`/`ToolReporter` (`../tool-outcome.js`).
 - Produces: `VALIDATE_PACKAGE_TOOL_NAME = 'validatePackage'`, `executeValidatePackage(rawInput, deps?)`, `validatePackageTool(report?)`.
 
-- [ ] **Step 1: A spec — előbb, bukjon**
+- [x] **Step 1: A spec — előbb, bukjon**
 
 `packages/core/src/lib/tools/package/validate-package-tool.spec.ts`:
 
@@ -1131,7 +1131,7 @@ describe('validatePackageTool', () => {
 
 A `validatePackageTool` maga a MEGOSZTOTT (valódi) pool-t hívja (nincs `deps` injektálás a tool-factory szintjén, az `upsertProductTool` mintája szerint) — ezért a `validatePackageTool` describe blokk csak azt bizonyítja, hogy a factory injektálás nélkül is felépíthető és a névkonstans helyes; a TÉNYLEGES viselkedést (érvényes/elutasított csomag, Trace-jelentés) az `executeValidatePackage` fenti tesztjei fedik `deps`-injektált mock pool-lal, DB nélkül. A teljes, valódi végponttól-végpontig futás — modell hívja a toolt, a tool a valódi DB-t éri el — a Task 4/6 DB-integrációs specjeiben van bizonyítva.
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern validate-package-tool.spec.ts
@@ -1139,7 +1139,7 @@ pnpm nx test core --testPathPattern validate-package-tool.spec.ts
 
 Várt: FAIL — a `./validate-package-tool.js` modul nem létezik.
 
-- [ ] **Step 3: `validate-package-tool.ts` implementálása**
+- [x] **Step 3: `validate-package-tool.ts` implementálása**
 
 ```ts
 import { tool, type Tool } from 'ai';
@@ -1232,7 +1232,7 @@ export const validatePackageTool = (
   });
 ```
 
-- [ ] **Step 4: A spec javítása és futtatás — menjen zölden**
+- [x] **Step 4: A spec javítása és futtatás — menjen zölden**
 
 Az 1. lépésben leírtak szerint a `validatePackageTool` describe blokkot a végleges, egyszerű formára cserélve futtasd:
 
@@ -1242,7 +1242,7 @@ pnpm nx test core --testPathPattern validate-package-tool.spec.ts
 
 Várt: PASS mind az 5 esetre (3 `executeValidatePackage` + 2 `validatePackageTool`).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/lib/tools/package/validate-package-tool.ts packages/core/src/lib/tools/package/validate-package-tool.spec.ts
@@ -1262,7 +1262,7 @@ git commit -m "feat: validate-package-tool — csomag-ellenőrzés AI-SDK toolk�
 - Consumes: `PackageInputSchema` (Task 4), `checkPackage` (Task 4), `withPackageTransaction` (Task 3).
 - Produces: `SAVE_PACKAGE_TOOL_NAME = 'savePackage'`, `executeSavePackage(rawInput, deps?)`, `savePackageTool(report?)`, `interface SavedPackage`.
 
-- [ ] **Step 1: Unit spec — a rejection-path, előbb (bukjon)**
+- [x] **Step 1: Unit spec — a rejection-path, előbb (bukjon)**
 
 `packages/core/src/lib/tools/package/save-package-tool.spec.ts`:
 
@@ -1316,7 +1316,7 @@ describe('savePackageTool', () => {
 });
 ```
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern save-package-tool.spec.ts
@@ -1324,7 +1324,7 @@ pnpm nx test core --testPathPattern save-package-tool.spec.ts
 
 Várt: FAIL — a `./save-package-tool.js` modul nem létezik.
 
-- [ ] **Step 3: `save-package-tool.ts` implementálása**
+- [x] **Step 3: `save-package-tool.ts` implementálása**
 
 ```ts
 import { tool, type Tool } from 'ai';
@@ -1448,7 +1448,7 @@ export const savePackageTool = (
   });
 ```
 
-- [ ] **Step 4: Futtatás — menjen zölden**
+- [x] **Step 4: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern save-package-tool.spec.ts
@@ -1456,7 +1456,7 @@ pnpm nx test core --testPathPattern save-package-tool.spec.ts
 
 Várt: PASS mind a 4 esetre.
 
-- [ ] **Step 5: DB-integrációs spec — valódi beszúrás, atomicitás, elutasítás**
+- [x] **Step 5: DB-integrációs spec — valódi beszúrás, atomicitás, elutasítás**
 
 `packages/core/src/lib/tools/package/save-package-db.spec.ts`:
 
@@ -1571,7 +1571,7 @@ describe('savePackage — valódi DB-n', () => {
 });
 ```
 
-- [ ] **Step 6: Futtatás — menjen zölden**
+- [x] **Step 6: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern save-package
@@ -1579,7 +1579,7 @@ pnpm nx test core --testPathPattern save-package
 
 Várt: PASS mind a két fájlra (unit + DB).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/lib/tools/package/save-package-tool.ts packages/core/src/lib/tools/package/save-package-tool.spec.ts packages/core/src/lib/tools/package/save-package-db.spec.ts
@@ -1597,7 +1597,7 @@ git commit -m "feat: save-package-tool — az egyetlen írási út a packages t�
 **Interfaces:**
 - Produces: `CANCEL_PACKAGE_TOOL_NAME = 'cancelPackage'`, `cancelPackageTool(report?)`.
 
-- [ ] **Step 1: A spec — előbb, bukjon**
+- [x] **Step 1: A spec — előbb, bukjon**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -1625,7 +1625,7 @@ describe('cancelPackageTool', () => {
 });
 ```
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern cancel-package-tool.spec.ts
@@ -1633,7 +1633,7 @@ pnpm nx test core --testPathPattern cancel-package-tool.spec.ts
 
 Várt: FAIL — a modul nem létezik.
 
-- [ ] **Step 3: Implementálás**
+- [x] **Step 3: Implementálás**
 
 ```ts
 import { tool } from 'ai';
@@ -1666,7 +1666,7 @@ export const cancelPackageTool = (report?: ToolReporter) =>
   });
 ```
 
-- [ ] **Step 4: Futtatás — menjen zölden**
+- [x] **Step 4: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern cancel-package-tool.spec.ts
@@ -1674,7 +1674,7 @@ pnpm nx test core --testPathPattern cancel-package-tool.spec.ts
 
 Várt: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/lib/tools/package/cancel-package-tool.ts packages/core/src/lib/tools/package/cancel-package-tool.spec.ts
@@ -1693,7 +1693,7 @@ git commit -m "feat: cancel-package-tool — a flow-lock záró jelzése (Task 7
 - Consumes: `askAgent`, `type AskAgentOptions` (`../../agents/query-agent/query-agent.js`), `type AskResult` (`../../agents/agent-loop.js`).
 - Produces: `ASK_INFO_AGENT_TOOL_NAME = 'askInfoAgent'`, `askInfoAgentTool(report?, options?)`.
 
-- [ ] **Step 1: A spec — a `delegate-to-ingest-tool.spec.ts` mintájára, előbb (bukjon)**
+- [x] **Step 1: A spec — a `delegate-to-ingest-tool.spec.ts` mintájára, előbb (bukjon)**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -1780,7 +1780,7 @@ describe('askInfoAgent', () => {
 });
 ```
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern ask-info-agent-tool.spec.ts
@@ -1788,7 +1788,7 @@ pnpm nx test core --testPathPattern ask-info-agent-tool.spec.ts
 
 Várt: FAIL — a modul nem létezik.
 
-- [ ] **Step 3: Implementálás**
+- [x] **Step 3: Implementálás**
 
 ```ts
 import { tool, type Tool } from 'ai';
@@ -1872,7 +1872,7 @@ export const askInfoAgentTool = (
 };
 ```
 
-- [ ] **Step 4: Futtatás — menjen zölden**
+- [x] **Step 4: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern ask-info-agent-tool.spec.ts
@@ -1880,7 +1880,7 @@ pnpm nx test core --testPathPattern ask-info-agent-tool.spec.ts
 
 Várt: PASS mind az 5 esetre.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/lib/tools/ask-info-agent/
@@ -1900,7 +1900,7 @@ git commit -m "feat: askInfoAgent tool — a package-agent info-lekérdezése (T
 - Consumes: `askInfoAgentTool` (Task 8), `validatePackageTool` (Task 5), `savePackageTool` (Task 6), `cancelPackageTool` (Task 7), `runAgentLoop`/`AskOptions`/`AskResult` (`../agent-loop.js`).
 - Produces: `buildPackagePrompt(): string`, `askPackageAgent(question: string, options?: AskOptions): Promise<AskResult>`, `MAX_PACKAGE_STEPS`.
 
-- [ ] **Step 1: `package-prompt.ts`**
+- [x] **Step 1: `package-prompt.ts`**
 
 ```ts
 // package-prompt.ts — a PACKAGE-agent system promptja. XML-szerű tagek tagolják a részeket
@@ -1952,7 +1952,7 @@ igényei alapján.
 }
 ```
 
-- [ ] **Step 2: A toolset-pinning spec — a `query-agent.spec.ts` mintájára, előbb (bukjon)**
+- [x] **Step 2: A toolset-pinning spec — a `query-agent.spec.ts` mintájára, előbb (bukjon)**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -2039,7 +2039,7 @@ describe('askPackageAgent — toolkészlet', () => {
 });
 ```
 
-- [ ] **Step 3: Futtatás — bukjon**
+- [x] **Step 3: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern package-agent.spec.ts
@@ -2047,7 +2047,7 @@ pnpm nx test core --testPathPattern package-agent.spec.ts
 
 Várt: FAIL — a `./package-agent.js` modul nem létezik.
 
-- [ ] **Step 4: `package-agent.ts` implementálása**
+- [x] **Step 4: `package-agent.ts` implementálása**
 
 ```ts
 import type { ToolSet } from 'ai';
@@ -2101,7 +2101,7 @@ export async function askPackageAgent(
 }
 ```
 
-- [ ] **Step 5: Futtatás — menjen zölden**
+- [x] **Step 5: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern package-agent.spec.ts
@@ -2109,7 +2109,7 @@ pnpm nx test core --testPathPattern package-agent.spec.ts
 
 Várt: PASS mind a 3 esetre.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/src/lib/agents/package-agent/
@@ -2128,7 +2128,7 @@ git commit -m "feat: package-agent — a csomag-építő agent (Task 9)"
 - Consumes: `type Message` (`../agent-loop.js`).
 - Produces: `type FlowLockState = 'package-open' | 'none'`, `findLastFlowSignal(history: readonly Message[]): FlowLockState`.
 
-- [ ] **Step 1: A spec — előbb, bukjon**
+- [x] **Step 1: A spec — előbb, bukjon**
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -2195,7 +2195,7 @@ describe('findLastFlowSignal', () => {
 });
 ```
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern flow-lock.spec.ts
@@ -2203,7 +2203,7 @@ pnpm nx test core --testPathPattern flow-lock.spec.ts
 
 Várt: FAIL — a `./flow-lock.js` modul nem létezik.
 
-- [ ] **Step 3: Implementálás**
+- [x] **Step 3: Implementálás**
 
 ```ts
 import type { Message } from '../agent-loop.js';
@@ -2244,7 +2244,7 @@ export function findLastFlowSignal(history: readonly Message[]): FlowLockState {
 }
 ```
 
-- [ ] **Step 4: Futtatás — menjen zölden**
+- [x] **Step 4: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern flow-lock.spec.ts
@@ -2252,7 +2252,7 @@ pnpm nx test core --testPathPattern flow-lock.spec.ts
 
 Várt: PASS mind a 7 esetre.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/lib/agents/orchestrator-agent/flow-lock.ts packages/core/src/lib/agents/orchestrator-agent/flow-lock.spec.ts
@@ -2270,7 +2270,7 @@ git commit -m "feat: flow-lock — a csomag-flow állapota a history tool-jelzé
 **Interfaces:**
 - Produces: `AgentDefinition.toolChoice?: 'auto' | 'none' | 'required'` (opcionális — a meglévő agentek ezt NEM töltik ki, viselkedésük változatlan).
 
-- [ ] **Step 1: A regressziós/új-viselkedés spec — előbb, bukjon**
+- [x] **Step 1: A regressziós/új-viselkedés spec — előbb, bukjon**
 
 `packages/core/src/lib/agents/agent-loop.spec.ts` VÉGÉRE (az utolsó `describe` blokk után, a fájl végén) illessz be egy új blokkot. Ehhez a fájl elején lévő segédfüggvényeket (`streamOf`, `textStepChunks`, `usage`) újrahasznosítja — ezek már léteznek a fájlban:
 
@@ -2338,7 +2338,7 @@ import { askAgent, MAX_TOOL_ITERATIONS } from './query-agent/query-agent.js';
 import { runAgentLoop } from './agent-loop.js';
 ```
 
-- [ ] **Step 2: Futtatás — bukjon**
+- [x] **Step 2: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern agent-loop.spec.ts
@@ -2346,7 +2346,7 @@ pnpm nx test core --testPathPattern agent-loop.spec.ts
 
 Várt: FAIL a MÁSODIK új teszten — `AgentDefinition` nem ismeri a `toolChoice` mezőt (típushiba/futásidejű `undefined` a várt `{type:'required'}` helyett). Az ELSŐ új teszt már ZÖLDEN fut (jelenleg is `undefined` megy ki) — ez a regressziós őr, ami a Step 3 UTÁN is zöld kell maradjon.
 
-- [ ] **Step 3: `agent-loop.ts` bővítése**
+- [x] **Step 3: `agent-loop.ts` bővítése**
 
 Az `AgentDefinition` interfészben az `emptyAnswer` mező UTÁN:
 
@@ -2367,7 +2367,7 @@ A `streamText({...})` hívásban a `tools,` sor UTÁN:
       toolChoice: agent.toolChoice,
 ```
 
-- [ ] **Step 4: Futtatás — menjen zölden**
+- [x] **Step 4: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern agent-loop.spec.ts
@@ -2375,7 +2375,7 @@ pnpm nx test core --testPathPattern agent-loop.spec.ts
 
 Várt: PASS, a TELJES fájlra (a meglévő tesztek is, a két újjal együtt).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add packages/core/src/lib/agents/agent-loop.ts packages/core/src/lib/agents/agent-loop.spec.ts
@@ -2396,7 +2396,7 @@ git commit -m "feat: AgentDefinition.toolChoice — kényszerített tool-válasz
 - Consumes: `askPackageAgent` (Task 9), `askAgent`/`type AskAgentOptions` (`../../agents/query-agent/query-agent.js`), `type Message`/`type AskOptions`/`type AskResult` (`../agent-loop.js`).
 - Produces: `ROUTE_TO_PACKAGE_AGENT_TOOL_NAME`, `routeToPackageAgentTool(report?, options)`; `ROUTE_TO_INFO_AGENT_TOOL_NAME`, `routeToInfoAgentTool(report?, options)`. **Fontos eltérés a `delegateToIngestTool` mintájától**: mindkét tool bemeneti sémája ÜRES (`z.object({})`) — a `question`/`history` NEM a modelltől jön, hanem az `orchestrator-agent.ts` zárja le a factory-hívásban (lásd Task 13), hogy a route-olt agent a TELJES, hiteles beszélgetést kapja, ne a modell által újrafogalmazott rövidített változatot.
 
-- [ ] **Step 1: `route-to-package-tool.spec.ts` — előbb, bukjon**
+- [x] **Step 1: `route-to-package-tool.spec.ts` — előbb, bukjon**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -2479,7 +2479,7 @@ describe('routeToPackageAgent', () => {
 });
 ```
 
-- [ ] **Step 2: `route-to-info-tool.spec.ts` — előbb, bukjon**
+- [x] **Step 2: `route-to-info-tool.spec.ts` — előbb, bukjon**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -2549,7 +2549,7 @@ describe('routeToInfoAgent', () => {
 });
 ```
 
-- [ ] **Step 3: Futtatás — bukjon**
+- [x] **Step 3: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern "route-to-package-tool|route-to-info-tool"
@@ -2557,7 +2557,7 @@ pnpm nx test core --testPathPattern "route-to-package-tool|route-to-info-tool"
 
 Várt: FAIL — egyik modul sem létezik.
 
-- [ ] **Step 4: `route-to-package-tool.ts` implementálása**
+- [x] **Step 4: `route-to-package-tool.ts` implementálása**
 
 ```ts
 import { tool, type Tool } from 'ai';
@@ -2627,7 +2627,7 @@ export const routeToPackageAgentTool = (
 };
 ```
 
-- [ ] **Step 5: `route-to-info-tool.ts` implementálása**
+- [x] **Step 5: `route-to-info-tool.ts` implementálása**
 
 ```ts
 import { tool, type Tool } from 'ai';
@@ -2702,7 +2702,7 @@ export const routeToInfoAgentTool = (
 };
 ```
 
-- [ ] **Step 6: Futtatás — menjen zölden**
+- [x] **Step 6: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern "route-to-package-tool|route-to-info-tool"
@@ -2710,7 +2710,7 @@ pnpm nx test core --testPathPattern "route-to-package-tool|route-to-info-tool"
 
 Várt: PASS mind a 5 esetre (3 + 2).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add packages/core/src/lib/tools/route-to-package/ packages/core/src/lib/tools/route-to-info/
@@ -2730,7 +2730,7 @@ git commit -m "feat: routeToPackageAgent + routeToInfoAgent — az orchestrátor
 - Consumes: `findLastFlowSignal` (Task 10), `routeToPackageAgentTool`/`routeToInfoAgentTool` (Task 12), `askPackageAgent` (Task 9), `askAgent`/`type AskAgentOptions` (`../query-agent/query-agent.js`), `runAgentLoop`/`type AskOptions`/`type AskResult`/`type Message` (`../agent-loop.js`), `CURRENT_ROLE` (`../../user-role/user-role.js`).
 - Produces: `MAX_ORCHESTRATOR_STEPS`, `interface AskOrchestratorOptions extends AskAgentOptions`, `askOrchestrator(question: string, options?: AskOrchestratorOptions): Promise<AskResult>`.
 
-- [ ] **Step 1: `orchestrator-prompt.ts`**
+- [x] **Step 1: `orchestrator-prompt.ts`**
 
 ```ts
 // orchestrator-prompt.ts — az ORCHESTRÁTOR system promptja. Ez az EGYETLEN agent a
@@ -2757,7 +2757,7 @@ A felhasználó üzenete alapján hívj PONTOSAN EGY toolt:
 </rules>`;
 ```
 
-- [ ] **Step 2: A spec — előbb, bukjon**
+- [x] **Step 2: A spec — előbb, bukjon**
 
 ```ts
 import { describe, expect, it, vi } from 'vitest';
@@ -2922,7 +2922,7 @@ describe('askOrchestrator — flow-lock rövidzár', () => {
 });
 ```
 
-- [ ] **Step 3: Futtatás — bukjon**
+- [x] **Step 3: Futtatás — bukjon**
 
 ```bash
 pnpm nx test core --testPathPattern orchestrator-agent.spec.ts
@@ -2930,7 +2930,7 @@ pnpm nx test core --testPathPattern orchestrator-agent.spec.ts
 
 Várt: FAIL — a `./orchestrator-agent.js` modul nem létezik.
 
-- [ ] **Step 4: `orchestrator-agent.ts` implementálása**
+- [x] **Step 4: `orchestrator-agent.ts` implementálása**
 
 ```ts
 import type { ToolSet } from 'ai';
@@ -3020,7 +3020,7 @@ export async function askOrchestrator(
 }
 ```
 
-- [ ] **Step 5: Futtatás — menjen zölden**
+- [x] **Step 5: Futtatás — menjen zölden**
 
 ```bash
 pnpm nx test core --testPathPattern orchestrator-agent.spec.ts
@@ -3028,7 +3028,7 @@ pnpm nx test core --testPathPattern orchestrator-agent.spec.ts
 
 Várt: PASS mind az 5 esetre.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/core/src/lib/agents/orchestrator-agent/
@@ -3045,7 +3045,7 @@ git commit -m "feat: orchestrator-agent — route-olás flow-lock rövidzárral 
 **Interfaces:**
 - Produces: minden Task 1–13-ban létrehozott publikus szimbólum elérhető a `@szoba-kertesz/core` felületről.
 
-- [ ] **Step 1: A barrel bővítése**
+- [x] **Step 1: A barrel bővítése**
 
 `packages/core/src/index.ts`-ben az `agents/ingest-agent/ingest-prompt.js` export sor UTÁN:
 
@@ -3071,7 +3071,7 @@ export * from './lib/tools/package/cancel-package-tool.js';
 export * from './lib/tools/package/db-package.js';
 ```
 
-- [ ] **Step 2: Ütközés-ellenőrzés typecheckkel**
+- [x] **Step 2: Ütközés-ellenőrzés typecheckkel**
 
 ```bash
 pnpm nx run core:typecheck
@@ -3079,7 +3079,7 @@ pnpm nx run core:typecheck
 
 Várt: PASS — nincs kétszer exportált azonos nevű szimbólum (pl. mindkét `route-to-*` fájl `Message`-t importál típusként, de nem exportálja újra, tehát nem ütközik).
 
-- [ ] **Step 3: Teljes core teszt-csomag**
+- [x] **Step 3: Teljes core teszt-csomag**
 
 ```bash
 pnpm nx test core
@@ -3087,7 +3087,7 @@ pnpm nx test core
 
 Várt: PASS (a `db-package.spec.ts`, `package-validation-db.spec.ts`, `save-package-db.spec.ts` élő, seedelt Postgrest igényel — legyen fent `docker compose up -d` + a Task 1–2 migrációi lefuttatva).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add packages/core/src/index.ts
@@ -3106,7 +3106,7 @@ git commit -m "feat: az orchestrátor és a package-agent publikus exportjai (Ta
 **Interfaces:**
 - Consumes: `askOrchestrator`, `closePackagePool` (a Task 14 barreljéből).
 
-- [ ] **Step 1: `apps/cli/src/main.ts`**
+- [x] **Step 1: `apps/cli/src/main.ts`**
 
 Az importban cseréld az `askAgent`-et `askOrchestrator`-ra, és vedd fel a `closePackagePool`-t:
 
@@ -3142,7 +3142,7 @@ A `finally` blokkban a pool-zárást bővítsd:
 
 (a korábbi egyetlen `await closeReadonlyPool();` sor helyett — a csomag-építés a package-poolt is megnyithatja, azt is zárni kell, különben a folyamat a pg `idleTimeoutMillis`-e miatt életben marad).
 
-- [ ] **Step 2: `apps/cli/src/interactive.ts`**
+- [x] **Step 2: `apps/cli/src/interactive.ts`**
 
 Az importban:
 
@@ -3184,7 +3184,7 @@ A `close` eseménykezelőben:
 
 (a korábbi kételemű tömb helyett).
 
-- [ ] **Step 3: `apps/server/src/app.ts`**
+- [x] **Step 3: `apps/server/src/app.ts`**
 
 Az importban:
 
@@ -3208,7 +3208,7 @@ Az `ask` alapértelmezés:
     options.ask ?? ((question, opts) => askOrchestrator(question, opts));
 ```
 
-- [ ] **Step 4: Meglévő specek futtatása — DB-mentesek, azonnal**
+- [x] **Step 4: Meglévő specek futtatása — DB-mentesek, azonnal**
 
 ```bash
 pnpm nx test cli
@@ -3218,7 +3218,7 @@ pnpm nx test web
 
 Várt: PASS mindhárom projektre, VÁLTOZATLANUL — az `interactive.spec.ts` és az `app.spec.ts` a saját `options.ask`/`options.store` injekciójukon futnak, sosem hívják a valódi `askAgent`/`askOrchestrator`-t (ellenőrizve a Task-előkészítés kutatási fázisában: egyik spec sem importálja/mockolja közvetlenül az `askAgent`-et).
 
-- [ ] **Step 5: Typecheck + lint + build a három érintett projektre**
+- [x] **Step 5: Typecheck + lint + build a három érintett projektre**
 
 ```bash
 pnpm nx run-many -t typecheck lint build -p cli,server,core
@@ -3226,7 +3226,7 @@ pnpm nx run-many -t typecheck lint build -p cli,server,core
 
 Várt: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/cli/src/main.ts apps/cli/src/interactive.ts apps/server/src/app.ts
@@ -3246,7 +3246,7 @@ git commit -m "feat: az orchestrátor lesz a belépési pont CLI-n és szerveren
 
 **Interfaces:** — (dokumentáció, nincs kód-interfész)
 
-- [ ] **Step 1: `CLAUDE.md`**
+- [x] **Step 1: `CLAUDE.md`**
 
 A "Project status" szekció végére egy új bekezdés (a legutóbbi, go-live-railway bekezdés UTÁN), ami elmondja: mostantól ÖT agent van, az `askOrchestrator` a belépési pont, a flow-lock a költség miatt kritikus, és az ötödik DB-szerep (`szoba-kertesz_package`) append-only.
 
@@ -3262,7 +3262,7 @@ A "Local database" szekció DB-kapcsolat felsorolásába vedd fel az ötödiket 
 
 Az "Architecture" invariáns-listát egy új ponttal egészítsd ki: **öt DB-kapcsolat, öt jogosultsági szint** — a régi "Négy DB-kapcsolat" cím és szöveg helyett.
 
-- [ ] **Step 2: `README.md`**
+- [x] **Step 2: `README.md`**
 
 A "Multi-agent, szétválasztott adatbázis-jogosultsággal" szekciót egészítsd ki két új bekezdéssel (orchestrator-agent + package-agent), a meglévő `query-agent`/`ingest-agent`/`delegateToIngest` felsorolás stílusában.
 
@@ -3270,19 +3270,19 @@ A "Toolok" felsorolást egészítsd ki: `askInfoAgent` · `routeToPackageAgent` 
 
 Az "Env változók" táblázatba vedd fel a `DATABASE_URL_PACKAGE` sort.
 
-- [ ] **Step 3: `docs/architektura-monorepo.md`**
+- [x] **Step 3: `docs/architektura-monorepo.md`**
 
 A `packages/core` alkönyvtár-leírásába (`agents/`) vedd fel az `orchestrator-agent/` és a `package-agent/` mappát a meglévő felsoroláshoz hasonló stílusban.
 
-- [ ] **Step 4: `docs/tech-stack.md`**
+- [x] **Step 4: `docs/tech-stack.md`**
 
 A `products`/`customers`/`threads`/`messages` táblák leírása UTÁN vedd fel a `packages`/`package_items` táblák sémáját (oszlopnevek, típusok), a meglévő táblázatok mintájára.
 
-- [ ] **Step 5: `docs/implementacios-terv.md`**
+- [x] **Step 5: `docs/implementacios-terv.md`**
 
 A "Hol tart a terv" táblázat 07. alkalom sorában a "C fázis... kimaradt" megjegyzést cseréld: a C fázis KONCEPCIÓJA (orchestrátor + package-agent + flow-lock) most, ebben a körben MEGÉPÜLT — hivatkozz erre a spec/plan fájlra, és jegyezd meg, mi maradt ki a kurzus eredeti C fázisából (UI-handover, flow-test mérőeszköz, router-mód — külön kör).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add CLAUDE.md README.md docs/architektura-monorepo.md docs/tech-stack.md docs/implementacios-terv.md
@@ -3295,7 +3295,7 @@ git commit -m "docs: orchestrátor-agent és package-agent szinkronizálása a d
 
 **Files:** — (nincs kódváltozás; ellenőrző lépések)
 
-- [ ] **Step 1: Teljes minőségi kapu**
+- [x] **Step 1: Teljes minőségi kapu**
 
 ```bash
 pnpm nx run-many -t typecheck lint build
@@ -3307,7 +3307,7 @@ pnpm nx test web
 
 Várt: mind PASS. (A `core` DB-s specjeihez élő, migrált, seedelt Postgres kell.)
 
-- [ ] **Step 2: `packages/core` diff-invariáns — EZ A KÖR KIVÉTEL, tudatosan**
+- [x] **Step 2: `packages/core` diff-invariáns — EZ A KÖR KIVÉTEL, tudatosan**
 
 Ellentétben a 08./09. alkalommal, EBBEN a körben a `packages/core` diffje SZÁNDÉKOSAN nem üres — ez a kör pontosan a core-t bővíti két új agenttel. Ne futtass üres-diff ellenőrzést; ehelyett ellenőrizd, hogy a diff KIZÁRÓLAG az új agentekhez/toolokhoz kapcsolódik, és nem érintett véletlenül semmi mást:
 
@@ -3317,7 +3317,7 @@ git diff master --stat -- packages/core/src | grep -v "orchestrator-agent\|packa
 
 Várt: ÜRES kimenet (minden érintett fájl a fenti, várt listán van).
 
-- [ ] **Step 3: Kézi smoke-teszt — élőben, a felhasználóval**
+- [x] **Step 3: Kézi smoke-teszt — élőben, a felhasználóval**
 
 Mondd el a felhasználónak, hogy ez a lépés MANUÁLIS és FIZETŐS, és kérj jóváhagyást minden fizetős hívás előtt:
 
@@ -3331,7 +3331,7 @@ A böngészőben (`http://localhost:4200`):
 2. Csomag-kérés (pl. "Állíts össze egy csomagot X ügyfélnek Y Ft-ig") → package-agent veszi át, végigmegy az azonosítás → javaslat → validálás → megerősítés → mentés folyamaton.
 3. Ellenőrizd élő DB-n: `docker compose exec postgres psql -U "$POSTGRES_ADMIN_USER" -d szoba-kertesz -c "SELECT * FROM packages ORDER BY created_at DESC LIMIT 1;"` — a mentett csomag valóban ott van.
 
-- [ ] **Step 4: `autotest:battery` regresszió — FIZETŐS, csak jóváhagyással**
+- [x] **Step 4: `autotest:battery` regresszió — FIZETŐS, csak jóváhagyással**
 
 Kérdezd meg a felhasználót, akarja-e futtatni (kb. az eddig mért díjtétel, lásd `.claude/skills/autotest/SKILL.md`):
 
@@ -3341,7 +3341,7 @@ pnpm autotest:battery
 
 Várt (a spec 6. sikerkritériuma): mind a 29 eset ZÖLD marad — nincs regresszió a meglévő katalógus/RAG-viselkedésben az orchestrátor bevezetése után.
 
-- [ ] **Step 5: A terv checkboxainak lezárása**
+- [x] **Step 5: A terv checkboxainak lezárása**
 
 ```bash
 perl -i -pe 's/^(\s*)- \[ \]/$1- [x]/' docs/superpowers/plans/2026-09-03-orchestrator-agent.md
@@ -3349,7 +3349,7 @@ perl -i -pe 's/^(\s*)- \[ \]/$1- [x]/' docs/superpowers/plans/2026-09-03-orchest
 
 Ellenőrizd: a Step 4 (autotest:battery) csak akkor pipálható ki, ha ténylegesen lefutott — ha a felhasználó nem hagyta jóvá, hagyd `- [ ]`-en, és jegyezd fel a `.superpowers/sdd/2026-09-03-orchestrator-agent/progress.md`-be, hogy miért maradt nyitva.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/superpowers/plans/2026-09-03-orchestrator-agent.md

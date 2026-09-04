@@ -247,7 +247,8 @@
               "pontosít",
               "nem világos",
               "nem tudom értelmezni",
-              "segíthetek"
+              "értelmezhetetlen",
+              "segít"
             ],
             "truth": "Értelmetlen inputra a helyes válasz tisztázó kérdés vagy udvarias visszaterelés, NEM kitalált tartalom."
           }

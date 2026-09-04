@@ -15,3 +15,4 @@ fel egy sort az alábbi táblába. Az `/autotest` skill 5. lépése minden mér�
 | [0001](0001-adr-bevezetese.md) | Az ADR-napló bevezetése | elfogadva | 2026-08-26 |
 | [0002](0002-hf4-terjedelem.md) | A HF4 fődokumentum terjedelmi korlátjának tudatos túllépése | elfogadva | 2026-08-31 |
 | [0003](0003-ai-act-50-2-gepi-jeloles.md) | Az AI Act 50. cikk (2) gépi jelölésének elhalasztása | elfogadva | 2026-09-01 |
+| [0004](0004-orchestrator-battery-regresszio-ellenorzes.md) | A garbage-gibberish eset szótő-bővítése az orchestrátor-agent záró battery-futása után | elfogadva | 2026-09-04 |
